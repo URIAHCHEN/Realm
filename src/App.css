@@ -1,0 +1,1309 @@
+/* ==================== iOS 18 毛玻璃风格 ==================== */
+
+/* 全局样式 */
+* {
+  box-sizing: border-box;
+}
+
+/* iOS 18 毛玻璃背景 */
+.ios-glass-bg {
+  background: 
+    linear-gradient(180deg, #f5f7fa 0%, #e8ecf1 100%);
+  min-height: 100vh;
+}
+
+/* iOS 18 毛玻璃卡片效果 */
+.ios-glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* iOS 18 毛玻璃头部 */
+.ios-glass-header {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+/* iOS 18 Tabs 样式 */
+.ios-tabs-list {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 0.5px solid rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  padding: 6px;
+  box-shadow: 
+    0 2px 12px rgba(0, 0, 0, 0.05),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.ios-tab-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1c1c1e;
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.ios-tab-trigger:hover {
+  background: rgba(0, 122, 255, 0.08);
+  color: #007aff;
+}
+
+.ios-tab-trigger[data-state="active"] {
+  background: #007aff;
+  color: white;
+  font-weight: 600;
+  box-shadow: 
+    0 2px 8px rgba(0, 122, 255, 0.35),
+    0 4px 16px rgba(0, 122, 255, 0.2);
+}
+
+.ios-tab-trigger[data-state="active"]:hover {
+  background: #0071e3;
+}
+
+/* iOS 18 按钮样式 */
+.ios-button {
+  background: #007aff;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+}
+
+.ios-button:hover {
+  background: #0071e3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.35);
+}
+
+.ios-button:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px rgba(0, 122, 255, 0.25);
+}
+
+.ios-button-secondary {
+  background: rgba(255, 255, 255, 0.7);
+  color: #007aff;
+  border: 0.5px solid rgba(0, 122, 255, 0.3);
+  font-weight: 500;
+}
+
+.ios-button-secondary:hover {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+/* iOS 18 输入框样式 */
+.ios-input {
+  background: rgba(255, 255, 255, 0.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.ios-input:focus {
+  background: white;
+  border-color: #007aff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.15);
+  outline: none;
+}
+
+/* iOS 18 卡片悬停效果 */
+.ios-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ios-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 12px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* iOS 18 分隔线 */
+.ios-divider {
+  height: 0.5px;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
+}
+
+/* iOS 18 标签样式 */
+.ios-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+}
+
+.ios-badge-blue {
+  background: rgba(0, 122, 255, 0.12);
+  color: #007aff;
+}
+
+.ios-badge-green {
+  background: rgba(52, 199, 89, 0.12);
+  color: #34c759;
+}
+
+.ios-badge-orange {
+  background: rgba(255, 149, 0, 0.12);
+  color: #ff9500;
+}
+
+.ios-badge-red {
+  background: rgba(255, 59, 48, 0.12);
+  color: #ff3b30;
+}
+
+/* iOS 18 选择器样式 */
+.ios-select {
+  background: rgba(255, 255, 255, 0.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+
+.ios-select:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+
+/* iOS 18 表格样式 */
+.ios-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ios-table th {
+  background: rgba(248, 249, 250, 0.8);
+  font-weight: 600;
+  font-size: 14px;
+  color: #3c3c43;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+.ios-table td {
+  padding: 14px 16px;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.04);
+  font-size: 15px;
+}
+
+.ios-table tr:hover td {
+  background: rgba(0, 122, 255, 0.03);
+}
+
+/* iOS 18 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 100px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* 动画效果 - iOS 风格 */
+@keyframes ios-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ios-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ios-animate-fade-in {
+  animation: ios-fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.ios-animate-scale-in {
+  animation: ios-scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 季节标签 - iOS 风格 */
+.season-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 0.5px solid transparent;
+}
+
+.season-tag.inactive {
+  background: rgba(142, 142, 147, 0.12);
+  color: #8e8e93;
+}
+
+.season-tag.inactive:hover {
+  background: rgba(142, 142, 147, 0.2);
+  color: #636366;
+}
+
+.season-summer.active {
+  background: linear-gradient(135deg, #fff5eb 0%, #ffedd5 100%);
+  color: #ea580c;
+  border-color: #fdba74;
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.15);
+}
+
+.season-autumn.active {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #d97706;
+  border-color: #fcd34d;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.15);
+}
+
+.season-winter.active {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #2563eb;
+  border-color: #93c5fd;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+.season-spring.active {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #16a34a;
+  border-color: #86efac;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.15);
+}
+
+/* 成绩颜色 */
+.score-high {
+  color: #34c759;
+}
+
+.score-medium {
+  color: #ff9500;
+}
+
+.score-low {
+  color: #ff3b30;
+}
+
+/* 响应式调整 */
+@media (max-width: 1280px) {
+  .ios-tabs-list {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 600px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ios-tabs-list {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 400px;
+  }
+  
+  .ios-tab-trigger {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+}
+
+/* ==================== 表扬榜剧场风格 ==================== */
+
+/* 彩带动画 */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  animation: confetti-fall 4s linear infinite;
+  border-radius: 2px;
+}
+
+/* 剧场统计卡片 */
+.theater-stat-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 16px;
+  padding: 16px;
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.gold-border {
+  position: relative;
+}
+
+.gold-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, #007aff, #5ac8fa, #007aff, #5ac8fa);
+  border-radius: 18px;
+  z-index: -1;
+  opacity: 0.3;
+}
+
+/* 奖杯脉冲动画 */
+@keyframes trophy-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(0, 122, 255, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(0, 122, 255, 0.6);
+  }
+}
+
+.trophy-pulse {
+  animation: trophy-pulse 2s ease-in-out infinite;
+}
+
+/* 剧场按钮 */
+.theater-button {
+  background: #007aff;
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 10px 24px;
+  box-shadow: 0 2px 12px rgba(0, 122, 255, 0.3);
+  transition: all 0.2s ease;
+}
+
+.theater-button:hover {
+  background: #0071e3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4);
+}
+
+/* 剧场Tabs */
+.theater-tabs {
+  background: rgba(30, 58, 95, 0.9);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  padding: 4px;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+.theater-tab {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.theater-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.theater-tab[data-state="active"] {
+  background: #007aff !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0, 122, 255, 0.4);
+}
+
+/* 剧场舞台背景 */
+.theater-stage {
+  background: linear-gradient(180deg, #1e3a5f 0%, #1e40af 30%, #2563eb 70%, #1e3a5f 100%);
+  border-radius: 24px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.2),
+    inset 0 0 100px rgba(0, 0, 0, 0.15);
+}
+
+/* 幕布纹理 */
+.theater-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 30px,
+      rgba(0, 0, 0, 0.06) 30px,
+      rgba(0, 0, 0, 0.06) 60px
+    );
+  pointer-events: none;
+  border-radius: 20px;
+}
+
+.purple-stage {
+  background: linear-gradient(180deg, #312e81 0%, #4338ca 30%, #6366f1 70%, #312e81 100%);
+}
+
+.blue-stage {
+  background: linear-gradient(180deg, #1e3a5f 0%, #2563eb 30%, #3b82f6 70%, #1e3a5f 100%);
+}
+
+/* 聚光灯效果 */
+.spotlight {
+  position: absolute;
+  width: 300px;
+  height: 400px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  top: -100px;
+}
+
+.spotlight-left {
+  left: -100px;
+  transform: rotate(-15deg);
+}
+
+.spotlight-right {
+  right: -100px;
+  transform: rotate(15deg);
+}
+
+/* 剧场标题 */
+.theater-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.theater-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #5ac8fa;
+  text-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(90, 200, 250, 0.4);
+  letter-spacing: 2px;
+}
+
+/* 皇冠闪烁动画 */
+@keyframes crown-shine {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px rgba(90, 200, 250, 0.5));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 25px rgba(90, 200, 250, 0.8));
+    transform: scale(1.1);
+  }
+}
+
+.crown-shine {
+  animation: crown-shine 2s ease-in-out infinite;
+}
+
+/* 领奖台容器 */
+.podium-container {
+  position: relative;
+  z-index: 1;
+}
+
+.podium-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 20px;
+}
+
+.podium-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 撕边卡片效果 */
+.torn-paper-card {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  clip-path: polygon(
+    0% 5%, 3% 0%, 8% 3%, 15% 0%, 22% 4%, 30% 0%, 38% 3%, 45% 0%, 
+    52% 4%, 60% 0%, 68% 3%, 75% 0%, 82% 4%, 90% 0%, 97% 3%, 100% 5%,
+    100% 95%, 97% 100%, 90% 97%, 82% 100%, 75% 96%, 68% 100%, 
+    60% 97%, 52% 100%, 45% 96%, 38% 100%, 30% 97%, 22% 100%, 
+    15% 96%, 8% 100%, 3% 97%, 0% 95%
+  );
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.15),
+    inset 0 2px 4px rgba(255, 255, 255, 0.8);
+}
+
+.gold-paper {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%);
+  border: 3px solid #0ea5e9;
+  min-width: 160px;
+}
+
+.silver-paper {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+  border: 3px solid #94a3b8;
+  min-width: 140px;
+}
+
+.bronze-paper {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%);
+  border: 3px solid #f97316;
+  min-width: 140px;
+}
+
+/* 奖牌徽章 */
+.medal-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  margin: -38px auto 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.medal-badge.silver {
+  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+  color: #475569;
+  border: 2px solid #94a3b8;
+}
+
+.medal-badge.bronze {
+  background: linear-gradient(135deg, #ffedd5 0%, #f97316 100%);
+  color: #7c2d12;
+  border: 2px solid #f97316;
+}
+
+.crown-icon {
+  font-size: 32px;
+  margin: -45px auto 5px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* 学生名字 */
+.student-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin-bottom: 4px;
+}
+
+.student-name.champion {
+  font-size: 28px;
+  color: #0369a1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.student-fullname {
+  font-size: 12px;
+  color: #0ea5e9;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.score-text {
+  font-size: 28px;
+  font-weight: 800;
+  color: #007aff;
+}
+
+.score-text.champion {
+  font-size: 32px;
+  color: #0369a1;
+}
+
+.rate-text {
+  font-size: 14px;
+  color: #0ea5e9;
+  opacity: 0.8;
+}
+
+/* 奖杯浮动动画 */
+@keyframes trophy-float {
+  0%, 100% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(5deg);
+  }
+}
+
+.trophy-float {
+  animation: trophy-float 2s ease-in-out infinite;
+  margin-bottom: 8px;
+}
+
+/* 领奖台底座 */
+.podium-base {
+  width: 100%;
+  padding: 12px;
+  text-align: center;
+  font-size: 32px;
+  margin-top: -5px;
+  clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%);
+}
+
+.gold-base {
+  background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+  height: 80px;
+}
+
+.silver-base {
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
+  height: 50px;
+}
+
+.bronze-base {
+  background: linear-gradient(180deg, #ffedd5 0%, #f97316 100%);
+  height: 35px;
+}
+
+/* 第一名特殊尺寸 */
+.first-place {
+  transform: scale(1.1);
+  z-index: 3;
+}
+
+.second-place {
+  z-index: 2;
+}
+
+.third-place {
+  z-index: 1;
+}
+
+/* 排名列表 */
+.rank-list {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  border: 0.5px solid rgba(0, 122, 255, 0.2);
+}
+
+.rank-item:last-child {
+  margin-bottom: 0;
+}
+
+.rank-number {
+  width: 28px;
+  height: 28px;
+  background: #007aff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.rank-name {
+  font-weight: 700;
+  color: #1e3a5f;
+  min-width: 60px;
+}
+
+.rank-fullname {
+  flex: 1;
+  color: #0ea5e9;
+  font-size: 14px;
+}
+
+.rank-score {
+  font-weight: 700;
+  color: #007aff;
+  font-size: 18px;
+}
+
+.rank-rate {
+  color: #0ea5e9;
+  font-size: 14px;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 48px;
+  color: white;
+}
+
+/* 乐听说网格 */
+.listening-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.listening-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0.5px solid rgba(0, 122, 255, 0.2);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.listening-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.15);
+}
+
+.listening-card.rank-1 {
+  background: linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%);
+  border-width: 2px;
+}
+
+.listening-rank {
+  width: 40px;
+  height: 40px;
+  background: #007aff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.listening-content {
+  flex: 1;
+}
+
+.listening-name {
+  font-weight: 700;
+  color: #1e3a5f;
+  font-size: 18px;
+}
+
+.listening-fullname {
+  font-size: 12px;
+  color: #0ea5e9;
+  opacity: 0.8;
+}
+
+.listening-score {
+  text-align: right;
+}
+
+.score-number {
+  font-size: 28px;
+  font-weight: 800;
+  color: #007aff;
+}
+
+.score-label {
+  font-size: 14px;
+  color: #0ea5e9;
+}
+
+.sparkle-icon {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  color: #007aff;
+  animation: crown-shine 1.5s ease-in-out infinite;
+}
+
+/* 荣誉墙 */
+.honor-wall {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.honor-section {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.honor-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.red-ribbon {
+  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+}
+
+.green-ribbon {
+  background: linear-gradient(135deg, #34c759 0%, #248a3d 100%);
+}
+
+.honor-content {
+  padding: 20px;
+  min-height: 150px;
+}
+
+.honor-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.honor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.honor-badge:hover {
+  transform: scale(1.05);
+}
+
+.gold-badge {
+  background: linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%);
+  color: #0369a1;
+  border: 1.5px solid #0ea5e9;
+}
+
+.emerald-badge {
+  background: linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%);
+  color: #15803d;
+  border: 1.5px solid #4ade80;
+}
+
+.honor-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 40px;
+}
+
+/* 进步之星列表 */
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.progress-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  border: 0.5px solid rgba(0, 122, 255, 0.2);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.progress-card:hover {
+  transform: translateX(8px);
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.15);
+}
+
+.progress-card.rank-1 {
+  background: linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%);
+  border-width: 2px;
+}
+
+.progress-card.rank-2 {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-color: #94a3b8;
+}
+
+.progress-card.rank-3 {
+  background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+  border-color: #f97316;
+}
+
+.progress-rank {
+  font-size: 32px;
+}
+
+.progress-info {
+  flex: 1;
+}
+
+.progress-name {
+  font-weight: 700;
+  color: #1e3a5f;
+  font-size: 20px;
+}
+
+.progress-fullname {
+  font-size: 14px;
+  color: #0ea5e9;
+  opacity: 0.8;
+}
+
+.progress-diff {
+  text-align: right;
+}
+
+.diff-label {
+  display: block;
+  font-size: 12px;
+  color: #0ea5e9;
+  opacity: 0.8;
+}
+
+.diff-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: #007aff;
+}
+
+.progress-icon {
+  width: 32px;
+  height: 32px;
+  color: #34c759;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .podium-stage {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .podium-item {
+    width: 100%;
+    max-width: 280px;
+  }
+  
+  .first-place {
+    transform: scale(1);
+    order: -1;
+  }
+  
+  .honor-wall {
+    grid-template-columns: 1fr;
+  }
+  
+  .theater-title {
+    font-size: 20px;
+  }
+  
+  .listening-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 学情记录表格字体放大 */
+.student-table {
+  font-size: 15px;
+}
+
+.student-table th {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.student-table td {
+  font-size: 15px;
+}
+
+/* 学情报告页面样式 */
+.report-container {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 24px;
+  padding: 32px;
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+.report-header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+}
+
+.report-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1c1c1e;
+  margin-bottom: 8px;
+}
+
+.report-subtitle {
+  font-size: 16px;
+  color: #8e8e93;
+}
+
+.report-section {
+  margin-bottom: 32px;
+}
+
+.report-section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1c1c1e;
+  margin-bottom: 16px;
+  padding-left: 12px;
+  border-left: 4px solid #007aff;
+}
+
+.report-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.report-info-item {
+  background: rgba(0, 122, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  border: 0.5px solid rgba(0, 122, 255, 0.15);
+}
+
+.report-info-label {
+  font-size: 13px;
+  color: #8e8e93;
+  margin-bottom: 4px;
+}
+
+.report-info-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #007aff;
+}
+
+.report-chart-container {
+  background: rgba(248, 249, 250, 0.8);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 0.5px solid rgba(0, 0, 0, 0.04);
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-table th {
+  background: rgba(0, 122, 255, 0.08);
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #1c1c1e;
+  border-bottom: 2px solid #007aff;
+  font-size: 14px;
+}
+
+.report-table td {
+  padding: 14px 16px;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+  font-size: 15px;
+}
+
+.report-table tr:hover {
+  background: rgba(0, 122, 255, 0.03);
+}
+
+/* Tabs居中 */
+.tabs-centered {
+  display: flex;
+  justify-content: center;
+}
+
+/* 题型配置可编辑满分 */
+.question-type-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 12px;
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 8px;
+}
+
+.question-type-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.question-type-score {
+  width: 80px;
+}
+
+/* iOS 18 风格导航 */
+.nav-ios {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+/* iOS 18 风格主背景 */
+.liquid-glass-bg {
+  background: linear-gradient(180deg, #f5f7fa 0%, #e8ecf1 100%);
+  min-height: 100vh;
+}
+
+/* 旧样式兼容 */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.liquid-glass-header {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+.liquid-glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.liquid-glass-input {
+  background: rgba(255, 255, 255, 0.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.liquid-glass-input:focus {
+  background: white;
+  border-color: #007aff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+}
+
+.liquid-glass-button {
+  background: #007aff;
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+}
+
+.liquid-glass-button:hover {
+  background: #0071e3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.35);
+}

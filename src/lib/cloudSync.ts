@@ -2,6 +2,7 @@
 // 数据表结构见 CloudSyncPanel 中的建表 SQL，单表按「作用域」存多行快照
 
 import { BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend } from '@/lib/config';
+import { ensureFreshToken, getAccessToken } from '@/lib/auth';
 import type { AppConfig, Class, SchoolScore } from '@/types';
 
 // 同步快照：与导出备份格式一致，方便离线/云端互换
@@ -127,9 +128,11 @@ interface CloudRow {
 }
 
 function apiHeaders(config: CloudSyncConfig, extra: Record<string, string> = {}) {
+  // 优先携带登录用户的 JWT（RLS 收紧后 anon 将无法读写），未登录回退 anon key
+  const bearer = getAccessToken() ?? config.supabaseKey.trim();
   return {
     apikey: config.supabaseKey.trim(),
-    Authorization: `Bearer ${config.supabaseKey.trim()}`,
+    Authorization: `Bearer ${bearer}`,
     'Content-Type': 'application/json',
     ...extra,
   };
@@ -147,6 +150,7 @@ export interface CloudState {
 
 // 读取云端状态（无数据返回 null）
 export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudState> {
+  await ensureFreshToken();
   const res = await fetch(restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&select=data,snapshot_hash,updated_at`), {
     headers: apiHeaders(config),
   });
@@ -173,6 +177,7 @@ export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudSta
 
 // 推送本地快照到云端（upsert）
 export async function pushSnapshot(config: CloudSyncConfig, snapshot: SyncSnapshot): Promise<CloudState> {
+  await ensureFreshToken();
   const hash = hashSnapshot(snapshot);
   const res = await fetch(restUrl(config, '?on_conflict=id'), {
     method: 'POST',

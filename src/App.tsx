@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
+import { getCachedSession, signOut } from '@/lib/auth';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { LessonManager } from '@/components/LessonManager';
@@ -54,9 +55,9 @@ const DEFAULT_LOGIN_PASSWORD = 'Lynn';
 const DEFAULT_ADMIN_PASSWORD = 'Chl0131';
 
 function App() {
-  // 认证状态
+  // 认证状态：以 Supabase Auth 真实会话为准（不再用 localStorage 密码门）
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('isAuthenticated') === 'true';
+    return !!getCachedSession();
   });
   // 登录密码：用于登录校验
   const [loginPassword, setLoginPassword] = useState(() => {
@@ -154,21 +155,16 @@ function App() {
     localStorage.setItem('adminPassword', adminPassword);
   }, [adminPassword]);
 
-  // 登录处理：登录密码或管理员密码均可登录
-  const handleLogin = (inputPassword: string): boolean => {
-    if (inputPassword === loginPassword || inputPassword === adminPassword) {
-      setIsAuthenticated(true);
-      localStorage.setItem('isAuthenticated', 'true');
-      toast.success('登录成功');
-      return true;
-    }
-    return false;
+  // 登录成功（Supabase Auth 会话已建立，由 LoginPage 调用）
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+    toast.success('登录成功');
   };
 
-  // 登出处理
+  // 登出处理：清除 Supabase 会话
   const handleLogout = () => {
+    signOut();
     setIsAuthenticated(false);
-    localStorage.removeItem('isAuthenticated');
     toast.success('已登出');
   };
 
@@ -187,7 +183,7 @@ function App() {
     return (
       <>
         <Toaster position="top-center" richColors />
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage onSuccess={handleLoginSuccess} />
       </>
     );
   }

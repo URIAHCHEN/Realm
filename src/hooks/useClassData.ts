@@ -10,6 +10,7 @@ import type {
   WeakPoint
 } from '@/types';
 import * as XLSX from 'xlsx';
+import { buildPublicityHTML } from '@/lib/publicityExport';
 
 // 生成唯一ID
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -25,14 +26,14 @@ const defaultQuestionTypes: QuestionType[] = [
 const defaultAppConfig: AppConfig = {
   defaultAttendanceOptions: ['按时出勤', '迟到', '缺勤', '请假', '调课'],
   defaultHomeworkOptions: ['超赞完成', '圆满完成', '未完成', '没带'],
-  defaultListeningOptions: ['具体分数', '未加入乐听说', '未完成'],
+  defaultListeningOptions: ['具体分数', '未加入课后任务', '未完成'],
   defaultFeedbackTemplate: `【学生昵称】家长您好！
 
 📚 第【课次】课学习反馈：
 
 🏫 考勤：【考勤】
 📝 作业：【作业】
-🎙️ 乐听说：【乐听说】
+🎙️ 课后任务：【课后任务】
 
 📊 入门测成绩：
 【成绩详情】
@@ -62,7 +63,8 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   listeningOptions: [...appConfig.defaultListeningOptions],
   feedbackTemplate: appConfig.defaultFeedbackTemplate,
   praiseTemplate: appConfig.defaultPraiseTemplate,
-  homeworkText: '1️⃣乐听说\n2️⃣错题本（按照要求整理）\n3️⃣开心过年'
+  homeworkText: '1️⃣课后任务\n2️⃣错题本（按照要求整理）\n3️⃣开心过年',
+  passThreshold: 80
 });
 
 export function useClassData() {
@@ -260,19 +262,38 @@ export function useClassData() {
   }, [currentClass, calculateClassStats]);
 
   // 创建新班级
-  const createClass = useCallback((name: string) => {
+  const createClass = useCallback((name: string, term?: string, batchCode?: string) => {
     const id = 'class' + generateId();
     setClasses(prev => ({
       ...prev,
-      [id]: { 
-        id, 
-        name, 
-        students: [], 
+      [id]: {
+        id,
+        name,
+        term: term?.trim() || undefined,
+        batchCode: batchCode?.trim() || undefined,
+        students: [],
         records: [],
         lessonConfigs: {}
       }
     }));
     return id;
+  }, []);
+
+  // 更新班级基础信息（名称/学期/批次编号）
+  const updateClass = useCallback((classId: string, patch: { name?: string; term?: string; batchCode?: string }) => {
+    setClasses(prev => {
+      const classData = prev[classId];
+      if (!classData) return prev;
+      return {
+        ...prev,
+        [classId]: {
+          ...classData,
+          ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(patch.term !== undefined ? { term: patch.term?.trim() || undefined } : {}),
+          ...(patch.batchCode !== undefined ? { batchCode: patch.batchCode?.trim() || undefined } : {})
+        }
+      };
+    });
   }, []);
 
   // 删除班级
@@ -513,6 +534,63 @@ export function useClassData() {
     }));
   }, []);
 
+  // 恢复被删除的单条记录（保留原 id，用于删除撤销）
+  const restoreRecord = useCallback((classId: string, record: StudentRecord) => {
+    setClasses(prev => {
+      const classData = prev[classId];
+      if (!classData) return prev;
+      // 已存在同 id 或同「学生+课次」的记录则不重复插入
+      const exists = classData.records.some(
+        r => r.id === record.id || (r.studentName === record.studentName && r.lessonNumber === record.lessonNumber)
+      );
+      if (exists) return prev;
+
+      const newRecords = [...classData.records, record];
+      // 重算该课次排名，与 saveRecord 保持一致
+      const lessonRecords = newRecords.filter(r => r.lessonNumber === record.lessonNumber);
+      const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
+      sorted.forEach((r, index) => {
+        const idx = newRecords.findIndex(nr => nr.id === r.id);
+        if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
+      });
+
+      return { ...prev, [classId]: { ...classData, records: newRecords } };
+    });
+  }, []);
+
+  // 恢复被移除的学生及其全部记录（用于移除学生的撤销）
+  const restoreStudent = useCallback((classId: string, studentName: string, records: StudentRecord[]) => {
+    setClasses(prev => {
+      const classData = prev[classId];
+      if (!classData) return prev;
+
+      const students = classData.students.includes(studentName)
+        ? classData.students
+        : [...classData.students, studentName];
+
+      const existingKeys = new Set(
+        classData.records.map(r => `${r.studentName}#${r.lessonNumber}`)
+      );
+      const toRestore = records.filter(
+        r => !existingKeys.has(`${r.studentName}#${r.lessonNumber}`)
+      );
+      const newRecords = [...classData.records, ...toRestore];
+
+      // 重算受影响课次的排名
+      const affectedLessons = new Set(toRestore.map(r => r.lessonNumber));
+      affectedLessons.forEach(lesson => {
+        const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
+        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
+        sorted.forEach((r, index) => {
+          const idx = newRecords.findIndex(nr => nr.id === r.id);
+          if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
+        });
+      });
+
+      return { ...prev, [classId]: { ...classData, students, records: newRecords } };
+    });
+  }, []);
+
   // 更新应用配置
   const updateAppConfig = useCallback((newConfig: Partial<AppConfig>) => {
     setAppConfig(prev => ({ ...prev, ...newConfig }));
@@ -553,7 +631,7 @@ export function useClassData() {
   }, []);
 
   // 批量导入校内成绩（从Excel）
-  const importSchoolScoresFromExcel = useCallback((file: File): Promise<{ success: number; failed: number; errors: string[] }> => {
+  const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[] }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -563,33 +641,58 @@ export function useClassData() {
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-          
+
           if (jsonData.length < 2) {
-            resolve({ success: 0, failed: 0, errors: ['文件格式不正确'] });
+            resolve({ success: 0, failed: 0, errors: ['文件格式不正确'], unmatched: [] });
             return;
           }
 
           const rows = jsonData.slice(1);
-          
+
           let success = 0;
           let failed = 0;
           const errors: string[] = [];
-          
+          const unmatchedSet = new Set<string>();
+
+          // 学生姓名匹配：精确匹配 -> 忽略空格匹配 -> 模糊匹配（包含关系）
+          const matchStudentName = (inputName: string): string | null => {
+            if (!classStudents || classStudents.length === 0) return inputName;
+            const trimmed = inputName.trim();
+            // 精确匹配
+            const exact = classStudents.find(s => s === trimmed);
+            if (exact) return exact;
+            // 忽略空格
+            const noSpace = classStudents.find(s => s.replace(/\s+/g, '') === trimmed.replace(/\s+/g, ''));
+            if (noSpace) return noSpace;
+            // 互相包含
+            const contains = classStudents.find(s => s.includes(trimmed) || trimmed.includes(s));
+            if (contains) return contains;
+            return null;
+          };
+
           rows.forEach((row, index) => {
             try {
-              const studentName = row[0]?.toString().trim();
+              const rawName = row[0]?.toString().trim();
               const score = parseFloat(row[10]?.toString() || '0');
               const totalScore = parseFloat(row[11]?.toString() || '0');
-              
-              if (!studentName || isNaN(score)) {
+
+              if (!rawName || isNaN(score)) {
                 failed++;
                 errors.push(`第${index + 2}行: 学生姓名或分数无效`);
                 return;
               }
-              
+
+              const matchedName = matchStudentName(rawName);
+              if (!matchedName) {
+                unmatchedSet.add(rawName);
+                failed++;
+                errors.push(`第${index + 2}行: 「${rawName}」未匹配到班级学生名单`);
+                return;
+              }
+
               const newScore: SchoolScore = {
                 id: generateId(),
-                studentName,
+                studentName: matchedName,
                 studentCode: row[1]?.toString(),
                 examName: '校内考试',
                 date: new Date().toISOString().split('T')[0],
@@ -615,20 +718,20 @@ export function useClassData() {
                 enrollmentPercent: parseFloat(row[21]?.toString() || '0') || undefined,
                 school: row[22]?.toString()
               };
-              
+
               setSchoolScores(prev => ({
                 ...prev,
-                [studentName]: [...(prev[studentName] || []), newScore]
+                [matchedName]: [...(prev[matchedName] || []), newScore]
               }));
-              
+
               success++;
             } catch (err) {
               failed++;
               errors.push(`第${index + 2}行: ${err}`);
             }
           });
-          
-          resolve({ success, failed, errors });
+
+          resolve({ success, failed, errors, unmatched: Array.from(unmatchedSet) });
         } catch (err) {
           reject(err);
         }
@@ -643,6 +746,19 @@ export function useClassData() {
       ...prev,
       [studentName]: (prev[studentName] || []).filter(s => s.id !== scoreId)
     }));
+  }, []);
+
+  // 恢复被删除的校内成绩（按原始位置插回，保证列表顺序不变）
+  const restoreSchoolScore = useCallback((studentName: string, score: SchoolScore) => {
+    setSchoolScores(prev => {
+      const list = prev[studentName] || [];
+      if (list.some(s => s.id === score.id)) return prev;
+      const next = [...list];
+      // 按 id 在原始快照中的顺序尽力还原：这里追加后按日期排序，保证展示稳定
+      next.push(score);
+      next.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return { ...prev, [studentName]: next };
+    });
   }, []);
 
   // 导出数据
@@ -668,197 +784,17 @@ export function useClassData() {
     setSchoolScores(data.schoolScores);
   }, []);
 
-  // 导出为HTML
-  const exportToHTML = useCallback((classId: string, lessonNumber: number): string => {
+  // 导出为HTML（公示页，样式可选：gradient/minimal/dark）
+  const exportToHTML = useCallback((classId: string, lessonNumber: number, style: 'gradient' | 'minimal' | 'dark' = 'gradient'): string => {
     const classData = classes[classId];
     if (!classData) return '';
 
     const lessonConfig = getLessonConfig(classId, lessonNumber);
     const records = classData.records.filter(r => r.lessonNumber === lessonNumber);
-    const stats = calculateClassStats(records, lessonConfig.questionTypes);
-    
-    let html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${classData.name} - 第${lessonNumber}课学情公示</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      text-align: center;
-    }
-    .header h1 { font-size: 28px; margin-bottom: 8px; }
-    .header p { opacity: 0.9; }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-      padding: 24px;
-      background: #f8fafc;
-    }
-    .stat-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      text-align: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    .stat-value {
-      font-size: 32px;
-      font-weight: bold;
-      color: #667eea;
-    }
-    .stat-label {
-      color: #64748b;
-      font-size: 14px;
-      margin-top: 4px;
-    }
-    .content { padding: 24px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    th {
-      background: #f1f5f9;
-      padding: 12px;
-      text-align: left;
-      font-weight: 600;
-      color: #475569;
-    }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    tr:hover { background: #f8fafc; }
-    .rank-1 { background: linear-gradient(90deg, #ffd700 0%, #ffed4a 100%); color: #92400e; font-weight: bold; }
-    .rank-2 { background: linear-gradient(90deg, #c0c0c0 0%, #e5e5e5 100%); color: #4b5563; font-weight: bold; }
-    .rank-3 { background: linear-gradient(90deg, #cd7f32 0%, #daa520 100%); color: #92400e; font-weight: bold; }
-    .score-high { color: #10b981; font-weight: 600; }
-    .score-medium { color: #f59e0b; }
-    .score-low { color: #ef4444; }
-    .weak-point {
-      display: inline-block;
-      background: #fee2e2;
-      color: #dc2626;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin-right: 4px;
-    }
-    .season-tag {
-      display: inline-block;
-      background: #e0e7ff;
-      color: #4f46e5;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin-right: 4px;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      color: #94a3b8;
-      font-size: 12px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>${classData.name}</h1>
-      <p>第${lessonNumber}课学情公示</p>
-    </div>
-    
-    <div class="stats">
-      <div class="stat-card">
-        <div class="stat-value">${stats.maxScore}</div>
-        <div class="stat-label">最高分</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.avgScore}</div>
-        <div class="stat-label">平均分</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.minScore}</div>
-        <div class="stat-label">最低分</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${records.length}</div>
-        <div class="stat-label">参考人数</div>
-      </div>
-    </div>
-    
-    <div class="content">
-      <table>
-        <thead>
-          <tr>
-            <th>排名</th>
-            <th>姓名</th>
-            <th>学习轨迹</th>
-            ${lessonConfig.questionTypes.map(qt => `<th>${qt.name}</th>`).join('')}
-            <th>总分</th>
-            <th>正确率</th>
-            <th>薄弱项</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${records.sort((a, b) => b.totalScore - a.totalScore).map((r, i) => {
-            const weakPoints: string[] = [];
-            lessonConfig.questionTypes.forEach(qt => {
-              const studentScore = r.scores[qt.id] || 0;
-              const avgScore = stats.avgScores[qt.id] || 0;
-              if (studentScore < avgScore - 5) {
-                weakPoints.push(qt.name);
-              }
-            });
-            
-            return `<tr class="${i < 3 ? `rank-${i + 1}` : ''}">
-              <td>${r.rank}</td>
-              <td>${nicknames[classId]?.[r.studentName] || r.studentName}</td>
-              <td>${r.seasons.map(s => `<span class="season-tag">${s}</span>`).join('')}</td>
-              ${lessonConfig.questionTypes.map(qt => {
-                const score = r.scores[qt.id] || 0;
-                const avg = stats.avgScores[qt.id] || 0;
-                const cssClass = score >= avg ? 'score-high' : score >= avg - 5 ? 'score-medium' : 'score-low';
-                return `<td class="${cssClass}">${score}</td>`;
-              }).join('')}
-              <td class="score-high">${r.totalScore}</td>
-              <td>${r.correctRate}%</td>
-              <td>${weakPoints.map(wp => `<span class="weak-point">${wp}</span>`).join('')}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-    
-    <div class="footer">
-      <p>生成时间：${new Date().toLocaleString('zh-CN')}</p>
-    </div>
-  </div>
-</body>
-</html>`;
+    const getNick = (name: string) => nicknames[classId]?.[name] || name;
 
-    return html;
-  }, [classes, nicknames, getLessonConfig, calculateClassStats]);
+    return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style);
+  }, [classes, nicknames, getLessonConfig]);
 
   return {
     appConfig,
@@ -880,6 +816,7 @@ export function useClassData() {
     calculateClassStats,
     calculateWeakPoints,
     createClass,
+    updateClass,
     deleteClass,
     addStudentToClass,
     addStudents,
@@ -888,12 +825,15 @@ export function useClassData() {
     saveRecord,
     updateRecordField,
     deleteRecord,
+    restoreRecord,
+    restoreStudent,
     updateAppConfig,
     getStudentAllRecords,
     getStudentSchoolScores,
     addSchoolScore,
     importSchoolScoresFromExcel,
     deleteSchoolScore,
+    restoreSchoolScore,
     exportData,
     importData,
     exportToHTML

@@ -45,7 +45,7 @@ export function exportToExcel(data: ExportData, _className: string): { workbook:
           '学习轨迹': record.seasons.join(''),
           '考勤': record.attendance,
           '书面作业': record.homeworkStatus,
-          '乐听说': record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus,
+          '课后任务': record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus,
         };
 
         // 添加各题型分数
@@ -115,5 +115,64 @@ export function exportLessonToExcel(
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(records);
   XLSX.utils.book_append_sheet(workbook, sheet, `第${lessonNumber}课`);
+  return workbook;
+}
+
+// 导出当前课次名单 Excel（学情记录表用）
+export function exportClassRosterToExcel(args: {
+  className: string;
+  lessonNumber: number;
+  students: string[];
+  records: Array<{
+    studentName: string;
+    seasons?: string[];
+    attendance?: string;
+    homeworkStatus?: string;
+    listeningStatus?: string;
+    listeningScore?: number;
+    scores?: Record<string, number>;
+    totalScore?: number;
+    correctRate?: number;
+    rank?: number;
+  }>;
+  nicknames: Record<string, string>;
+  questionTypes: Array<{ id: string; name: string }>;
+}): XLSX.WorkBook {
+  const { lessonNumber, students, records, nicknames, questionTypes } = args;
+  const workbook = XLSX.utils.book_new();
+
+  // Sheet 1：班级学员名单
+  const roster = students.map((name, i) => ({
+    '序号': i + 1,
+    '学生姓名': name,
+    '昵称': nicknames[name] || name
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(roster), '班级名单');
+
+  // Sheet 2：学情记录
+  const recordByName = new Map(records.map(r => [r.studentName, r]));
+  const rows = students.map((name, i) => {
+    const r = recordByName.get(name);
+    const row: Record<string, string | number> = {
+      '序号': i + 1,
+      '学生姓名': name,
+      '昵称': nicknames[name] || name
+    };
+    if (r) {
+      row['学习轨迹'] = (r.seasons || []).join('');
+      row['考勤'] = r.attendance || '';
+      row['书面作业'] = r.homeworkStatus || '';
+      row['课后任务'] = r.listeningStatus === '具体分数' ? `${r.listeningScore ?? 0}分` : (r.listeningStatus || '');
+      questionTypes.forEach(qt => {
+        row[qt.name] = (r.scores || {})[qt.id] ?? 0;
+      });
+      row['总分'] = r.totalScore ?? 0;
+      row['正确率'] = `${r.correctRate ?? 0}%`;
+      row['排名'] = r.rank ? `第${r.rank}名` : '';
+    }
+    return row;
+  });
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), `第${lessonNumber}课学情`);
+
   return workbook;
 }

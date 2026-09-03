@@ -29,12 +29,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#007aff] via-[#5ac8fa] to-[#34c759] flex items-center justify-center p-4">
+    <div className="min-h-screen mac-login-bg flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo 区域 */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-4 border border-white/50">
-            <GraduationCap className="w-12 h-12 text-[#007aff]" />
+            <GraduationCap className="w-12 h-12 text-[color:var(--accent)]" />
           </div>
           <h1 className="text-4xl font-bold text-white mb-1">Lynn's</h1>
           <p className="text-white/80 text-xl font-medium">Realm</p>
@@ -60,7 +60,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                       setPassword(e.target.value);
                       setError('');
                     }}
-                    className="pl-12 pr-12 h-14 rounded-xl bg-[#f2f2f7] border-0 text-[#1c1c1e] placeholder:text-[#8e8e93] focus:ring-2 focus:ring-[#007aff]/30 focus:bg-white transition-all"
+                    className="pl-12 pr-12 h-14 rounded-xl bg-[#f2f2f7] border-0 text-[#1c1c1e] placeholder:text-[#8e8e93] focus:ring-2 focus:ring-[rgb(var(--accent-rgb)/0.3)] focus:bg-white transition-all"
                   />
                   <button
                     type="button"
@@ -77,7 +77,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
               <Button 
                 type="submit" 
-                className="w-full h-14 bg-[#007aff] hover:bg-[#0071e3] text-white font-semibold text-base rounded-xl shadow-lg shadow-[#007aff]/30 transition-all active:scale-[0.98]"
+                className="w-full h-14 bg-[rgb(var(--accent-rgb)/0.12)] hover:bg-[var(--accent-strong)] text-white font-semibold text-base rounded-xl shadow-lg shadow-[rgb(var(--accent-rgb)/30)] transition-all active:scale-[0.98]"
               >
                 登录
               </Button>

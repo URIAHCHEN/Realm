@@ -4,7 +4,7 @@ export type AttendanceType = string;
 // 作业状态类型
 export type HomeworkStatusType = string;
 
-// 乐听说状态类型
+// 课后任务状态类型
 export type ListeningStatusType = string;
 
 // 季节类型
@@ -18,6 +18,23 @@ export interface QuestionType {
   order: number;
 }
 
+// 固定列的自定义标题（可留空使用默认名）
+export interface ColumnLabels {
+  seasons?: string;
+  attendance?: string;
+  homework?: string;
+  listening?: string;
+  note?: string;
+  pass?: string;
+}
+
+// 班群公示表彰模板
+export interface PraiseTemplate {
+  id: string;
+  name: string;
+  template: string;
+}
+
 // 课次配置
 export interface LessonConfig {
   questionTypes: QuestionType[];
@@ -26,7 +43,13 @@ export interface LessonConfig {
   listeningOptions: string[];
   feedbackTemplate: string;
   praiseTemplate: string;
+  /** 多套表彰模板（优先于 praiseTemplate 使用；为空时回退 praiseTemplate） */
+  praiseTemplates?: PraiseTemplate[];
   homeworkText: string;
+  /** 固定列自定义标题，如将"课后任务"改为其他名称 */
+  columnLabels?: ColumnLabels;
+  /** 过关正确率阈值（百分比），达到或超过判定为过关；默认 80 */
+  passThreshold?: number;
 }
 
 // 学生记录
@@ -45,6 +68,8 @@ export interface StudentRecord {
   correctRate: number;
   rank: number;
   date: string;
+  /** 备注 */
+  note?: string;
 }
 
 // 全局学生（跨班型同步）
@@ -57,6 +82,10 @@ export interface GlobalStudent {
 export interface Class {
   id: string;
   name: string;
+  /** 财年季度，如 FY27Q1 / FY27Q2 */
+  term?: string;
+  /** 班级批次编号，如 TG3ZY078 */
+  batchCode?: string;
   students: string[];
   records: StudentRecord[];
   lessonConfigs: { [lessonNumber: string]: LessonConfig };

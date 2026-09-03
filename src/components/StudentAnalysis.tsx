@@ -1,13 +1,31 @@
+// 学员学情分析弹窗 —— 现代化管理后台风格：KPI 总览 + 多维图表 + 课次时间线 + 校内成绩
 import { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingUp, BarChart3, PieChart, Activity } from 'lucide-react';
-import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  LineChart,
+} from 'recharts';
+import {
+  TrendingUp, TrendingDown, Minus, BarChart3, Activity, School,
+  CalendarCheck, BookOpen, Mic, Trophy, Layers, FileText, Target
+} from 'lucide-react';
+import type { StudentRecord, LessonConfig, SchoolScore, QuestionType } from '@/types';
 
 interface StudentAnalysisProps {
   isOpen: boolean;
@@ -19,164 +37,101 @@ interface StudentAnalysisProps {
   getLessonConfig: (classId: string, lessonNumber: number) => LessonConfig;
 }
 
-// 简单的折线图组件
-function LineChart({ data, labels, title, color = '#6366f1' }: { 
-  data: number[]; 
-  labels: string[]; 
-  title: string;
-  color?: string;
-}) {
-  if (data.length === 0) return <div className="text-center text-slate-400 py-8">暂无数据</div>;
+const CHART_COLORS = ['#0a84ff', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
-  const max = Math.max(...data, 100);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
+const tooltipStyle = {
+  backgroundColor: 'rgba(255,255,255,0.96)',
+  border: '1px solid #e2e8f0',
+  borderRadius: '12px',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+  fontSize: 13,
+};
 
+// 考勤徽章
+const attendanceBadge = (status: string) => {
+  const map: Record<string, string> = {
+    '按时出勤': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    '迟到': 'bg-amber-50 text-amber-700 border-amber-200',
+    '缺勤': 'bg-rose-50 text-rose-700 border-rose-200',
+    '请假': 'bg-blue-50 text-blue-700 border-blue-200',
+    '调课': 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  };
+  return <Badge variant="outline" className={`text-xs ${map[status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>{status}</Badge>;
+};
+
+// 作业徽章
+const homeworkBadge = (status: string) => {
+  const map: Record<string, string> = {
+    '超赞完成': 'bg-amber-50 text-amber-700 border-amber-200',
+    '圆满完成': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    '基本完成': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    '没带': 'bg-orange-50 text-orange-700 border-orange-200',
+    '未完成': 'bg-rose-50 text-rose-700 border-rose-200',
+  };
+  return <Badge variant="outline" className={`text-xs ${map[status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>{status}</Badge>;
+};
+
+// KPI 卡片
+function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; tone: string }) {
   return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium text-slate-600">{title}</div>
-      <div className="relative h-48 bg-slate-50 rounded-lg p-4">
-        <svg className="w-full h-full" viewBox={`0 0 ${data.length * 60} 200`} preserveAspectRatio="none">
-          {/* 网格线 */}
-          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-            <line
-              key={i}
-              x1="0"
-              y1={200 - p * 200}
-              x2={data.length * 60}
-              y2={200 - p * 200}
-              stroke="#e2e8f0"
-              strokeWidth="1"
-            />
-          ))}
-          
-          {/* 折线 */}
-          <polyline
-            fill="none"
-            stroke={color}
-            strokeWidth="3"
-            points={data.map((v, i) => `${i * 60 + 30},${200 - ((v - min) / range) * 180 - 10}`).join(' ')}
-          />
-          
-          {/* 数据点 */}
-          {data.map((v, i) => (
-            <circle
-              key={i}
-              cx={i * 60 + 30}
-              cy={200 - ((v - min) / range) * 180 - 10}
-              r="6"
-              fill={color}
-              stroke="white"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
-        
-        {/* X轴标签 */}
-        <div className="flex justify-between mt-2 text-xs text-slate-500">
-          {labels.map((l, i) => (
-            <div key={i} className="text-center" style={{ width: `${100 / labels.length}%` }}>
-              {l}
-            </div>
-          ))}
-        </div>
+    <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 flex items-center gap-3 shadow-sm">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tone}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-400 font-medium">{label}</p>
+        <p className="text-xl font-bold text-slate-800 leading-tight">{value}<span className="text-xs font-medium text-slate-400 ml-1">{sub}</span></p>
       </div>
     </div>
   );
 }
 
-// 玫瑰图（极坐标面积图）
-function RoseChart({ data, labels, title }: { 
-  data: number[]; 
-  labels: string[]; 
-  title: string;
-}) {
-  if (data.length === 0) return <div className="text-center text-slate-400 py-8">暂无数据</div>;
-
-  const max = Math.max(...data, 100);
-  const centerX = 100;
-  const centerY = 100;
-  const maxRadius = 80;
-  const angleStep = (2 * Math.PI) / data.length;
-
-  // 生成路径
-  const pathPoints = data.map((v, i) => {
-    const angle = i * angleStep - Math.PI / 2;
-    const radius = (v / max) * maxRadius;
-    return {
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle),
-      label: labels[i],
-      value: v
-    };
-  });
-
-  const pathD = pathPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
-
+// 单条课次时间线卡片
+function LessonTimelineCard({ record, questionTypes }: { record: StudentRecord; questionTypes: QuestionType[] }) {
+  const fullScore = questionTypes.reduce((s, q) => s + q.fullScore, 0);
+  const rateTrend = record.correctRate >= 80 ? 'text-emerald-600' : record.correctRate >= 60 ? 'text-amber-600' : 'text-rose-600';
   return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium text-slate-600">{title}</div>
-      <div className="relative h-64 flex items-center justify-center">
-        <svg width="200" height="200" viewBox="0 0 200 200">
-          {/* 背景圆环 */}
-          {[0.2, 0.4, 0.6, 0.8, 1].map((p, i) => (
-            <circle
-              key={i}
-              cx={centerX}
-              cy={centerY}
-              r={maxRadius * p}
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="1"
-            />
-          ))}
-          
-          {/* 射线 */}
-          {data.map((_, i) => {
-            const angle = i * angleStep - Math.PI / 2;
+    <div className="relative pl-6">
+      {/* 时间线轴点 */}
+      <div className="absolute left-0 top-6 w-3 h-3 rounded-full bg-[color:var(--accent)] ring-4 ring-[rgb(var(--accent-rgb)/0.15)]" />
+      <div className="absolute left-[5.5px] top-9 bottom-0 w-px bg-slate-200" />
+      <div className="rounded-2xl bg-white/80 backdrop-blur border border-black/5 p-4 shadow-sm mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-800">Day{record.lessonNumber}</span>
+            <span className="text-xs text-slate-400">{record.date}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {attendanceBadge(record.attendance)}
+            {homeworkBadge(record.homeworkStatus)}
+            <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">
+              <Mic className="w-3 h-3 mr-1" />
+              {record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}
+            </Badge>
+          </div>
+        </div>
+        {/* 题型得分条 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 mb-3">
+          {questionTypes.map(qt => {
+            const score = record.scores[qt.id] || 0;
+            const pct = qt.fullScore > 0 ? Math.min(100, (score / qt.fullScore) * 100) : 0;
+            const barColor = pct >= 85 ? 'bg-emerald-400' : pct >= 70 ? 'bg-sky-400' : pct >= 55 ? 'bg-amber-400' : 'bg-rose-400';
             return (
-              <line
-                key={i}
-                x1={centerX}
-                y1={centerY}
-                x2={centerX + maxRadius * Math.cos(angle)}
-                y2={centerY + maxRadius * Math.sin(angle)}
-                stroke="#e2e8f0"
-                strokeWidth="1"
-              />
+              <div key={qt.id}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-500">{qt.name}</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">{score}<span className="text-slate-400 font-normal">/{qt.fullScore}</span></span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className={`h-full rounded-full ${barColor} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
             );
           })}
-          
-          {/* 数据区域 */}
-          <path
-            d={pathD}
-            fill="rgba(99, 102, 241, 0.3)"
-            stroke="#6366f1"
-            strokeWidth="2"
-          />
-          
-          {/* 数据点 */}
-          {pathPoints.map((p, i) => (
-            <circle
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              r="4"
-              fill="#6366f1"
-              stroke="white"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
-        
-        {/* 图例 */}
-        <div className="absolute bottom-0 left-0 right-0 flex flex-wrap justify-center gap-2 text-xs">
-          {pathPoints.map((p, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-indigo-500" />
-              <span>{p.label}: {p.value.toFixed(1)}%</span>
-            </div>
-          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-bold text-lg text-[color:var(--accent)]">{record.totalScore}<span className="text-xs font-medium text-slate-400">/{fullScore}</span></span>
+          <Badge variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">第 {record.rank} 名</Badge>
+          <span className={`font-semibold ${rateTrend}`}>正确率 {record.correctRate}%</span>
+          {record.note && <span className="text-xs text-slate-400 truncate max-w-[240px]" title={record.note}>📝 {record.note}</span>}
         </div>
       </div>
     </div>
@@ -186,293 +141,307 @@ function RoseChart({ data, labels, title }: {
 export function StudentAnalysis({
   isOpen,
   onClose,
-
+  studentName,
   nickname,
   allRecords,
   schoolScores,
   getLessonConfig
 }: StudentAnalysisProps) {
   const [selectedClassIndex, setSelectedClassIndex] = useState(0);
-  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
 
   const currentClassData = allRecords[selectedClassIndex];
-  const records = currentClassData?.records || [];
+  const records = useMemo(() =>
+    [...(currentClassData?.records || [])].sort((a, b) => a.lessonNumber - b.lessonNumber),
+    [currentClassData]
+  );
 
-  // 计算趋势数据
-  const trendData = useMemo(() => {
-    const lessonNumbers = records.map(r => r.lessonNumber);
-    const totalScores = records.map(r => r.totalScore);
-    const correctRates = records.map(r => r.correctRate);
-    const listeningScores = records.map(r => r.listeningStatus === '具体分数' ? r.listeningScore : 0);
-    
-    return { lessonNumbers, totalScores, correctRates, listeningScores };
-  }, [records]);
-
-  // 各题型分数趋势
-  const questionTypeTrends = useMemo(() => {
-    if (records.length === 0) return {};
-    
-    const lessonConfig = getLessonConfig(currentClassData.classId, records[0].lessonNumber);
-    const trends: { [key: string]: number[] } = {};
-    
-    lessonConfig.questionTypes.forEach(qt => {
-      trends[qt.name] = records.map(r => r.scores[qt.id] || 0);
-    });
-    
-    return trends;
+  // 统一取最新课次的题型配置
+  const questionTypes = useMemo(() => {
+    if (records.length === 0) return [];
+    const configs = records.map(r => getLessonConfig(currentClassData.classId, r.lessonNumber));
+    return configs[configs.length - 1].questionTypes;
   }, [records, currentClassData, getLessonConfig]);
 
-  // 选中课程的玫瑰图数据
-  const roseChartData = useMemo(() => {
-    if (selectedRecordIndex === null || records.length === 0) return null;
-    
-    const record = records[selectedRecordIndex];
-    const lessonConfig = getLessonConfig(currentClassData.classId, record.lessonNumber);
-    
-    // 获取该课次的班级平均分
-    // 这里简化处理，实际应该从所有学生记录中计算
-    const data = lessonConfig.questionTypes.map(qt => {
-      const score = record.scores[qt.id] || 0;
-      return (score / qt.fullScore) * 100;
-    });
-    
-    const labels = lessonConfig.questionTypes.map(qt => qt.name);
-    
-    return { data, labels };
-  }, [selectedRecordIndex, records, currentClassData, getLessonConfig]);
+  // KPI 统计
+  const kpis = useMemo(() => {
+    if (records.length === 0) return null;
+    const scores = records.map(r => r.totalScore);
+    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
+    const max = Math.max(...scores);
+    const min = Math.min(...scores);
+    const avgRate = Math.round(records.reduce((a, r) => a + r.correctRate, 0) / records.length * 10) / 10;
+    const latest = records[records.length - 1];
+    const prev = records[records.length - 2];
+    const trend = prev ? latest.totalScore - prev.totalScore : 0;
+    const fullScore = questionTypes.reduce((s, q) => s + q.fullScore, 0);
+    const attendanceRate = Math.round(records.filter(r => r.attendance === '按时出勤').length / records.length * 100);
+    return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
+  }, [records, questionTypes]);
 
-  // 校内成绩趋势
-  const schoolScoreTrend = useMemo(() => {
-    const sorted = [...schoolScores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return {
-      dates: sorted.map(s => s.date.slice(5)),
-      scores: sorted.map(s => s.totalScore > 0 ? Math.round((s.score / s.totalScore) * 100 * 10) / 10 : 0),
-      classRanks: sorted.map(s => s.classRank || 0)
-    };
-  }, [schoolScores]);
+  // 总分 + 正确率组合图
+  const trendChartData = useMemo(() =>
+    records.map(r => ({ name: `D${r.lessonNumber}`, 总分: r.totalScore, 正确率: r.correctRate })),
+    [records]
+  );
+
+  // 题型雷达图（平均得分率 %）
+  const radarData = useMemo(() => {
+    if (records.length === 0) return [];
+    return questionTypes.map(qt => {
+      const pcts = records.map(r => {
+        const score = r.scores[qt.id] || 0;
+        return qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0;
+      });
+      return { subject: qt.name, 得分率: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10 };
+    });
+  }, [records, questionTypes]);
+
+  // 各题型分数多线趋势
+  const qtTrendData = useMemo(() => {
+    return records.map(r => {
+      const row: Record<string, string | number> = { name: `D${r.lessonNumber}` };
+      questionTypes.forEach(qt => { row[qt.name] = r.scores[qt.id] || 0; });
+      return row;
+    });
+  }, [records, questionTypes]);
+
+  // 校内成绩
+  const schoolData = useMemo(() =>
+    [...schoolScores]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map(s => ({
+        name: s.date.slice(5),
+        exam: s.examName,
+        得分率: s.totalScore > 0 ? Math.round((s.score / s.totalScore) * 100 * 10) / 10 : 0,
+        score: s.score,
+        totalScore: s.totalScore,
+        classRank: s.classRank,
+        gradeRank: s.gradeRank,
+        classSize: s.classSize,
+      })),
+    [schoolScores]
+  );
+
+  if (records.length === 0) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{nickname} 学情分析</DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-10 text-slate-400">
+            <FileText className="w-14 h-14 mx-auto mb-3" />
+            <p>该学员暂无学情记录</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[98vw] w-[1600px] max-h-[95vh] overflow-y-auto liquid-glass-card">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-3xl flex items-center gap-3 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 bg-clip-text text-transparent font-bold">
-              <Activity className="w-8 h-8 text-violet-600" />
-              {nickname} 学情分析
-            </DialogTitle>
-
+      <DialogContent className="max-w-[1100px] w-[96vw] max-h-[92vh] overflow-y-auto rounded-3xl">
+        <DialogHeader className="space-y-0">
+          {/* 头部：头像 + 姓名 + 趋势标识 */}
+          <div className="flex items-center gap-4 pt-1">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[rgb(var(--accent-rgb)/0.2)] to-[rgb(var(--accent-rgb)/0.4)] flex items-center justify-center text-2xl font-bold text-[color:var(--accent-strong)] shadow-inner">
+              {nickname.slice(0, 1)}
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                {nickname}
+                <span className="text-sm font-normal text-slate-400">{studentName !== nickname ? studentName : ''}</span>
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {currentClassData && (
+                  <Badge variant="outline" className="text-xs bg-[rgb(var(--accent-rgb)/0.08)] text-[color:var(--accent)] border-[rgb(var(--accent-rgb)/0.2)]">
+                    <Layers className="w-3 h-3 mr-1" />{currentClassData.className}
+                  </Badge>
+                )}
+                {kpis && kpis.trend !== 0 && (
+                  <Badge variant="outline" className={`text-xs ${kpis.trend > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                    {kpis.trend > 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                    较上次 {kpis.trend > 0 ? '+' : ''}{kpis.trend} 分
+                  </Badge>
+                )}
+                {kpis && kpis.trend === 0 && records.length > 1 && (
+                  <Badge variant="outline" className="text-xs bg-slate-50 text-slate-500 border-slate-200">
+                    <Minus className="w-3 h-3 mr-1" />与上次持平
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 mt-4">
-          {/* 班级选择 */}
-          {allRecords.length > 1 && (
-            <div className="flex gap-2">
-              {allRecords.map((data, i) => (
-                <Button
-                  key={data.classId}
-                  variant={selectedClassIndex === i ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setSelectedClassIndex(i);
-                    setSelectedRecordIndex(null);
-                  }}
-                >
-                  {data.className}
-                </Button>
+        {/* 多班级切换 */}
+        {allRecords.length > 1 && (
+          <div className="flex flex-wrap gap-2 -mt-2">
+            {allRecords.map((data, i) => (
+              <Button
+                key={data.classId}
+                variant={selectedClassIndex === i ? 'default' : 'outline'}
+                size="sm"
+                className={`h-8 rounded-xl ${selectedClassIndex === i ? 'ios-button' : 'bg-white/60'}`}
+                onClick={() => setSelectedClassIndex(i)}
+              >
+                {data.className}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {/* KPI 总览 */}
+        {kpis && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard icon={<BarChart3 className="w-5 h-5 text-white" />} label="累计课次" value={kpis.total} sub="课" tone="bg-gradient-to-br from-sky-400 to-blue-500" />
+            <KpiCard icon={<Target className="w-5 h-5 text-white" />} label="平均分" value={kpis.avg} sub={`/${kpis.fullScore}`} tone="bg-gradient-to-br from-violet-400 to-purple-500" />
+            <KpiCard icon={<Trophy className="w-5 h-5 text-white" />} label="最高分" value={kpis.max} sub="分" tone="bg-gradient-to-br from-amber-400 to-orange-500" />
+            <KpiCard icon={<CalendarCheck className="w-5 h-5 text-white" />} label="出勤率" value={kpis.attendanceRate} sub="%" tone="bg-gradient-to-br from-emerald-400 to-teal-500" />
+          </div>
+        )}
+
+        <Tabs defaultValue="overview" className="mt-1">
+          <TabsList className="bg-slate-100/80 rounded-2xl p-1 h-auto">
+            <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm gap-1.5">
+              <BarChart3 className="w-4 h-4" />成绩总览
+            </TabsTrigger>
+            <TabsTrigger value="detail" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm gap-1.5">
+              <FileText className="w-4 h-4" />课次明细
+            </TabsTrigger>
+            <TabsTrigger value="school" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm gap-1.5">
+              <School className="w-4 h-4" />校内成绩
+            </TabsTrigger>
+          </TabsList>
+
+          {/* 成绩总览 */}
+          <TabsContent value="overview" className="space-y-4 mt-4">
+            <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-[color:var(--accent)]" />总分与正确率走势
+              </p>
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={trendChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <YAxis yAxisId="score" tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--accent-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
+                    <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[color:var(--accent)]" />题型能力雷达（平均得分率）
+                </p>
+                <div style={{ height: 250 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
+                      <PolarGrid stroke="#e2e8f0" />
+                      <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} angle={30} />
+                      <Radar name="得分率%" dataKey="得分率" stroke="rgb(var(--accent-rgb) / 0.9)" fill="rgb(var(--accent-rgb) / 0.25)" strokeWidth={2} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-[color:var(--accent)]" />各题型分数趋势
+                </p>
+                <div style={{ height: 250 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={qtTrendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      {questionTypes.map((qt, i) => (
+                        <Line key={qt.id} type="monotone" dataKey={qt.name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* 课次明细（时间线） */}
+          <TabsContent value="detail" className="mt-4">
+            <div className="max-h-[52vh] overflow-y-auto pr-1">
+              {[...records].reverse().map(record => (
+                <LessonTimelineCard key={record.id} record={record} questionTypes={questionTypes} />
               ))}
             </div>
-          )}
+          </TabsContent>
 
-          {/* 图表区域 */}
-          <div className="grid grid-cols-2 gap-8">
-            {/* 入门测趋势 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  入门测总分趋势
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LineChart
-                  data={trendData.totalScores}
-                  labels={trendData.lessonNumbers.map(n => `第${n}课`)}
-                  title=""
-                  color="#6366f1"
-                />
-              </CardContent>
-            </Card>
-
-            {/* 正确率趋势 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  正确率趋势
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LineChart
-                  data={trendData.correctRates}
-                  labels={trendData.lessonNumbers.map(n => `第${n}课`)}
-                  title=""
-                  color="#10b981"
-                />
-              </CardContent>
-            </Card>
-
-            {/* 乐听说趋势 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  乐听说分数趋势
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LineChart
-                  data={trendData.listeningScores.filter(s => s > 0)}
-                  labels={trendData.lessonNumbers.filter((_, i) => trendData.listeningScores[i] > 0).map(n => `第${n}课`)}
-                  title=""
-                  color="#f59e0b"
-                />
-              </CardContent>
-            </Card>
-
-            {/* 校内成绩趋势 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  校内成绩正确率趋势
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LineChart
-                  data={schoolScoreTrend.scores}
-                  labels={schoolScoreTrend.dates}
-                  title=""
-                  color="#8b5cf6"
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 各题型分数趋势 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                各题型分数趋势
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                {Object.entries(questionTypeTrends).map(([name, scores]) => (
-                  <div key={name} className="space-y-2">
-                    <div className="text-xs font-medium text-slate-600">{name}</div>
-                    <LineChart
-                      data={scores}
-                      labels={trendData.lessonNumbers.map(n => `第${n}课`)}
-                      title=""
-                      color={`hsl(${Math.random() * 360}, 70%, 50%)`}
-                    />
+          {/* 校内成绩 */}
+          <TabsContent value="school" className="space-y-4 mt-4">
+            {schoolData.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <School className="w-14 h-14 mx-auto mb-3" />
+                <p>暂无校内成绩记录</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <School className="w-4 h-4 text-[color:var(--accent)]" />校内考试得分率走势
+                  </p>
+                  <div style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={schoolData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line type="monotone" dataKey="得分率" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 单次课玫瑰图 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <PieChart className="w-4 h-4" />
-                单次课题型得分率分析
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4 mb-4">
-                <Select 
-                  value={selectedRecordIndex?.toString() || ''} 
-                  onValueChange={(v) => setSelectedRecordIndex(parseInt(v))}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="选择课次" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {records.map((r, i) => (
-                      <SelectItem key={r.id} value={i.toString()}>
-                        第{r.lessonNumber}课 (总分: {r.totalScore})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {roseChartData && (
-                <div className="w-64 mx-auto">
-                  <RoseChart
-                    data={roseChartData.data}
-                    labels={roseChartData.labels}
-                    title=""
-                  />
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 详细记录表 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">详细学情记录</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-64">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>课次</TableHead>
-                      <TableHead>考勤</TableHead>
-                      <TableHead>作业</TableHead>
-                      <TableHead>乐听说</TableHead>
-                      {records[0] && getLessonConfig(currentClassData.classId, records[0].lessonNumber).questionTypes.map(qt => (
-                        <TableHead key={qt.id}>{qt.name}</TableHead>
+                <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 shadow-sm overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left font-medium">考试</th>
+                        <th className="px-4 py-2.5 text-left font-medium">日期</th>
+                        <th className="px-4 py-2.5 text-left font-medium">得分</th>
+                        <th className="px-4 py-2.5 text-left font-medium">得分率</th>
+                        <th className="px-4 py-2.5 text-left font-medium">班级排名</th>
+                        <th className="px-4 py-2.5 text-left font-medium">年级排名</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...schoolData].reverse().map((s, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-4 py-2.5 font-medium text-slate-700">{s.exam}</td>
+                          <td className="px-4 py-2.5 text-slate-500">{s.name}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{s.score}/{s.totalScore}</td>
+                          <td className="px-4 py-2.5">
+                            <Badge variant="outline" className={`text-xs ${s.得分率 >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : s.得分率 >= 60 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>{s.得分率}%</Badge>
+                          </td>
+                          <td className="px-4 py-2.5">{s.classRank ? `${s.classRank}/${s.classSize || '-'}` : '-'}</td>
+                          <td className="px-4 py-2.5">{s.gradeRank || '-'}</td>
+                        </tr>
                       ))}
-                      <TableHead>总分</TableHead>
-                      <TableHead>排名</TableHead>
-                      <TableHead>正确率</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {records.map((record) => {
-                      const lessonConfig = getLessonConfig(currentClassData.classId, record.lessonNumber);
-                      return (
-                        <TableRow key={record.id}>
-                          <TableCell>第{record.lessonNumber}课</TableCell>
-                          <TableCell>{record.attendance}</TableCell>
-                          <TableCell>{record.homeworkStatus}</TableCell>
-                          <TableCell>
-                            {record.listeningStatus === '具体分数' 
-                              ? `${record.listeningScore}分` 
-                              : record.listeningStatus}
-                          </TableCell>
-                          {lessonConfig.questionTypes.map(qt => (
-                            <TableCell key={qt.id}>{record.scores[qt.id] || 0}</TableCell>
-                          ))}
-                          <TableCell className="font-bold">{record.totalScore}</TableCell>
-                          <TableCell>第{record.rank}名</TableCell>
-                          <TableCell>{record.correctRate}%</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

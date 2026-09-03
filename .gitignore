@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+
+# local env files (密钥不入库，CI 用 Secrets 注入)
+.env
+.env.*
+!.env.example
+
+# logs / editor / OS
+*.local
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/

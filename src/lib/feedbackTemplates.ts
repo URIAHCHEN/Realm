@@ -53,7 +53,7 @@ export function generatePersonalFeedback(
     .replace(/【课次】/g, record.lessonNumber.toString())
     .replace(/【考勤】/g, record.attendance)
     .replace(/【作业】/g, record.homeworkStatus)
-    .replace(/【乐听说】/g, record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus)
+    .replace(/【课后任务】|【乐听说】/g, record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus)
     .replace(/【成绩详情】/g, scoreDetails)
     .replace(/【总分】/g, record.totalScore.toString())
     .replace(/【满分】/g, fullScore.toString())
@@ -71,9 +71,11 @@ export function generatePraise(
   lessonConfig: LessonConfig,
   stats: ClassStats,
   getNickname: (name: string) => string,
-  praiseType: 'entrance' | 'listening' | 'comprehensive' = 'comprehensive'
+  praiseType: 'entrance' | 'listening' | 'comprehensive' = 'comprehensive',
+  /** 指定模板内容（多模板管理时传入所选模板），缺省用 lessonConfig.praiseTemplate */
+  templateOverride?: string
 ): string {
-  const template = lessonConfig.praiseTemplate;
+  const template = templateOverride ?? lessonConfig.praiseTemplate;
   
   let praiseContent = '';
   
@@ -96,14 +98,14 @@ export function generatePraise(
   }
   
   if (praiseType === 'listening' || praiseType === 'comprehensive') {
-    // 乐听说排名
+    // 课后任务排名
     const listeningRanked = records
       .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0)
       .sort((a, b) => b.listeningScore - a.listeningScore)
       .slice(0, 5);
     
     if (listeningRanked.length > 0) {
-      praiseContent += '🎙️【乐听说达人】\n';
+      praiseContent += '🎙️【课后任务达人】\n';
       const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌'];
       listeningRanked.forEach((r, i) => {
         const nickname = getNickname(r.studentName);
@@ -157,7 +159,7 @@ export function generatePraise(
   // 替换模板变量
   let praise = template
     .replace(/【课次】/g, lessonNumber.toString())
-    .replace(/【表彰类型】/g, praiseType === 'entrance' ? '入门测' : praiseType === 'listening' ? '乐听说' : '综合')
+    .replace(/【表彰类型】/g, praiseType === 'entrance' ? '入门测' : praiseType === 'listening' ? '课后任务' : '综合')
     .replace(/【表彰内容】/g, praiseContent);
   
   return praise;
@@ -181,7 +183,7 @@ export function exportToCSV(
   _className: string,
   _lessonNumber: number
 ): string {
-  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '书面作业', '乐听说', ...lessonConfig.questionTypes.map(qt => qt.name), '总分', '正确率', '排名'];
+  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), '总分', '正确率', '排名'];
   
   let csv = headers.join(',') + '\n';
   

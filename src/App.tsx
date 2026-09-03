@@ -45,7 +45,6 @@ import { exportToCSV, downloadCSV } from '@/lib/feedbackTemplates';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
-import { SyncCenterGate } from '@/components/SyncCenterGate';
 import { DocSyncPanel } from '@/components/DocSyncPanel';
 import { DisplaySettingsPanel } from '@/components/DisplaySettingsPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
@@ -759,7 +758,7 @@ function App() {
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="space-y-6">
             <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
-            <SyncCenterGate adminPassword={adminPassword}>
+            {membership.admin && (
               <div className="space-y-6">
                 <CloudSyncPanel sync={cloudSync} />
                 <DocSyncPanel
@@ -772,7 +771,7 @@ function App() {
                   onExportExcel={handleExportAllData}
                 />
               </div>
-            </SyncCenterGate>
+            )}
           </TabsContent>
         </Tabs>
       </div>

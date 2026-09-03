@@ -41,6 +41,7 @@ import { exportToCSV, downloadCSV } from '@/lib/feedbackTemplates';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
+import { SyncCenterGate } from '@/components/SyncCenterGate';
 import { DocSyncPanel } from '@/components/DocSyncPanel';
 import { DisplaySettingsPanel } from '@/components/DisplaySettingsPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
@@ -122,7 +123,9 @@ function App() {
 
   const cloudSync = useCloudSync({
     snapshot: syncSnapshot,
-    onImport: (snap) => importData(snap)
+    onImport: (snap) => importData(snap),
+    enabled: isAuthenticated,
+    sessionKey: getCachedSession()?.user_id ?? null
   });
 
   const displaySettings = useDisplaySettings();
@@ -720,16 +723,20 @@ function App() {
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="space-y-6">
-            <CloudSyncPanel sync={cloudSync} />
-            <DocSyncPanel
-              records={currentClass?.records.filter(r => r.lessonNumber === currentLessonNumber) || []}
-              lessonConfig={currentLessonConfig}
-              lessonNumber={currentLessonNumber}
-              getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-              display={displaySettings}
-              onImportRows={handleImportDocRows}
-              onExportExcel={handleExportAllData}
-            />
+            <SyncCenterGate adminPassword={adminPassword}>
+              <div className="space-y-6">
+                <CloudSyncPanel sync={cloudSync} />
+                <DocSyncPanel
+                  records={currentClass?.records.filter(r => r.lessonNumber === currentLessonNumber) || []}
+                  lessonConfig={currentLessonConfig}
+                  lessonNumber={currentLessonNumber}
+                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                  display={displaySettings}
+                  onImportRows={handleImportDocRows}
+                  onExportExcel={handleExportAllData}
+                />
+              </div>
+            </SyncCenterGate>
           </TabsContent>
         </Tabs>
       </div>

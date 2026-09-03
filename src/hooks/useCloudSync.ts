@@ -17,11 +17,15 @@ import { getSyncIntervalSec } from '@/lib/displaySettings';
 interface UseCloudSyncOptions {
   snapshot: SyncSnapshot;
   onImport: (snapshot: SyncSnapshot) => void;
+  /** 是否已登录：RLS 收紧后需携带用户 JWT，未登录时不做对账/自动推送 */
+  enabled: boolean;
+  /** 当前登录账号标识；变化时重新对账（切换账号场景） */
+  sessionKey?: string | null;
 }
 
 export type SyncAction = 'idle' | 'pushing' | 'pulling';
 
-export function useCloudSync({ snapshot, onImport }: UseCloudSyncOptions) {
+export function useCloudSync({ snapshot, onImport, enabled, sessionKey }: UseCloudSyncOptions) {
   const [config, setConfig] = useState<CloudSyncConfig | null>(() => loadSyncConfig());
   const [status, setStatus] = useState<CloudSyncStatus>('unconfigured');
   const [action, setAction] = useState<SyncAction>('idle');
@@ -138,16 +142,17 @@ export function useCloudSync({ snapshot, onImport }: UseCloudSyncOptions) {
     }
   }, [doPush, doPull]);
 
-  // 首次加载：已配置则自动对账
+  // 登录后对账：enabled 变 true 或切换账号时重新对账（此时已携带用户 JWT，可过 RLS）
   useEffect(() => {
-    if (config) {
+    if (config && enabled) {
       reconcile(config);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled, sessionKey]);
 
-  // 数据变更：自动同步（防抖，间隔可在设置中调整），仅连接正常且无冲突时
+  // 数据变更：自动同步（防抖，间隔可在设置中调整），仅登录后、连接正常且无冲突时
   useEffect(() => {
+    if (!enabled) return;
     if (!config || !config.autoSync) return;
     if (statusRef.current !== 'connected') return;
     if (suppressPush.current) {
@@ -163,7 +168,7 @@ export function useCloudSync({ snapshot, onImport }: UseCloudSyncOptions) {
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [snapshot, config, doPush]);
+  }, [snapshot, config, doPush, enabled]);
 
   // ============ 对外操作 ============
 

@@ -30,6 +30,7 @@ export type CloudSyncStatus =
   | 'unconfigured'
   | 'connecting'
   | 'connected'
+  | 'readonly'
   | 'error'
   | 'conflict';
 

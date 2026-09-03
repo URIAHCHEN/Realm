@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
 import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut } from '@/lib/auth';
+import { BUILD_SCOPE } from '@/lib/config';
+import { ensureSelfMembership, myUserId } from '@/lib/members';
+import type { Membership } from '@/lib/members';
+import { MembersPanel } from '@/components/MembersPanel';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { LessonManager } from '@/components/LessonManager';
@@ -113,6 +117,15 @@ function App() {
   const [activeTab, setActiveTab] = useState('records');
   const [analysisStudent, setAnalysisStudent] = useState<string | null>(null);
 
+  // 团队权限：是否已登录、当前会话用户、成员身份（服务端 RLS 为准）
+  const sessionKey = isAuthenticated ? (getCachedSession()?.user_id ?? null) : null;
+  const [membership, setMembership] = useState<Membership>({ member: false, admin: false });
+  const refreshMembership = useCallback(async () => {
+    if (!isAuthenticated) { setMembership({ member: false, admin: false }); return; }
+    const res = await ensureSelfMembership(BUILD_SCOPE);
+    setMembership(res.ok && res.data ? res.data : { member: false, admin: false });
+  }, [isAuthenticated]);
+
   // 云同步：全量快照变化时自动推送到云端
   const syncSnapshot = useMemo<SyncSnapshot>(() => ({
     appConfig,
@@ -125,10 +138,14 @@ function App() {
     snapshot: syncSnapshot,
     onImport: (snap) => importData(snap),
     enabled: isAuthenticated,
-    sessionKey: getCachedSession()?.user_id ?? null
+    sessionKey,
+    canWrite: isAuthenticated && membership.member
   });
 
   const displaySettings = useDisplaySettings();
+
+  // 登录后：自举首个管理员 / 刷新成员身份
+  useEffect(() => { refreshMembership(); }, [refreshMembership, sessionKey]);
 
   // 从在线表格粘贴导入：逐行合并到当前课次
   const handleImportDocRows = (rows: ParsedRow[]) => {
@@ -168,6 +185,7 @@ function App() {
   const handleLogout = () => {
     signOut();
     setIsAuthenticated(false);
+    setMembership({ member: false, admin: false });
     toast.success('已登出');
   };
 
@@ -469,13 +487,30 @@ function App() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  const id = myUserId();
+                  if (!id) return;
+                  try { await navigator.clipboard.writeText(id); toast.success('已复制我的用户ID'); } catch { toast.error('复制失败'); }
+                }}
+                title="点击复制我的用户ID（发送给管理员以加入可写名单）"
+                className="flex items-center gap-2 h-8 pl-2.5 pr-3 rounded-full border text-xs transition-colors border-[#e5e5ea] bg-white/60 hover:bg-white text-[#3c3c43]"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    membership.admin ? 'bg-emerald-500' : membership.member ? 'bg-blue-500' : 'bg-amber-500'
+                  }`}
+                />
+                {membership.admin ? '管理员' : membership.member ? '成员' : '只读'}
+                <span className="font-mono text-[#8e8e93]">{myUserId().slice(0, 8)}</span>
+              </button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setActiveTab('cloud')}
                 className={`gap-2 relative ${
                   cloudSync.status === 'connected' ? 'border-emerald-400/40 text-emerald-600' :
-                  cloudSync.status === 'conflict' || cloudSync.status === 'error' ? 'border-amber-400/40 text-amber-600' :
+                  cloudSync.status === 'conflict' || cloudSync.status === 'error' || cloudSync.status === 'readonly' ? 'border-amber-400/40 text-amber-600' :
                   ''
                 }`}
               >
@@ -484,7 +519,7 @@ function App() {
                 <span
                   className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${
                     cloudSync.status === 'connected' ? 'bg-emerald-500' :
-                    cloudSync.status === 'conflict' || cloudSync.status === 'error' ? 'bg-amber-500 animate-pulse' :
+                    cloudSync.status === 'conflict' || cloudSync.status === 'error' || cloudSync.status === 'readonly' ? 'bg-amber-500' :
                     cloudSync.status === 'connecting' ? 'bg-blue-500 animate-pulse' :
                     'bg-slate-300'
                   }`}
@@ -723,6 +758,7 @@ function App() {
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="space-y-6">
+            <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
             <SyncCenterGate adminPassword={adminPassword}>
               <div className="space-y-6">
                 <CloudSyncPanel sync={cloudSync} />

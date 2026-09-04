@@ -73,14 +73,14 @@ export function ClassSelector({
     <div className="ios-glass-card px-6 py-4 mx-auto max-w-[1600px]">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-[#1c1c1e] flex items-center gap-3">
-          <div className="w-9 h-9 bg-[rgb(var(--accent-rgb)/0.1)] rounded-xl flex items-center justify-center">
-            <Users className="w-5 h-5 text-[color:var(--accent)]" />
+          <div className="w-9 h-9 bg-[rgb(var(--brand-rgb)/0.1)] rounded-xl flex items-center justify-center">
+            <Users className="w-5 h-5 text-[color:var(--brand)]" />
           </div>
           班级选择
         </h2>
         <Dialog open={manageOpen} onOpenChange={setManageOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 rounded-xl border-[rgb(var(--accent-rgb)/0.2)] text-[color:var(--accent)] hover:bg-[rgb(var(--accent-rgb)/0.05)]">
+            <Button variant="outline" size="sm" className="gap-2 rounded-xl border-[rgb(var(--brand-rgb)/0.2)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.05)]">
               <Settings className="w-4 h-4" />
               班级管理
             </Button>
@@ -120,7 +120,7 @@ export function ClassSelector({
                 <Button
                   onClick={() => setBulkImportOpen(true)}
                   variant="outline"
-                  className="w-full gap-2 rounded-xl border-[rgb(var(--accent-rgb)/0.25)] text-[color:var(--accent)] hover:bg-[rgb(var(--accent-rgb)/0.06)]"
+                  className="w-full gap-2 rounded-xl border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"
                 >
                   <Upload className="w-4 h-4" />
                   批量导入学员（四列表格）
@@ -167,7 +167,7 @@ export function ClassSelector({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-[#1c1c1e]">{cls.name}</span>
                           {cls.term && (
-                            <span className="text-xs bg-[rgb(var(--accent-rgb)/0.1)] text-[color:var(--accent)] px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                            <span className="text-xs bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)] px-1.5 py-0.5 rounded-md flex items-center gap-1">
                               <CalendarDays className="w-3 h-3" />
                               {cls.term}
                             </span>
@@ -186,7 +186,7 @@ export function ClassSelector({
                           variant="ghost"
                           size="sm"
                           onClick={() => startEdit(cls)}
-                          className="text-[#8e8e93] hover:text-[color:var(--accent)] rounded-xl"
+                          className="text-[#8e8e93] hover:text-[color:var(--brand)] rounded-xl"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
@@ -250,14 +250,14 @@ export function ClassSelector({
               px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200
               flex items-center gap-2
               ${currentClassId === cls.id
-                ? 'bg-[rgb(var(--accent-rgb)/0.12)] text-white shadow-md shadow-[rgb(var(--accent-rgb)/25)]'
+                ? 'bg-[rgb(var(--brand-rgb)/0.12)] text-white shadow-md shadow-[rgb(var(--brand-rgb)/25)]'
                 : 'bg-[#f2f2f7] text-[#1c1c1e] hover:bg-[#e5e5ea]'
               }
             `}
           >
             <span>{cls.name}</span>
             {cls.term && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${currentClassId === cls.id ? 'bg-white/20' : 'bg-[rgb(var(--accent-rgb)/0.1)] text-[color:var(--accent)]'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${currentClassId === cls.id ? 'bg-white/20' : 'bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)]'}`}>
                 {cls.term}
               </span>
             )}

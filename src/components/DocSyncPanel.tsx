@@ -81,13 +81,13 @@ export function DocSyncPanel({
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
-            <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             推送到腾讯文档 / 金山文档
             <Badge variant="secondary" className="rounded-full">第{lessonNumber}课</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl bg-[rgb(var(--accent-rgb)/0.06)] p-4 text-sm text-[#3a3a3c] space-y-1.5">
+          <div className="rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] p-4 text-sm text-[#3a3a3c] space-y-1.5">
             <p className="font-medium">使用方式（约 30 秒成表）：</p>
             <p>1️⃣ 点下方按钮复制学情表 → 2️⃣ 打开腾讯文档/金山文档新建在线表格 → 3️⃣ Ctrl+V 粘贴，行列自动对齐 → 4️⃣ 分享公示链接</p>
           </div>
@@ -112,7 +112,7 @@ export function DocSyncPanel({
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
-            <ClipboardPaste className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            <ClipboardPaste className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             从在线表格导入（双向回环）
           </CardTitle>
         </CardHeader>
@@ -137,7 +137,7 @@ export function DocSyncPanel({
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
-            <CloudCog className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            <CloudCog className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             同步机制与冲突策略
           </CardTitle>
         </CardHeader>
@@ -156,7 +156,7 @@ export function DocSyncPanel({
               <p className="text-[#8e8e93] text-xs leading-relaxed">所有数据本地常驻（localStorage），断网可正常录入，恢复联网后自动补传云端。</p>
             </div>
           </div>
-          <div className="flex items-center justify-between rounded-xl bg-[rgb(var(--accent-rgb)/0.06)] px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] px-4 py-3">
             <div>
               <p className="font-medium flex items-center gap-1.5"><Timer className="w-4 h-4" />自动同步频率</p>
               <p className="text-xs text-[#8e8e93]">数据变化后延迟该时长自动上传云端</p>

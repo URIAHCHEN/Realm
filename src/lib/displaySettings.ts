@@ -75,9 +75,9 @@ export function getSyncIntervalSec(): number {
 export function applyTheme(settings: DisplaySettings) {
   const preset = THEME_PRESETS.find(p => p.id === settings.themeColor) || THEME_PRESETS[0];
   const root = document.documentElement;
-  root.style.setProperty('--accent', preset.accent);
-  root.style.setProperty('--accent-strong', preset.accentStrong);
-  root.style.setProperty('--accent-rgb', preset.rgb);
+  root.style.setProperty('--brand', preset.accent);
+  root.style.setProperty('--brand-strong', preset.accentStrong);
+  root.style.setProperty('--brand-rgb', preset.rgb);
   root.style.setProperty('--page-from', preset.pageFrom);
   root.style.setProperty('--page-to', preset.pageTo);
 }

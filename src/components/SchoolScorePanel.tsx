@@ -268,7 +268,7 @@ export function SchoolScorePanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb)/0.7))' }}>
+            style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
             <TrendingUp className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -420,8 +420,8 @@ export function SchoolScorePanel({
           return (
             <Card key={k.label} className="ios-glass-card border-0">
               <CardContent className="pt-4 pb-3.5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[rgb(var(--accent-rgb)/0.1)]">
-                  <Icon className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[rgb(var(--brand-rgb)/0.1)]">
+                  <Icon className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                 </div>
                 <div>
                   <p className="text-xl font-bold text-[#1c1c1e] leading-tight">{k.value}</p>
@@ -500,7 +500,7 @@ export function SchoolScorePanel({
             {examEntries.map(({ examName, list, avgRate, top1 }) => (
               <Card key={examName} className="ios-glass-card border-0 overflow-hidden">
                 <div className="px-5 py-3.5 flex items-center justify-between gap-3"
-                  style={{ background: 'linear-gradient(135deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb)/0.75))' }}>
+                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.75))' }}>
                   <div className="flex items-center gap-2.5 text-white">
                     <Award className="w-5 h-5" />
                     <span className="font-semibold">{examName}</span>
@@ -549,7 +549,7 @@ export function SchoolScorePanel({
                             <TableCell>
                               <span className="flex items-center gap-2">
                                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-                                  style={{ background: 'linear-gradient(135deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb)/0.7))' }}>
+                                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
                                   {getNickname(score.studentName).slice(0, 1)}
                                 </span>
                                 <span className="font-medium text-[#1c1c1e]">{getNickname(score.studentName)}</span>
@@ -609,7 +609,7 @@ export function SchoolScorePanel({
             <Card className="ios-glass-card border-0">
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                  <TrendingUp className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                   <h3 className="font-semibold text-[#1c1c1e]">进步之星</h3>
                   <span className="text-xs text-[#8e8e93]">基于同一学生的多次考试成绩，按正确率提升幅度排序</span>
                 </div>
@@ -667,7 +667,7 @@ export function SchoolScorePanel({
               <CardContent className="pt-5 pb-4">
                 <div className="flex flex-wrap items-center gap-4 mb-4">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                    <BarChart3 className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                     <h3 className="font-semibold text-[#1c1c1e]">阶段对比</h3>
                   </div>
                   <div className="flex items-center gap-3 flex-1">

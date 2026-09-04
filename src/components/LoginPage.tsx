@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { GraduationCap, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { signIn, signUp } from '@/lib/auth';
 
 interface LoginPageProps {
-  /** 登录/注册成功后回调（由 App 置为已认证并进入应用） */
   onSuccess: () => void;
 }
 
@@ -22,6 +20,13 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
 
   const isRegister = mode === 'register';
 
+  const switchMode = (m: 'login' | 'register') => {
+    if (m === mode) return;
+    setMode(m);
+    setError('');
+    setInfo('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -32,99 +37,104 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
     const res = isRegister ? await signUp(email, password) : await signIn(email, password);
     setBusy(false);
     if (res.ok) {
-      if (isRegister && res.message.includes('确认')) {
-        setInfo(res.message); // 需邮箱确认，停留本页
-        return;
-      }
+      if (isRegister && res.message.includes('确认')) { setInfo(res.message); return; }
       onSuccess();
     } else {
       setError(res.message);
     }
   };
 
+  const fieldCls =
+    'h-12 rounded-xl bg-white/70 border border-black/10 pl-11 pr-11 text-[color:var(--ink)] placeholder:text-[color:var(--ink-4)] ' +
+    'transition-[box-shadow,border-color,background] duration-150 focus-visible:bg-white focus-visible:border-[color:var(--brand)] focus-visible:ring-0 ' +
+    'focus-visible:shadow-[0_0_0_4px_rgb(var(--brand-rgb)/0.15)]';
+
   return (
-    <div className="min-h-screen mac-login-bg flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo 区域 */}
+    <div className="relative min-h-screen mac-login-bg flex items-center justify-center px-5 py-10">
+      {/* 背景柔光点缀，增强层次但不喧哗 */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgb(var(--brand-rgb)/0.25)' }} />
+        <div className="absolute -bottom-24 -right-16 w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgba(255,255,255,0.18)' }} />
+      </div>
+
+      <div className="relative w-full max-w-[380px] ios-animate-fade-in">
+        {/* 品牌区 */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-4 border border-white/50">
-            <GraduationCap className="w-12 h-12 text-[color:var(--accent)]" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-[22px] bg-white/90 backdrop-blur-xl ring-1 ring-white/60 shadow-[0_12px_40px_rgba(0,0,0,0.18)] flex items-center justify-center">
+            <GraduationCap className="w-9 h-9" style={{ color: 'var(--brand)' }} />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-1">Lynn's</h1>
-          <p className="text-white/80 text-xl font-medium">Realm</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Lynn's Realm</h1>
+          <p className="mt-1 text-white/75 text-sm">学情管理 · 让每一次成长有迹可循</p>
         </div>
 
         {/* 登录卡片 */}
-        <Card className="border-0 shadow-2xl bg-white/85 backdrop-blur-2xl rounded-3xl overflow-hidden">
-          <CardHeader className="pb-4 pt-6">
-            <CardTitle className="text-xl text-center text-[#1c1c1e] font-semibold">
-              {isRegister ? '创建账号' : '账号登录'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-6">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-[#3c3c43] text-sm font-medium ml-1">邮箱</Label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8e8e93]" />
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="username"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setError(''); setInfo(''); }}
-                    className="pl-12 pr-4 h-14 rounded-xl bg-[#f2f2f7] border-0 text-[#1c1c1e] placeholder:text-[#8e8e93] focus:ring-2 focus:ring-[rgb(var(--accent-rgb)/0.3)] focus:bg-white transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-[#3c3c43] text-sm font-medium ml-1">密码</Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8e8e93]" />
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete={isRegister ? 'new-password' : 'current-password'}
-                    placeholder={isRegister ? '至少 6 位' : '密码'}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setError(''); setInfo(''); }}
-                    className="pl-12 pr-12 h-14 rounded-xl bg-[#f2f2f7] border-0 text-[#1c1c1e] placeholder:text-[#8e8e93] focus:ring-2 focus:ring-[rgb(var(--accent-rgb)/0.3)] focus:bg-white transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#3c3c43] transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {error && <p className="text-sm text-[#ff3b30] ml-1">{error}</p>}
-                {info && <p className="text-sm text-[#34c759] ml-1">{info}</p>}
-              </div>
-
-              <Button
-                type="submit"
-                disabled={busy}
-                className="w-full h-14 bg-[rgb(var(--accent-rgb)/0.12)] hover:bg-[var(--accent-strong)] text-white font-semibold text-base rounded-xl shadow-lg shadow-[rgb(var(--accent-rgb)/30)] transition-all active:scale-[0.98] disabled:opacity-60"
+        <div className="rounded-[26px] bg-white/85 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.22)] ring-1 ring-white/60 p-6">
+          {/* 分段切换：登录 / 创建账号 */}
+          <div role="tablist" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-black/[0.05] mb-6">
+            {(['login', 'register'] as const).map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => switchMode(m)}
+                className={
+                  'h-9 rounded-lg text-sm font-medium transition-all duration-150 ' +
+                  (mode === m ? 'bg-white text-[color:var(--ink)] shadow-sm' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]')
+                }
               >
-                {busy ? '处理中…' : (isRegister ? '注册并登录' : '登录')}
-              </Button>
+                {m === 'login' ? '登录' : '创建账号'}
+              </button>
+            ))}
+          </div>
 
-              <div className="text-center text-sm text-[#8e8e93]">
-                {isRegister ? '已有账号？' : '还没有账号？'}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-[color:var(--ink-2)] text-sm">邮箱</Label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[color:var(--ink-4)]" />
+                <Input
+                  id="email" type="email" inputMode="email" autoComplete="username" placeholder="you@example.com"
+                  value={email} onChange={(e) => { setEmail(e.target.value); setError(''); setInfo(''); }} className={fieldCls}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-[color:var(--ink-2)] text-sm">密码</Label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[color:var(--ink-4)]" />
+                <Input
+                  id="password" type={showPassword ? 'text' : 'password'} autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  placeholder={isRegister ? '至少 6 位' : '请输入密码'}
+                  value={password} onChange={(e) => { setPassword(e.target.value); setError(''); setInfo(''); }} className={fieldCls}
+                />
                 <button
-                  type="button"
-                  onClick={() => { setMode(isRegister ? 'login' : 'register'); setError(''); setInfo(''); }}
-                  className="ml-1 font-medium text-[color:var(--accent)] hover:underline"
+                  type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-4)] hover:text-[color:var(--ink-2)] transition-colors"
                 >
-                  {isRegister ? '去登录' : '创建账号'}
+                  {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
                 </button>
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            </div>
+
+            {error && <p className="text-sm text-[#ff3b30]" role="alert">{error}</p>}
+            {info && <p className="text-sm text-[#34c759]" role="status">{info}</p>}
+
+            <Button type="submit" disabled={busy} className="ios-button w-full h-12 mt-1">
+              {busy ? <><Loader2 className="w-4 h-4 animate-spin" />处理中…</> : (isRegister ? '创建账号并进入' : '登录')}
+            </Button>
+          </form>
+
+          <p className="mt-5 text-center text-xs text-[color:var(--ink-4)]">
+            {isRegister ? '已有账号？' : '还没有账号？'}
+            <button
+              type="button" onClick={() => switchMode(isRegister ? 'login' : 'register')}
+              className="ml-1 font-medium hover:underline" style={{ color: 'var(--brand)' }}
+            >
+              {isRegister ? '去登录' : '创建账号'}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

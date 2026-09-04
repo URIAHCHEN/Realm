@@ -339,9 +339,9 @@ export function StudentTable({
         ) : (
           <>
             {/* 批量操作工具栏 */}
-            <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.06)] to-[rgb(var(--accent-rgb)/0.12)] border border-[rgb(var(--accent-rgb)/0.15)] space-y-3">
+            <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border border-[rgb(var(--brand-rgb)/0.15)] space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--accent)]">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--brand)]">
                   <Zap className="w-4 h-4" />全班一键考勤
                 </span>
                 <Select value={classAttendanceValue} onValueChange={setClassAttendanceValue}>
@@ -352,11 +352,11 @@ export function StudentTable({
                   <Check className="w-4 h-4" />一键标记全班
                 </Button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-[rgb(var(--accent-rgb)/0.15)]">
+              <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-[rgb(var(--brand-rgb)/0.15)]">
                 <span className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
                   批量设置
                   {someSelected && (
-                    <Badge className="bg-[rgb(var(--accent-rgb)/0.15)] text-[color:var(--accent)] border-0">已选 {selectedStudents.size} 人</Badge>
+                    <Badge className="bg-[rgb(var(--brand-rgb)/0.15)] text-[color:var(--brand)] border-0">已选 {selectedStudents.size} 人</Badge>
                   )}
                 </span>
                 {someSelected && (
@@ -416,7 +416,7 @@ export function StudentTable({
             <div className="bg-white rounded-xl p-4">
               <ScrollArea className="h-[600px] border rounded-lg">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.07)] to-[rgb(var(--accent-rgb)/0.12)] backdrop-blur-md">
+                  <TableHeader className="sticky top-0 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.07)] to-[rgb(var(--brand-rgb)/0.12)] backdrop-blur-md">
                     <TableRow>
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
@@ -443,7 +443,7 @@ export function StudentTable({
                       const totalScore = record?.totalScore || 0;
                       const correctRate = record?.correctRate || 0;
                       return (
-                        <TableRow key={studentName} className={`hover:bg-[rgb(var(--accent-rgb)/0.04)] transition-colors ${selectedStudents.has(studentName) ? 'bg-[rgb(var(--accent-rgb)/0.08)]' : ''}`}>
+                        <TableRow key={studentName} className={`hover:bg-[rgb(var(--brand-rgb)/0.04)] transition-colors ${selectedStudents.has(studentName) ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}>
                           <TableCell className="text-center">
                             <Checkbox checked={selectedStudents.has(studentName)} onCheckedChange={() => toggleSelect(studentName)} aria-label={`选择 ${studentName}`} className="translate-y-[2px]" />
                           </TableCell>
@@ -456,7 +456,7 @@ export function StudentTable({
                               )
                             ) : <span className="text-slate-300 text-base">-</span>}
                           </TableCell>
-                          <TableCell className="font-medium cursor-pointer hover:underline text-base" style={{ color: 'var(--accent)' }} onClick={() => onViewStudentAnalysis(studentName)}>{getNickname(studentName)}</TableCell>
+                          <TableCell className="font-medium cursor-pointer hover:underline text-base" style={{ color: 'var(--brand)' }} onClick={() => onViewStudentAnalysis(studentName)}>{getNickname(studentName)}</TableCell>
                           {col('seasons') && (
                           <TableCell className="text-base">
                             <div className="flex gap-1">
@@ -539,7 +539,7 @@ export function StudentTable({
                               {settings.showDataBars && fullScore > 0 && totalScore > 0 && (
                                 <span className="total-bar" style={{ width: `${Math.min(100, (totalScore / fullScore) * 100)}%` }} />
                               )}
-                              <span className="relative z-[1] font-bold text-lg" style={{ color: 'var(--accent)' }}>{totalScore}</span>
+                              <span className="relative z-[1] font-bold text-lg" style={{ color: 'var(--brand)' }}>{totalScore}</span>
                             </span>
                             <span className="text-sm text-slate-400">/{fullScore}</span>
                           </TableCell>
@@ -588,7 +588,7 @@ export function StudentTable({
                           {col('actions') && (
                           <TableCell className="text-base">
                             <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--accent-rgb)/0.08)]" style={{ color: 'var(--accent)' }} title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
                               <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-9 w-9 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50" title="删除记录"><Trash2 className="w-5 h-5" /></Button>
                               <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-9 w-9 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="移除学生"><UserMinus className="w-5 h-5" /></Button>
                             </div>
@@ -598,11 +598,11 @@ export function StudentTable({
                       );
                     })}
                     {/* 底部统计行 */}
-                    <TableRow className="bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.06)] to-[rgb(var(--accent-rgb)/0.12)] border-t-2 border-[rgb(var(--accent-rgb)/0.25)] hover:bg-[rgb(var(--accent-rgb)/0.10)] font-semibold">
+                    <TableRow className="bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border-t-2 border-[rgb(var(--brand-rgb)/0.25)] hover:bg-[rgb(var(--brand-rgb)/0.10)] font-semibold">
                       <TableCell></TableCell>
                       <TableCell className="text-sm font-bold text-slate-700" colSpan={2}>
                         <div className="flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                          <BarChart3 className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                           <span>班级统计</span>
                         </div>
                       </TableCell>
@@ -612,7 +612,7 @@ export function StudentTable({
                       {col('listening') && <TableCell></TableCell>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => (
                         <TableCell key={qt.id} className="text-center text-sm">
-                          <span className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold text-[color:var(--accent)] bg-white/70 border border-[rgb(var(--accent-rgb)/0.2)]">
+                          <span className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold text-[color:var(--brand)] bg-white/70 border border-[rgb(var(--brand-rgb)/0.2)]">
                             {(stats.avgScores[qt.id] ?? 0).toFixed(1)}
                           </span>
                         </TableCell>

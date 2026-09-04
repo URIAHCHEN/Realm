@@ -70,7 +70,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center justify-between text-[#1c1c1e]">
             <span className="flex items-center gap-2">
-              <Cloud className="w-5 h-5 text-[color:var(--accent)]" />
+              <Cloud className="w-5 h-5 text-[color:var(--brand)]" />
               云同步状态
             </span>
             <Badge className={`${meta.className} border-0 flex items-center gap-1.5`}>
@@ -86,7 +86,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
           <p className="text-sm text-[#8e8e93]">最近同步：{formatTime(sync.lastSyncAt)}</p>
 
           {sync.action !== 'idle' && (
-            <p className="text-sm text-[color:var(--accent)] flex items-center gap-2">
+            <p className="text-sm text-[color:var(--brand)] flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
               {sync.action === 'pushing' ? '正在上传到云端…' : '正在拉取云端数据…'}
             </p>
@@ -136,7 +136,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
-            <Link2 className="w-5 h-5 text-[color:var(--accent)]" />
+            <Link2 className="w-5 h-5 text-[color:var(--brand)]" />
             Supabase 连接配置
           </CardTitle>
         </CardHeader>
@@ -192,9 +192,9 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-[#3a3a3c]">
           <div className="space-y-2">
-            <p><span className="font-semibold text-[color:var(--accent)]">第 1 步</span>：打开 <span className="font-mono text-xs bg-[#f2f2f7] px-1.5 py-0.5 rounded">supabase.com</span> 免费注册并新建一个项目（免费额度完全够用）。</p>
-            <p><span className="font-semibold text-[color:var(--accent)]">第 2 步</span>：项目左侧菜单进 <span className="font-semibold">SQL Editor</span>，粘贴下面的建表 SQL 并执行（只需一次）。</p>
-            <p><span className="font-semibold text-[color:var(--accent)]">第 3 步</span>：项目设置 → API，把 <span className="font-semibold">Project URL</span> 和 <span className="font-semibold">anon public key</span> 填到上方，点"保存并连接"。</p>
+            <p><span className="font-semibold text-[color:var(--brand)]">第 1 步</span>：打开 <span className="font-mono text-xs bg-[#f2f2f7] px-1.5 py-0.5 rounded">supabase.com</span> 免费注册并新建一个项目（免费额度完全够用）。</p>
+            <p><span className="font-semibold text-[color:var(--brand)]">第 2 步</span>：项目左侧菜单进 <span className="font-semibold">SQL Editor</span>，粘贴下面的建表 SQL 并执行（只需一次）。</p>
+            <p><span className="font-semibold text-[color:var(--brand)]">第 3 步</span>：项目设置 → API，把 <span className="font-semibold">Project URL</span> 和 <span className="font-semibold">anon public key</span> 填到上方，点"保存并连接"。</p>
           </div>
           <div className="relative">
             <pre className="bg-[#1c1c1e] text-[#e5e5ea] rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap">{SETUP_SQL}</pre>

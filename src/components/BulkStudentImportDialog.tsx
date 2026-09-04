@@ -202,15 +202,15 @@ export function BulkStudentImportDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-[color:var(--accent)]" />
+            <Users className="w-5 h-5 text-[color:var(--brand)]" />
             批量导入学员
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
           {/* 格式说明 */}
-          <div className="p-3 rounded-xl bg-[rgb(var(--accent-rgb)/0.06)] border border-[rgb(var(--accent-rgb)/0.15)] text-sm text-slate-600 space-y-1.5">
-            <p className="font-medium text-[color:var(--accent)]">表格格式要求（四列）</p>
+          <div className="p-3 rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] border border-[rgb(var(--brand-rgb)/0.15)] text-sm text-slate-600 space-y-1.5">
+            <p className="font-medium text-[color:var(--brand)]">表格格式要求（四列）</p>
             <p>第 1 列：学员编码（必填，不可重复） · 第 2 列：学员名称（必填）</p>
             <p>第 3 列：班级编码（必填，相同编码自动归入同班） · 第 4 列：班级名称（选填）</p>
           </div>

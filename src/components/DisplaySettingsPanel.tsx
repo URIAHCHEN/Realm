@@ -20,7 +20,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
     <Card className="ios-glass-card border-0">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
-          <Sparkles className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+          <Sparkles className="w-5 h-5" style={{ color: 'var(--brand)' }} />
           个性化设置
         </CardTitle>
       </CardHeader>
@@ -38,7 +38,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 onClick={() => update({ themeColor: p.id })}
                 className={`flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-medium transition-all duration-300 border ${
                   settings.themeColor === p.id
-                    ? 'border-[rgb(var(--accent-rgb)/0.5)] bg-[rgb(var(--accent-rgb)/0.08)] shadow-sm scale-[1.03]'
+                    ? 'border-[rgb(var(--brand-rgb)/0.5)] bg-[rgb(var(--brand-rgb)/0.08)] shadow-sm scale-[1.03]'
                     : 'border-black/8 bg-white/60 hover:bg-white'
                 }`}
               >
@@ -118,9 +118,9 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                       ? 'border-black/8 bg-[#f2f2f7] text-[#aeaeb2] cursor-not-allowed'
                       : hidden
                         ? 'border-dashed border-black/15 bg-white/40 text-[#aeaeb2] line-through'
-                        : 'border-[rgb(var(--accent-rgb)/0.35)] bg-[rgb(var(--accent-rgb)/0.08)]'
+                        : 'border-[rgb(var(--brand-rgb)/0.35)] bg-[rgb(var(--brand-rgb)/0.08)]'
                   }`}
-                  style={!disabled && !hidden ? { color: 'var(--accent)' } : undefined}
+                  style={!disabled && !hidden ? { color: 'var(--brand)' } : undefined}
                 >
                   {c.label}{disabled && ' ·'}
                 </button>
@@ -146,7 +146,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 onClick={() => update({ exportStyle: s.id as never })}
                 className={`rounded-2xl overflow-hidden border text-left transition-all duration-300 ${
                   settings.exportStyle === s.id
-                    ? 'border-[rgb(var(--accent-rgb)/0.5)] shadow-md scale-[1.02]'
+                    ? 'border-[rgb(var(--brand-rgb)/0.5)] shadow-md scale-[1.02]'
                     : 'border-black/8 hover:border-black/20'
                 }`}
               >

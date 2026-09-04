@@ -100,7 +100,7 @@ export function PraiseGenerator({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
           {quickStats.map(s => (
             <div key={s.label} className="rounded-xl bg-[#f2f2f7] px-3.5 py-2.5 text-center">
-              <p className="text-xl font-bold" style={{ color: 'var(--accent)' }}>{s.value}</p>
+              <p className="text-xl font-bold" style={{ color: 'var(--brand)' }}>{s.value}</p>
               <p className="text-[11px] text-[#8e8e93]">{s.label}</p>
             </div>
           ))}

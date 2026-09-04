@@ -36,7 +36,7 @@ const StudentAnalysis = lazy(() =>
 // 懒加载期间的占位，保持与页面一致的留白节奏
 const ModuleLoading = ({ label }: { label: string }) => (
   <div className="flex items-center justify-center py-16 text-[#8e8e93] text-sm gap-2">
-    <span className="w-4 h-4 rounded-full border-2 border-[rgb(var(--accent-rgb)/0.3)] border-t-[rgb(var(--accent-rgb))] animate-spin" />
+    <span className="w-4 h-4 rounded-full border-2 border-[rgb(var(--brand-rgb)/0.3)] border-t-[rgb(var(--brand-rgb))] animate-spin" />
     正在加载{label}…
   </div>
 );
@@ -442,14 +442,14 @@ function App() {
 
       {/* 顶部导航栏 */}
       <header className="liquid-glass-header sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
+        <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 via-blue-500 to-sky-500 rounded-xl flex items-center justify-center shadow-lg liquid-glass text-3xl">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 via-blue-500 to-sky-500 rounded-xl flex items-center justify-center shadow-lg liquid-glass text-2xl sm:text-3xl">
                 🏫
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-700 via-blue-600 to-sky-600 bg-clip-text text-transparent">Lynn's Realm</h1>
+                <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-blue-700 via-blue-600 to-sky-600 bg-clip-text text-transparent">Lynn's Realm</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -468,7 +468,7 @@ function App() {
                   }`}
                 />
                 {membership.admin ? '管理员' : membership.member ? '成员' : '只读'}
-                <span className="font-mono text-[#8e8e93]">{myUserId().slice(0, 8)}</span>
+                <span className="font-mono text-[#8e8e93] hidden sm:inline">{myUserId().slice(0, 8)}</span>
               </button>
               <Button
                 variant="outline"
@@ -481,7 +481,7 @@ function App() {
                 }`}
               >
                 <Cloud className="w-4 h-4" />
-                云同步
+                <span className="hidden sm:inline">云同步</span>
                 <span
                   className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${
                     cloudSync.status === 'connected' ? 'bg-emerald-500' :
@@ -498,7 +498,7 @@ function App() {
                 className="gap-2"
               >
                 <Upload className="w-4 h-4" />
-                导入备份
+                <span className="hidden sm:inline">导入备份</span>
               </Button>
               <Button
                 variant="outline"
@@ -507,7 +507,7 @@ function App() {
                 className="gap-2"
               >
                 <Download className="w-4 h-4" />
-                导出备份
+                <span className="hidden sm:inline">导出备份</span>
               </Button>
               <Button
                 variant="ghost"
@@ -524,7 +524,7 @@ function App() {
       </header>
 
       {/* 班级选择栏 */}
-      <div className="max-w-[1600px] mx-auto px-6 py-4">
+      <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
         <ClassSelector
           classes={classes}
           currentClassId={currentClassId}
@@ -537,7 +537,7 @@ function App() {
       </div>
 
       {/* 主内容区 */}
-      <div className="max-w-[1600px] mx-auto px-6 pb-8">
+      <div className="max-w-[1600px] mx-auto px-4 pb-8 sm:px-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="ios-tabs-list">
             <TabsTrigger value="records" className="ios-tab-trigger">
@@ -772,7 +772,7 @@ function PublicityStylePanel({ display }: { display: ReturnType<typeof useDispla
   return (
     <div className="ios-glass-card rounded-2xl border-0 p-6 space-y-5">
       <div className="flex items-center gap-2">
-        <FileText className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+        <FileText className="w-5 h-5" style={{ color: 'var(--brand)' }} />
         <h2 className="font-semibold text-[#1c1c1e]">公示导出样式</h2>
         <span className="text-xs text-[#8e8e93]">影响学情公示 HTML / 图片的视觉风格</span>
       </div>
@@ -782,7 +782,7 @@ function PublicityStylePanel({ display }: { display: ReturnType<typeof useDispla
             key={o.id}
             onClick={() => update({ exportStyle: o.id })}
             className={`text-left rounded-xl border-2 p-3 transition-all ${
-              settings.exportStyle === o.id ? 'border-[rgb(var(--accent-rgb)/0.6)] shadow-md' : 'border-slate-100 hover:border-slate-200'
+              settings.exportStyle === o.id ? 'border-[rgb(var(--brand-rgb)/0.6)] shadow-md' : 'border-slate-100 hover:border-slate-200'
             }`}
           >
             <div className="mb-2">{o.preview}</div>

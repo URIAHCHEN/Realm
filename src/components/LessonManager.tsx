@@ -44,14 +44,14 @@ export function LessonManager({
     <Card className="rounded-2xl bg-white/60 backdrop-blur border border-black/5 shadow-sm">
       <CardContent className="p-4 space-y-4">
         {/* 当前课次大徽章 */}
-        <div className="rounded-xl bg-gradient-to-r from-[rgb(var(--accent-rgb)/0.12)] to-[rgb(var(--accent-rgb)/0.25)] p-3.5 flex items-center justify-between">
+        <div className="rounded-xl bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.12)] to-[rgb(var(--brand-rgb)/0.25)] p-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
-              <BookOpen className="w-4 h-4 text-[color:var(--accent)]" />
+              <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />
             </div>
             <span className="text-sm font-medium text-slate-600">当前课次</span>
           </div>
-          <Badge className="text-lg px-4 py-1 rounded-xl bg-white/80 text-[color:var(--accent-strong)] border-0 shadow-sm font-bold">
+          <Badge className="text-lg px-4 py-1 rounded-xl bg-white/80 text-[color:var(--brand-strong)] border-0 shadow-sm font-bold">
             第 {currentLessonNumber} 课
           </Badge>
         </div>
@@ -85,8 +85,8 @@ export function LessonManager({
                   className={`
                     h-9 rounded-lg text-sm font-semibold transition-all duration-150
                     ${currentLessonNumber === lesson
-                      ? 'bg-[color:var(--accent)] text-white shadow-md shadow-[rgb(var(--accent-rgb)/0.3)]'
-                      : 'bg-slate-100/80 text-slate-600 hover:bg-[rgb(var(--accent-rgb)/0.1)] hover:text-[color:var(--accent)]'}
+                      ? 'bg-[color:var(--brand)] text-white shadow-md shadow-[rgb(var(--brand-rgb)/0.3)]'
+                      : 'bg-slate-100/80 text-slate-600 hover:bg-[rgb(var(--brand-rgb)/0.1)] hover:text-[color:var(--brand)]'}
                   `}
                 >
                   {lesson}
@@ -101,7 +101,7 @@ export function LessonManager({
           <div className="flex rounded-xl overflow-hidden border border-black/10 bg-white/70">
             <button
               onClick={() => onAddLesson(Math.max(0, ...allLessons, 0) + 1)}
-              className="px-3 flex items-center justify-center text-slate-400 hover:text-[color:var(--accent)] hover:bg-[rgb(var(--accent-rgb)/0.06)] transition-colors"
+              className="px-3 flex items-center justify-center text-slate-400 hover:text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] transition-colors"
               title="新建下一个课次"
             >
               <Plus className="w-4 h-4" />

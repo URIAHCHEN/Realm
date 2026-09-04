@@ -178,7 +178,7 @@ export function FeedbackGenerator({
     }
     if (tone === 'generated') {
       return (
-        <Badge className="border-0 rounded-full gap-1 bg-[rgb(var(--accent-rgb)/0.12)]" style={{ color: 'var(--accent)' }}>
+        <Badge className="border-0 rounded-full gap-1 bg-[rgb(var(--brand-rgb)/0.12)]" style={{ color: 'var(--brand)' }}>
           已生成
         </Badge>
       );
@@ -198,7 +198,7 @@ export function FeedbackGenerator({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb)/0.7))' }}>
+                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
                 <FileText className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -230,7 +230,7 @@ export function FeedbackGenerator({
                 有记录学生 {withRecordsCount} / 共 {students.length} 人
               </span>
               <span>
-                已生成 <span className="font-semibold" style={{ color: 'var(--accent)' }}>{generatedCount}</span>
+                已生成 <span className="font-semibold" style={{ color: 'var(--brand)' }}>{generatedCount}</span>
                 <span className="mx-1.5">·</span>
                 已发送 <span className="font-semibold text-emerald-600">{copiedCount}</span>
               </span>
@@ -240,7 +240,7 @@ export function FeedbackGenerator({
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${progressPct}%`,
-                  background: 'linear-gradient(90deg, rgb(var(--accent-rgb)/0.6), rgb(var(--accent-rgb)))'
+                  background: 'linear-gradient(90deg, rgb(var(--brand-rgb)/0.6), rgb(var(--brand-rgb)))'
                 }}
               />
             </div>
@@ -254,7 +254,7 @@ export function FeedbackGenerator({
         <Card className="ios-glass-card border-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-[#3a3a3c]">
-              <ClipboardList className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+              <ClipboardList className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               学生列表
               <Badge variant="secondary" className="rounded-full ml-auto">{students.length} 人</Badge>
             </CardTitle>
@@ -275,7 +275,7 @@ export function FeedbackGenerator({
                         onClick={() => handleSelect(s)}
                         className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
                           isActive
-                            ? 'bg-[rgb(var(--accent-rgb)/0.1)] ring-1 ring-[rgb(var(--accent-rgb)/0.35)]'
+                            ? 'bg-[rgb(var(--brand-rgb)/0.1)] ring-1 ring-[rgb(var(--brand-rgb)/0.35)]'
                             : 'hover:bg-black/[0.04]'
                         }`}
                       >
@@ -284,7 +284,7 @@ export function FeedbackGenerator({
                           style={{
                             background: tone === 'copied'
                               ? 'linear-gradient(135deg,#34d399,#10b981)'
-                              : 'linear-gradient(135deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb)/0.7))'
+                              : 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))'
                           }}
                         >
                           {getNickname(s).slice(0, 1) || s.slice(0, 1)}
@@ -298,7 +298,7 @@ export function FeedbackGenerator({
                         {tone === 'copied' ? (
                           <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                         ) : tone === 'generated' ? (
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'rgb(var(--accent-rgb))' }} />
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'rgb(var(--brand-rgb))' }} />
                         ) : (
                           <span className="w-2 h-2 rounded-full bg-slate-200 flex-shrink-0" />
                         )}
@@ -316,7 +316,7 @@ export function FeedbackGenerator({
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between gap-2 text-[#3a3a3c]">
               <span className="flex items-center gap-2">
-                <Send className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                 {selected ? `${getNickname(selected)} 的反馈内容` : '反馈内容'}
               </span>
               {selected && statusBadge(selected)}

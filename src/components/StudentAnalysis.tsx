@@ -91,7 +91,7 @@ function LessonTimelineCard({ record, questionTypes }: { record: StudentRecord; 
   return (
     <div className="relative pl-6">
       {/* 时间线轴点 */}
-      <div className="absolute left-0 top-6 w-3 h-3 rounded-full bg-[color:var(--accent)] ring-4 ring-[rgb(var(--accent-rgb)/0.15)]" />
+      <div className="absolute left-0 top-6 w-3 h-3 rounded-full bg-[color:var(--brand)] ring-4 ring-[rgb(var(--brand-rgb)/0.15)]" />
       <div className="absolute left-[5.5px] top-9 bottom-0 w-px bg-slate-200" />
       <div className="rounded-2xl bg-white/80 backdrop-blur border border-black/5 p-4 shadow-sm mb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -128,7 +128,7 @@ function LessonTimelineCard({ record, questionTypes }: { record: StudentRecord; 
           })}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-bold text-lg text-[color:var(--accent)]">{record.totalScore}<span className="text-xs font-medium text-slate-400">/{fullScore}</span></span>
+          <span className="font-bold text-lg text-[color:var(--brand)]">{record.totalScore}<span className="text-xs font-medium text-slate-400">/{fullScore}</span></span>
           <Badge variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">第 {record.rank} 名</Badge>
           <span className={`font-semibold ${rateTrend}`}>正确率 {record.correctRate}%</span>
           {record.note && <span className="text-xs text-slate-400 truncate max-w-[240px]" title={record.note}>📝 {record.note}</span>}
@@ -244,7 +244,7 @@ export function StudentAnalysis({
         <DialogHeader className="space-y-0">
           {/* 头部：头像 + 姓名 + 趋势标识 */}
           <div className="flex items-center gap-4 pt-1">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[rgb(var(--accent-rgb)/0.2)] to-[rgb(var(--accent-rgb)/0.4)] flex items-center justify-center text-2xl font-bold text-[color:var(--accent-strong)] shadow-inner">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.2)] to-[rgb(var(--brand-rgb)/0.4)] flex items-center justify-center text-2xl font-bold text-[color:var(--brand-strong)] shadow-inner">
               {nickname.slice(0, 1)}
             </div>
             <div className="min-w-0">
@@ -254,7 +254,7 @@ export function StudentAnalysis({
               </DialogTitle>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {currentClassData && (
-                  <Badge variant="outline" className="text-xs bg-[rgb(var(--accent-rgb)/0.08)] text-[color:var(--accent)] border-[rgb(var(--accent-rgb)/0.2)]">
+                  <Badge variant="outline" className="text-xs bg-[rgb(var(--brand-rgb)/0.08)] text-[color:var(--brand)] border-[rgb(var(--brand-rgb)/0.2)]">
                     <Layers className="w-3 h-3 mr-1" />{currentClassData.className}
                   </Badge>
                 )}
@@ -318,7 +318,7 @@ export function StudentAnalysis({
           <TabsContent value="overview" className="space-y-4 mt-4">
             <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
               <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-[color:var(--accent)]" />总分与正确率走势
+                <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />总分与正确率走势
               </p>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -329,7 +329,7 @@ export function StudentAnalysis({
                     <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--accent-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
+                    <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
                     <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -339,7 +339,7 @@ export function StudentAnalysis({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-[color:var(--accent)]" />题型能力雷达（平均得分率）
+                  <Activity className="w-4 h-4 text-[color:var(--brand)]" />题型能力雷达（平均得分率）
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -347,7 +347,7 @@ export function StudentAnalysis({
                       <PolarGrid stroke="#e2e8f0" />
                       <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} />
                       <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} angle={30} />
-                      <Radar name="得分率%" dataKey="得分率" stroke="rgb(var(--accent-rgb) / 0.9)" fill="rgb(var(--accent-rgb) / 0.25)" strokeWidth={2} />
+                      <Radar name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.9)" fill="rgb(var(--brand-rgb) / 0.25)" strokeWidth={2} />
                       <Tooltip contentStyle={tooltipStyle} />
                     </RadarChart>
                   </ResponsiveContainer>
@@ -356,7 +356,7 @@ export function StudentAnalysis({
 
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[color:var(--accent)]" />各题型分数趋势
+                  <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各题型分数趋势
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -396,7 +396,7 @@ export function StudentAnalysis({
               <>
                 <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                    <School className="w-4 h-4 text-[color:var(--accent)]" />校内考试得分率走势
+                    <School className="w-4 h-4 text-[color:var(--brand)]" />校内考试得分率走势
                   </p>
                   <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">

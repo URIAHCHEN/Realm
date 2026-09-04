@@ -386,8 +386,8 @@ export function StudentReport({
         <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
           <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无学生数据</h3>
-        <p className="text-slate-500">请先添加学生后再查看学情报告</p>
+        <h3 className="text-xl font-semibold text-[color:var(--ink)] mb-2">暂无学生数据</h3>
+        <p className="text-[color:var(--ink-4)]">请先添加学生后再查看学情报告</p>
       </div>
     );
   }
@@ -413,9 +413,9 @@ export function StudentReport({
 
             {reportMode === 'personal' ? (
               <>
-                <span className="font-medium text-slate-700">选择学生：</span>
+                <span className="font-medium text-[color:var(--ink-2)]">选择学生：</span>
                 <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                  <SelectTrigger className="w-64 liquid-glass-input">
+                  <SelectTrigger className="w-full sm:w-64 liquid-glass-input">
                     <SelectValue placeholder="选择学生" />
                   </SelectTrigger>
                   <SelectContent>
@@ -429,9 +429,9 @@ export function StudentReport({
               </>
             ) : (
               <>
-                <span className="font-medium text-slate-700">选择课次：</span>
+                <span className="font-medium text-[color:var(--ink-2)]">选择课次：</span>
                 <Select value={String(selectedLesson)} onValueChange={(v) => setSelectedLesson(v === 'all' ? 'all' : Number(v))}>
-                  <SelectTrigger className="w-48 liquid-glass-input">
+                  <SelectTrigger className="w-full sm:w-48 liquid-glass-input">
                     <SelectValue placeholder="选择课次" />
                   </SelectTrigger>
                   <SelectContent>
@@ -441,8 +441,8 @@ export function StudentReport({
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex-1" />
-                <div className="flex gap-2">
+                <div className="hidden sm:block flex-1" />
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" className="gap-2" onClick={exportClassReportCSV}>
                     <FileSpreadsheet className="w-4 h-4" />
                     导出CSV
@@ -599,8 +599,8 @@ function PersonalReport({
         <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
           <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无学习记录</h3>
-        <p className="text-slate-500">该学生暂无任何课次的学习记录</p>
+        <h3 className="text-xl font-semibold text-[color:var(--ink)] mb-2">暂无学习记录</h3>
+        <p className="text-[color:var(--ink-4)]">该学生暂无任何课次的学习记录</p>
       </div>
     );
   }
@@ -618,7 +618,7 @@ function PersonalReport({
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex items-center gap-2">
-              <Label className="text-sm text-slate-600 whitespace-nowrap">趋势图类型</Label>
+              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">趋势图类型</Label>
               <Select value={trendType} onValueChange={(v) => setTrendType(v as typeof trendType)}>
                 <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -629,7 +629,7 @@ function PersonalReport({
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm text-slate-600 whitespace-nowrap">课次排序</Label>
+              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">课次排序</Label>
               <Select value={scoreSort} onValueChange={(v) => setScoreSort(v as typeof scoreSort)}>
                 <SelectTrigger className="w-36 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -640,7 +640,7 @@ function PersonalReport({
               </Select>
             </div>
             <div className="flex items-center gap-4">
-              <Label className="text-sm text-slate-600 whitespace-nowrap">展示指标</Label>
+              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">展示指标</Label>
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                 <Checkbox checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} className="translate-y-[1px]" />课后任务
               </label>
@@ -649,7 +649,7 @@ function PersonalReport({
               </label>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm text-slate-600 whitespace-nowrap">题型分布图</Label>
+              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">题型分布图</Label>
               <Select value={distType} onValueChange={(v) => setDistType(v as typeof distType)}>
                 <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -800,7 +800,7 @@ function PersonalReport({
             </div>
             <div className="space-y-3">
               {studentStats?.avgQuestionTypeScores.map((qt, index) => (
-                <div key={qt.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div key={qt.id} className="flex items-center justify-between p-3 bg-black/[0.04] rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                     <span className="font-medium">{qt.name}</span>
@@ -845,15 +845,15 @@ function PersonalReport({
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">按时出勤</span>
+                <span className="text-[color:var(--ink-2)]">按时出勤</span>
                 <Badge className="bg-green-100 text-green-700">{studentStats?.attendanceStats.onTime} 次</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">迟到</span>
+                <span className="text-[color:var(--ink-2)]">迟到</span>
                 <Badge className="bg-yellow-100 text-yellow-700">{studentStats?.attendanceStats.late} 次</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">缺勤</span>
+                <span className="text-[color:var(--ink-2)]">缺勤</span>
                 <Badge className="bg-red-100 text-red-700">{studentStats?.attendanceStats.absent} 次</Badge>
               </div>
             </div>
@@ -870,15 +870,15 @@ function PersonalReport({
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">超赞完成</span>
+                <span className="text-[color:var(--ink-2)]">超赞完成</span>
                 <Badge className="bg-green-100 text-green-700">{studentStats?.homeworkStats.excellent} 次</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">圆满完成</span>
+                <span className="text-[color:var(--ink-2)]">圆满完成</span>
                 <Badge className="bg-[rgb(var(--brand-rgb)/0.13)] text-[color:var(--brand)]">{studentStats?.homeworkStats.good} 次</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-600">基本完成</span>
+                <span className="text-[color:var(--ink-2)]">基本完成</span>
                 <Badge className="bg-yellow-100 text-yellow-700">{studentStats?.homeworkStats.average} 次</Badge>
               </div>
             </div>
@@ -1011,8 +1011,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
         <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
           <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无班级学习记录</h3>
-        <p className="text-slate-500">请先录入学情数据后再查看班级报告</p>
+        <h3 className="text-xl font-semibold text-[color:var(--ink)] mb-2">暂无班级学习记录</h3>
+        <p className="text-[color:var(--ink-4)]">请先录入学情数据后再查看班级报告</p>
       </div>
     );
   }
@@ -1041,9 +1041,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
   return (
     <div className="space-y-8">
       {/* 报告头部 */}
-      <div className="text-center pb-6 border-b border-slate-100">
-        <h1 className="text-2xl font-bold text-slate-800">📊 班级学情报告</h1>
-        <p className="text-slate-500 mt-1">
+      <div className="text-center pb-6 border-b border-black/[0.06]">
+        <h1 className="text-2xl font-bold text-[color:var(--ink)]">📊 班级学情报告</h1>
+        <p className="text-[color:var(--ink-4)] mt-1">
           {currentClassName} · {selectedLesson === 'all' ? '全部课次' : `第${selectedLesson}课`}
         </p>
       </div>
@@ -1057,8 +1057,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <Target className="w-5 h-5 text-[color:var(--brand)]" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">平均分</p>
-                <p className="text-xl font-bold text-slate-800">{classStats.avgScore}</p>
+                <p className="text-xs text-[color:var(--ink-4)]">平均分</p>
+                <p className="text-xl font-bold text-[color:var(--ink)]">{classStats.avgScore}</p>
               </div>
             </div>
           </CardContent>
@@ -1070,8 +1070,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <TrendingUp className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">平均正确率</p>
-                <p className="text-xl font-bold text-slate-800">{classStats.avgCorrectRate}%</p>
+                <p className="text-xs text-[color:var(--ink-4)]">平均正确率</p>
+                <p className="text-xl font-bold text-[color:var(--ink)]">{classStats.avgCorrectRate}%</p>
               </div>
             </div>
           </CardContent>
@@ -1083,8 +1083,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <CheckSquare className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">出勤率</p>
-                <p className="text-xl font-bold text-slate-800">{attendanceRate}%</p>
+                <p className="text-xs text-[color:var(--ink-4)]">出勤率</p>
+                <p className="text-xl font-bold text-[color:var(--ink)]">{attendanceRate}%</p>
               </div>
             </div>
           </CardContent>
@@ -1096,8 +1096,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <BookOpen className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">作业优良率</p>
-                <p className="text-xl font-bold text-slate-800">{homeworkExcellentRate}%</p>
+                <p className="text-xs text-[color:var(--ink-4)]">作业优良率</p>
+                <p className="text-xl font-bold text-[color:var(--ink)]">{homeworkExcellentRate}%</p>
               </div>
             </div>
           </CardContent>
@@ -1129,7 +1129,7 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
               <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: `${d.color}15` }}>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
-                  <span className="text-sm text-slate-700">{d.label}分</span>
+                  <span className="text-sm text-[color:var(--ink-2)]">{d.label}分</span>
                 </div>
                 <span className="font-bold" style={{ color: d.color }}>{d.count}人</span>
               </div>
@@ -1152,12 +1152,12 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                   <span className="text-sm text-rose-700 font-medium">Top {i + 1}</span>
                   <Badge className="bg-rose-100 text-rose-700 border-0">{qt.correctRate}%</Badge>
                 </div>
-                <p className="text-lg font-bold text-slate-800">{qt.name}</p>
-                <p className="text-sm text-slate-500 mt-1">班均 {qt.avgScore} / {qt.fullScore} 分</p>
+                <p className="text-lg font-bold text-[color:var(--ink)]">{qt.name}</p>
+                <p className="text-sm text-[color:var(--ink-4)] mt-1">班均 {qt.avgScore} / {qt.fullScore} 分</p>
               </CardContent>
             </Card>
           )) : (
-            <div className="col-span-3 text-center py-8 text-slate-500 bg-slate-50 rounded-xl">
+            <div className="col-span-3 text-center py-8 text-[color:var(--ink-4)] bg-black/[0.04] rounded-xl">
               暂无题型数据
             </div>
           )}
@@ -1187,9 +1187,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <p className="text-2xl font-bold text-red-700">{classStats.attendanceSummary.absent}</p>
                 <p className="text-xs text-red-600">缺勤</p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-slate-700">{classStats.attendanceSummary.leave + classStats.attendanceSummary.transfer}</p>
-                <p className="text-xs text-slate-600">请假/调课</p>
+              <div className="p-3 bg-black/[0.04] rounded-xl text-center">
+                <p className="text-2xl font-bold text-[color:var(--ink-2)]">{classStats.attendanceSummary.leave + classStats.attendanceSummary.transfer}</p>
+                <p className="text-xs text-[color:var(--ink-2)]">请假/调课</p>
               </div>
             </div>
           </CardContent>
@@ -1216,9 +1216,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <p className="text-2xl font-bold text-yellow-700">{classStats.homeworkSummary.average + classStats.homeworkSummary.poor}</p>
                 <p className="text-xs text-yellow-600">未完成/基本完成</p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-slate-700">{classStats.homeworkSummary.notBring}</p>
-                <p className="text-xs text-slate-600">没带</p>
+              <div className="p-3 bg-black/[0.04] rounded-xl text-center">
+                <p className="text-2xl font-bold text-[color:var(--ink-2)]">{classStats.homeworkSummary.notBring}</p>
+                <p className="text-xs text-[color:var(--ink-2)]">没带</p>
               </div>
             </div>
           </CardContent>
@@ -1368,27 +1368,27 @@ function StudentFeedback({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-700 leading-relaxed">{overallFeedback}</p>
+          <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{overallFeedback}</p>
         </CardContent>
       </Card>
       
       {questionTypeFeedbacks.length > 0 && (
-        <Card className="mb-4 bg-gradient-to-br from-slate-50 to-gray-50 border-slate-200">
+        <Card className="mb-4 bg-gradient-to-br from-black/[0.05] to-gray-50 border-black/[0.1]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-slate-600" />
+              <BarChart3 className="w-4 h-4 text-[color:var(--ink-2)]" />
               各题型分析
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {questionTypeFeedbacks.map((item, index) => (
-                <div key={index} className="p-3 bg-white rounded-lg border border-slate-100">
+                <div key={index} className="p-3 bg-white rounded-lg border border-black/[0.06]">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle2 className="w-4 h-4 text-[color:var(--brand)]" />
-                    <span className="font-medium text-sm text-slate-800">{item.name}</span>
+                    <span className="font-medium text-sm text-[color:var(--ink)]">{item.name}</span>
                   </div>
-                  <p className="text-sm text-slate-600 leading-relaxed ml-6">{item.feedback}</p>
+                  <p className="text-sm text-[color:var(--ink-2)] leading-relaxed ml-6">{item.feedback}</p>
                 </div>
               ))}
             </div>
@@ -1405,7 +1405,7 @@ function StudentFeedback({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-700 leading-relaxed">{attendanceFeedback}</p>
+            <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{attendanceFeedback}</p>
           </CardContent>
         </Card>
 
@@ -1417,7 +1417,7 @@ function StudentFeedback({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-700 leading-relaxed">{homeworkFeedbackText}</p>
+            <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{homeworkFeedbackText}</p>
           </CardContent>
         </Card>
 
@@ -1429,7 +1429,7 @@ function StudentFeedback({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-700 leading-relaxed">{trajectoryFeedbackText}</p>
+            <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{trajectoryFeedbackText}</p>
           </CardContent>
         </Card>
       </div>
@@ -1443,7 +1443,7 @@ function StudentFeedback({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-700 leading-relaxed">{listeningFeedbackText}</p>
+            <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{listeningFeedbackText}</p>
           </CardContent>
         </Card>
       )}

@@ -38,7 +38,7 @@ const rateTone = (r: number): string => {
 const rankTone = (rank?: number): { icon?: string; className: string } => {
   if (!rank) return { className: 'text-[color:var(--ink-4)]' };
   if (rank === 1) return { icon: '🥇', className: 'font-semibold text-amber-600' };
-  if (rank === 2) return { icon: '🥈', className: 'font-semibold text-slate-500' };
+  if (rank === 2) return { icon: '🥈', className: 'font-semibold text-[color:var(--ink-4)]' };
   if (rank === 3) return { icon: '🥉', className: 'font-semibold text-orange-600' };
   return { className: 'text-[color:var(--ink-2)]' };
 };
@@ -276,7 +276,7 @@ export function SchoolScorePanel({
             <p className="text-xs text-[color:var(--ink-4)]">按考试归组追踪班级校内成绩、正确率与排名变化</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             type="file"
             ref={fileInputRef}
@@ -285,15 +285,15 @@ export function SchoolScorePanel({
             className="hidden"
           />
           <Button
-            variant="outline"
+            variant="outline" title="导入 Excel"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl gap-2"
+            className="rounded-[var(--r-md)] gap-2"
           >
             <Upload className="w-4 h-4" />
-            导入Excel
+            <span className="hidden sm:inline">导入Excel</span>
           </Button>
           <Button
-            variant="outline"
+            variant="outline" title="导出趋势图"
             disabled={scores.length === 0}
             onClick={() => {
               const namesWithData = new Set(scores.map(s => s.studentName));
@@ -301,16 +301,16 @@ export function SchoolScorePanel({
               setTrendStudent(first);
               setIsTrendDialogOpen(true);
             }}
-            className="rounded-xl gap-2"
+            className="rounded-[var(--r-md)] gap-2"
           >
             <LineChartIcon className="w-4 h-4" />
-            导出趋势图
+            <span className="hidden sm:inline">导出趋势图</span>
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="ios-button gap-2">
+              <Button className="ios-button gap-2" title="添加成绩">
                 <Plus className="w-4 h-4" />
-                添加成绩
+                <span className="hidden sm:inline">添加成绩</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -616,7 +616,7 @@ export function SchoolScorePanel({
                 {progressStars.length > 0 ? (
                   <div className="space-y-3">
                     {progressStars.map((s, i) => (
-                      <div key={s.name} className="flex items-center gap-4 p-4 rounded-xl bg-white/60 border border-slate-100">
+                      <div key={s.name} className="flex items-center gap-4 p-4 rounded-xl bg-white/60 border border-black/[0.06]">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
                           style={{
                             background: i === 0 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' :
@@ -785,10 +785,15 @@ export function SchoolScorePanel({
       {/* 成绩列表（无数据时） */}
       {examEntries.length === 0 && (
         <Card className="ios-glass-card border-0">
-          <CardContent className="py-14 text-center text-[color:var(--ink-4)]">
-            <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p className="font-medium text-[color:var(--ink-2)]">暂无校内成绩记录</p>
-            <p className="text-sm mt-2">支持导入Excel文件，格式参考：学员姓名、学号、校区、年级、学科、得分、试卷总分、班级排名、年级排名</p>
+          <CardContent>
+            <div className="empty-general">
+              <span className="empty-ico"><FileSpreadsheet className="w-6 h-6" /></span>
+              <div className="empty-t">暂无校内成绩记录</div>
+              <div className="empty-d">
+                支持导入 Excel，格式参考：学员姓名、学号、校区、年级、学科、得分、试卷总分、班级排名、年级排名。
+                也可点右上角「添加成绩」手工录入。
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -872,7 +877,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
   }, [lineData]);
 
   if (!student || studentScores.length === 0) {
-    return <div className="text-center py-12 text-slate-500">所选学员暂无校内成绩数据</div>;
+    return <div className="text-center py-12 text-[color:var(--ink-4)]">所选学员暂无校内成绩数据</div>;
   }
 
   const nickname = getNickname(student);
@@ -884,17 +889,17 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
   return (
     <div className="space-y-5">
       {/* 报告头 */}
-      <div className="text-center pb-3 border-b border-slate-100">
+      <div className="text-center pb-3 border-b border-black/[0.06]">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-[color:var(--brand)] to-cyan-600 bg-clip-text text-transparent">
           入门测成绩趋势报告
         </h2>
-        <p className="text-slate-500 mt-1">
-          学员姓名：<span className="font-semibold text-slate-800">{nickname}</span>
-          <span className="mx-3 text-slate-300">|</span>
-          共 <span className="font-semibold text-slate-800">{studentScores.length}</span> 次考试
+        <p className="text-[color:var(--ink-4)] mt-1">
+          学员姓名：<span className="font-semibold text-[color:var(--ink)]">{nickname}</span>
+          <span className="mx-3 text-[color:var(--ink-4)]">|</span>
+          共 <span className="font-semibold text-[color:var(--ink)]">{studentScores.length}</span> 次考试
           {improvements.length > 0 && (
             <>
-              <span className="mx-3 text-slate-300">|</span>
+              <span className="mx-3 text-[color:var(--ink-4)]">|</span>
               <span className="text-emerald-600 font-semibold">进步课次 {improvements.length} 次</span>
             </>
           )}
@@ -904,29 +909,29 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
       {/* KPI 瓷贴 */}
       <div className="grid grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-cyan-50 border border-[rgb(var(--brand-rgb)/0.22)]">
-          <p className="text-xs text-slate-500 mb-1">最近正确率</p>
+          <p className="text-xs text-[color:var(--ink-4)] mb-1">最近正确率</p>
           <p className="text-2xl font-bold text-[color:var(--brand)]">{latestRate}%</p>
         </div>
         <div className={`p-4 rounded-xl border ${totalImprovement >= 0 ? 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100' : 'bg-gradient-to-br from-rose-50 to-orange-50 border-rose-100'}`}>
-          <p className="text-xs text-slate-500 mb-1">总体提升</p>
+          <p className="text-xs text-[color:var(--ink-4)] mb-1">总体提升</p>
           <p className={`text-2xl font-bold ${totalImprovement >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
             {totalImprovement >= 0 ? '+' : ''}{totalImprovement}%
           </p>
         </div>
         <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-100">
-          <p className="text-xs text-slate-500 mb-1">最佳班级排名</p>
+          <p className="text-xs text-[color:var(--ink-4)] mb-1">最佳班级排名</p>
           <p className="text-2xl font-bold text-amber-700">{bestRank < 999 ? `第${bestRank}名` : '-'}</p>
         </div>
       </div>
 
       {/* 折线图 */}
-      <div className="rounded-xl border border-slate-100 p-4">
+      <div className="rounded-xl border border-black/[0.06] p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+          <h3 className="font-semibold text-[color:var(--ink)] flex items-center gap-2">
             <LineChartIcon className="w-4 h-4 text-[color:var(--brand)]" />
             历次正确率趋势
           </h3>
-          <span className="text-xs text-slate-500">虚线=班级平均 · 紫色=班级最高</span>
+          <span className="text-xs text-[color:var(--ink-4)]">虚线=班级平均 · 紫色=班级最高</span>
         </div>
         <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -965,8 +970,8 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
 
       {/* 饼图 + 进步课次 */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-xl border border-slate-100 p-4">
-          <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2 text-sm">
+        <div className="rounded-xl border border-black/[0.06] p-4">
+          <h3 className="font-semibold text-[color:var(--ink)] mb-2 flex items-center gap-2 text-sm">
             <Target className="w-4 h-4 text-[color:var(--brand)]" />
             各次得分分布
           </h3>
@@ -982,8 +987,8 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-100 p-4">
-          <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2 text-sm">
+        <div className="rounded-xl border border-black/[0.06] p-4">
+          <h3 className="font-semibold text-[color:var(--ink)] mb-2 flex items-center gap-2 text-sm">
             <Sparkles className="w-4 h-4 text-emerald-600" />
             高亮进步课次（相对上次提升≥5%）
           </h3>
@@ -991,21 +996,21 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
             <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
               {improvements.map((imp, i) => (
                 <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100">
-                  <span className="text-sm text-slate-700 truncate">{imp.examName}</span>
+                  <span className="text-sm text-[color:var(--ink-2)] truncate">{imp.examName}</span>
                   <Badge className="bg-emerald-100 text-emerald-700 border-0">+{imp.improvement}%</Badge>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center text-sm text-slate-500 py-12">暂无显著进步课次</div>
+            <div className="text-center text-sm text-[color:var(--ink-4)] py-12">暂无显著进步课次</div>
           )}
         </div>
       </div>
 
       {/* 历次汇总表（参考附图） */}
-      <div className="rounded-xl border border-slate-100 overflow-hidden">
+      <div className="rounded-xl border border-black/[0.06] overflow-hidden">
         <div className="px-4 py-2 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.10)] to-cyan-50 border-b border-[rgb(var(--brand-rgb)/0.22)]">
-          <h3 className="font-semibold text-slate-800 text-sm">一、历次情况汇总</h3>
+          <h3 className="font-semibold text-[color:var(--ink)] text-sm">一、历次情况汇总</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1019,7 +1024,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
             </thead>
             <tbody>
               <tr className="bg-white">
-                <td className="px-3 py-2 font-medium text-slate-700">{nickname}</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">{nickname}</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center">
                     <span className={d.studentRate >= 80 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>{d.studentRate}%</span>
@@ -1027,19 +1032,19 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
                 ))}
               </tr>
               <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
-                <td className="px-3 py-2 font-medium text-slate-700">班级最高正确率</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级最高正确率</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center text-purple-700 font-semibold">{d.classMax}%</td>
                 ))}
               </tr>
               <tr className="bg-white">
-                <td className="px-3 py-2 font-medium text-slate-700">班级平均正确率</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级平均正确率</td>
                 {lineData.map((d, i) => (
-                  <td key={i} className="px-3 py-2 text-center text-slate-600 font-semibold">{d.classAvg}%</td>
+                  <td key={i} className="px-3 py-2 text-center text-[color:var(--ink-2)] font-semibold">{d.classAvg}%</td>
                 ))}
               </tr>
               <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
-                <td className="px-3 py-2 font-medium text-slate-700">班级排名【前】</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级排名【前】</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center font-semibold">{d.rank > 0 ? d.rank.toFixed(2) : '-'}</td>
                 ))}

@@ -1578,3 +1578,13 @@ body{
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
 }
+
+/* 报告文档：桌面/导出版式保持不变，仅窄屏做响应式收拢 */
+@media (max-width:768px){
+  .report-container{ padding:var(--sp-5); }
+  .report-title{ font-size:var(--text-2xl); }
+  .report-info-grid{ grid-template-columns:repeat(2,1fr); gap:var(--sp-2); }
+  .report-section{ margin-bottom:var(--sp-6); }
+  .report-section-title{ font-size:var(--text-lg); margin-bottom:var(--sp-3); }
+  .report-info-value{ font-size:var(--text-xl); }
+}

@@ -717,7 +717,7 @@ export function Leaderboard({
       {showConfetti && <Confetti />}
 
       {/* 顶部统计卡片（含入截图区域） */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <div className="theater-stat-card gold-border">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 flex items-center justify-center shadow-lg trophy-pulse">
@@ -765,9 +765,9 @@ export function Leaderboard({
       </div>
 
       {/* 控制栏：榜单类型 + 课次范围 + 操作按钮（导出图片时忽略此区域） */}
-      <div data-h2c-ignore className="flex flex-wrap items-end gap-4 p-4 ios-glass-card rounded-xl">
+      <div data-h2c-ignore className="flex flex-wrap items-end gap-4 p-4 sm:p-5 ios-glass-card rounded-[var(--r-lg)]">
         <div className="space-y-1.5">
-          <Label className="text-sm text-slate-600">榜单类型</Label>
+          <Label className="text-sm text-[color:var(--ink-2)]">榜单类型</Label>
           <Select value={mode} onValueChange={(v) => setMode(v as LeaderboardMode)}>
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -783,7 +783,7 @@ export function Leaderboard({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-sm text-slate-600">课次范围</Label>
+          <Label className="text-sm text-[color:var(--ink-2)]">课次范围</Label>
           <Select value={lessonRange} onValueChange={(v) => setLessonRange(v as LessonRange)}>
             <SelectTrigger className="w-36">
               <SelectValue />
@@ -799,7 +799,7 @@ export function Leaderboard({
         {lessonRange === 'custom' && (
           <>
             <div className="space-y-1.5">
-              <Label className="text-sm text-slate-600">起始课次</Label>
+              <Label className="text-sm text-[color:var(--ink-2)]">起始课次</Label>
               <Input
                 type="number"
                 min={1}
@@ -809,7 +809,7 @@ export function Leaderboard({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-slate-600">结束课次</Label>
+              <Label className="text-sm text-[color:var(--ink-2)]">结束课次</Label>
               <Input
                 type="number"
                 min={1}
@@ -823,7 +823,7 @@ export function Leaderboard({
 
         {mode === 'progress' && lessonRange !== 'current' && (
           <div className="space-y-1.5">
-            <Label className="text-sm text-slate-600">最少课次数</Label>
+            <Label className="text-sm text-[color:var(--ink-2)]">最少课次数</Label>
             <Input
               type="number"
               min={2}
@@ -863,30 +863,30 @@ export function Leaderboard({
               {showExportMenu ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </Button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-20">
+              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-lg shadow-xl border border-black/[0.06] overflow-hidden z-20">
                 <button
-                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-black/[0.04] flex items-center gap-2"
                   onClick={() => handleExport('text')}
                 >
-                  <FileText className="w-4 h-4 text-slate-500" />
+                  <FileText className="w-4 h-4 text-[color:var(--ink-4)]" />
                   导出文本
                 </button>
                 <button
-                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-black/[0.04] flex items-center gap-2"
                   onClick={() => handleExport('csv')}
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
                   导出 CSV
                 </button>
                 <button
-                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-black/[0.04] flex items-center gap-2"
                   onClick={() => handleExport('json')}
                 >
                   <FileJson className="w-4 h-4 text-blue-500" />
                   导出 JSON
                 </button>
                 <button
-                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-black/[0.04] flex items-center gap-2 border-t border-black/[0.06]"
                   onClick={handleExportImage}
                   disabled={isExportingImage}
                 >

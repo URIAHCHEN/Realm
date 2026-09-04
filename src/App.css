@@ -1588,3 +1588,13 @@ body{
   .report-section-title{ font-size:var(--text-lg); margin-bottom:var(--sp-3); }
   .report-info-value{ font-size:var(--text-xl); }
 }
+
+/* 表扬榜 Theater：仅窄屏收拢内距/间距，桌面与导出版式不变 */
+@media (max-width:768px){
+  .theater-stage{ padding:var(--sp-5); border-radius:var(--r-xl); }
+  .theater-header{ margin-bottom:var(--sp-5); gap:var(--sp-2); }
+  .theater-title{ font-size:var(--text-xl); letter-spacing:1px; }
+  .podium-stage{ gap:var(--sp-3); padding:var(--sp-3); }
+  .honor-wall{ gap:var(--sp-4); }
+  .listening-grid{ gap:var(--sp-3); }
+}

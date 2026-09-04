@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, Lock } from 'lucide-react';
+import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData } from '@/hooks/useClassData';
@@ -18,7 +18,6 @@ import { FeedbackGenerator } from '@/components/FeedbackGenerator';
 import { PraiseGenerator } from '@/components/PraiseGenerator';
 import { StudentImportModal } from '@/components/StudentImportModal';
 import { ConfigPanel } from '@/components/ConfigPanel';
-import { PasswordSettings } from '@/components/PasswordSettings';
 import { Leaderboard } from '@/components/Leaderboard';
 
 // 以下三个模块依赖 recharts（图表库）/ xlsx（Excel）/ html2canvas（截图），
@@ -53,23 +52,10 @@ import type { SyncSnapshot } from '@/lib/cloudSync';
 import type { AppConfig, LessonConfig } from '@/types';
 import './App.css';
 
-// 默认管理员密码
-// 默认密码：登录密码（日常使用）与管理员密码（最高权限）
-const DEFAULT_LOGIN_PASSWORD = 'Lynn';
-const DEFAULT_ADMIN_PASSWORD = 'Chl0131';
-
 function App() {
   // 认证状态：以 Supabase Auth 真实会话为准（不再用 localStorage 密码门）
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return !!getCachedSession();
-  });
-  // 登录密码：用于登录校验
-  const [loginPassword, setLoginPassword] = useState(() => {
-    return localStorage.getItem('loginPassword') || DEFAULT_LOGIN_PASSWORD;
-  });
-  // 管理员密码：用于修改登录密码等高权限操作
-  const [adminPassword, setAdminPassword] = useState(() => {
-    return localStorage.getItem('adminPassword') || DEFAULT_ADMIN_PASSWORD;
   });
 
   // 应用数据
@@ -165,15 +151,6 @@ function App() {
     });
   };
 
-  // 保存密码到localStorage
-  useEffect(() => {
-    localStorage.setItem('loginPassword', loginPassword);
-  }, [loginPassword]);
-
-  useEffect(() => {
-    localStorage.setItem('adminPassword', adminPassword);
-  }, [adminPassword]);
-
   // 登录成功（Supabase Auth 会话已建立，由 LoginPage 调用）
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -186,16 +163,6 @@ function App() {
     setIsAuthenticated(false);
     setMembership({ member: false, admin: false });
     toast.success('已登出');
-  };
-
-  // 修改登录密码（需先通过管理员密码校验，由 PasswordSettings 内部完成）
-  const handleChangeLoginPassword = (newPassword: string) => {
-    setLoginPassword(newPassword);
-  };
-
-  // 修改管理员密码
-  const handleChangeAdminPassword = (newPassword: string) => {
-    setAdminPassword(newPassword);
   };
 
   // 未登录显示登录页面
@@ -708,7 +675,7 @@ function App() {
           {/* 系统配置 Tab */}
           <TabsContent value="config" className="space-y-6">
             <Tabs defaultValue="visualization" className="space-y-4">
-              <TabsList className="grid w-full max-w-2xl grid-cols-4">
+              <TabsList className="grid w-full max-w-2xl grid-cols-3">
                 <TabsTrigger value="visualization" className="gap-1.5">
                   <BarChart3 className="w-4 h-4" />数据可视化
                 </TabsTrigger>
@@ -717,9 +684,6 @@ function App() {
                 </TabsTrigger>
                 <TabsTrigger value="publicity" className="gap-1.5">
                   <FileText className="w-4 h-4" />公示样式
-                </TabsTrigger>
-                <TabsTrigger value="security" className="gap-1.5">
-                  <Lock className="w-4 h-4" />密码
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="visualization">
@@ -741,15 +705,6 @@ function App() {
               <TabsContent value="publicity">
                 <div className="max-w-4xl">
                   <PublicityStylePanel display={displaySettings} />
-                </div>
-              </TabsContent>
-              <TabsContent value="security">
-                <div className="max-w-md">
-                  <PasswordSettings
-                    adminPassword={adminPassword}
-                    onChangeLoginPassword={handleChangeLoginPassword}
-                    onChangeAdminPassword={handleChangeAdminPassword}
-                  />
                 </div>
               </TabsContent>
             </Tabs>

@@ -14,6 +14,16 @@ import {
 } from '@/lib/cloudSync';
 import { getSyncIntervalSec } from '@/lib/displaySettings';
 
+/** 把内部错误码/异常转成老师能看懂的中文提示 */
+function toSyncMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (raw === 'AUTH_FAILED') return '登录已失效或无写入权限：请重新登录；若你不在可写名单，数据将保持只读';
+  if (raw === 'TABLE_MISSING') return '云端数据表尚未创建：请先在 Supabase 执行建表/权限 SQL';
+  if (raw.startsWith('HTTP_')) return `云端返回异常（${raw.replace('HTTP_', 'HTTP ')}），请稍后重试`;
+  if (raw.includes('Failed to fetch') || raw.includes('NetworkError') || raw.includes('network')) return '网络连接异常：请检查网络后重试';
+  return raw;
+}
+
 interface UseCloudSyncOptions {
   snapshot: SyncSnapshot;
   onImport: (snapshot: SyncSnapshot) => void;
@@ -63,8 +73,9 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     } catch (e) {
       setStatus('error');
       statusRef.current = 'error';
-      setMessage(e instanceof Error ? e.message : String(e));
-      if (!silent) toast.error('云端上传失败：' + (e instanceof Error ? e.message : String(e)));
+      const m = toSyncMessage(e);
+      setMessage(m);
+      if (!silent) toast.error('云端上传失败：' + m);
       return false;
     } finally {
       setAction('idle');
@@ -93,8 +104,9 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     } catch (e) {
       setStatus('error');
       statusRef.current = 'error';
-      setMessage(e instanceof Error ? e.message : String(e));
-      if (!silent) toast.error('云端拉取失败：' + (e instanceof Error ? e.message : String(e)));
+      const m = toSyncMessage(e);
+      setMessage(m);
+      if (!silent) toast.error('云端拉取失败：' + m);
       return false;
     } finally {
       setAction('idle');
@@ -148,7 +160,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     } catch (e) {
       setStatus('error');
       statusRef.current = 'error';
-      setMessage(e instanceof Error ? e.message : String(e));
+      setMessage(toSyncMessage(e));
     }
   }, [doPush, doPull, canWrite]);
 
@@ -180,6 +192,22 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
   }, [snapshot, config, doPush, enabled, canWrite]);
+
+  // 多端收敛：窗口获焦/可见 或 每 60s，轻量再对账（复用冲突检测，不改变写入语义）
+  useEffect(() => {
+    if (!enabled || !config) return;
+    const maybeReconcile = () => {
+      if (document.visibilityState === 'visible') reconcile(config);
+    };
+    window.addEventListener('focus', maybeReconcile);
+    document.addEventListener('visibilitychange', maybeReconcile);
+    const id = setInterval(maybeReconcile, 60_000);
+    return () => {
+      window.removeEventListener('focus', maybeReconcile);
+      document.removeEventListener('visibilitychange', maybeReconcile);
+      clearInterval(id);
+    };
+  }, [enabled, config, reconcile]);
 
   // ============ 对外操作 ============
 

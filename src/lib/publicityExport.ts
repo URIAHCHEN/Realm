@@ -144,8 +144,8 @@ export function buildPublicityHTML(
     return `<span style="display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-weight:600;background:${style === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};color:${p.muted}">${rank || i + 1}</span>`;
   };
 
-  // 统一单元格样式：全居中、固定行高、底部细分隔线
-  const td = 'padding:10px 8px;border-bottom:1px solid ' + p.rowBorder + ';text-align:center;vertical-align:middle;';
+  // 统一单元格样式：全居中、固定行高、底部细分隔线；溢出裁剪，保证固定列宽不错位
+  const td = 'padding:10px 8px;border-bottom:1px solid ' + p.rowBorder + ';text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;';
 
   const rows = sorted.map((r, i) => {
     const ratePct = r.correctRate || 0;
@@ -202,7 +202,7 @@ export function buildPublicityHTML(
   .banner { background: ${p.bannerBg}; color: ${p.bannerText}; padding: 26px 32px; text-align: center; }
   .banner h1 { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-bottom: 6px; }
   .banner p { opacity: ${style === 'gradient' ? '0.9' : '0.7'}; font-size: 14.5px; }
-  .banner .meta { display: inline-flex; gap: 14px; margin-top: 8px; font-size: 13px; opacity: 0.85; }
+  .banner .meta { display:block; margin-top:6px; font-size:11.5px; opacity:0.6; letter-spacing:0.2px; }
   .content { padding: 18px 16px 20px; overflow-x: auto; }
   table { width: ${tableWidth}px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
   th { background: ${p.headBg}; color: ${p.headText}; padding: 11px 6px; font-weight: 700; white-space: nowrap; font-size: 13px; letter-spacing: 0.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
@@ -216,22 +216,22 @@ export function buildPublicityHTML(
     <div class="banner">
       <h1>Day${lessonNumber}学情公示</h1>
       <p>${classData.name}${classData.term ? ' · ' + classData.term : ''}${classData.batchCode ? ' · 批次 ' + classData.batchCode : ''}</p>
-      <div class="meta"><span>👥 参考人数 ${records.length} 人</span><span>💯 总分 ${fullScore} 分</span><span>📅 ${new Date().toLocaleDateString('zh-CN')}</span></div>
+      <div class="meta">共 ${records.length} 人 · 满分 ${fullScore} 分 · ${new Date().toLocaleDateString('zh-CN')}</div>
     </div>
     <div class="content">
       <table>
         ${colgroup}
         <thead>
           <tr>
-            <th>排名</th>
-            <th>姓名</th>
-            <th>成长轨迹</th>
-            <th>考勤</th>
-            <th>课堂练习</th>
-            <th>课后任务</th>
-            ${questionTypes.map(qt => `<th title="${qt.name}">${qt.name}</th>`).join('')}
-            <th>总分(${fullScore})</th>
-            <th>正确率</th>
+            <th style="width:56px;max-width:56px">排名</th>
+            <th style="width:86px;max-width:86px">姓名</th>
+            <th style="width:100px;max-width:100px">成长轨迹</th>
+            <th style="width:96px;max-width:96px">考勤</th>
+            <th style="width:96px;max-width:96px">课堂练习</th>
+            <th style="width:104px;max-width:104px">课后任务</th>
+            ${questionTypes.map(qt => `<th title="${qt.name}" style="width:84px;max-width:84px">${qt.name}</th>`).join('')}
+            <th style="width:100px;max-width:100px">总分(${fullScore})</th>
+            <th style="width:76px;max-width:76px">正确率</th>
           </tr>
         </thead>
         <tbody>${rows}${hasData ? avgRow : ''}</tbody>

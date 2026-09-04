@@ -89,7 +89,7 @@ export function PraiseGenerator({
   return (
     <Card className="ios-glass-card border-0">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2 text-[#1c1c1e]">
+        <CardTitle className="text-lg flex items-center gap-2 text-[color:var(--ink)]">
           <Trophy className="w-5 h-5 text-amber-500" />
           班群公示表彰
           <Badge variant="secondary" className="rounded-full">第{lessonNumber}课</Badge>
@@ -99,9 +99,9 @@ export function PraiseGenerator({
         {/* 表彰数据概览 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
           {quickStats.map(s => (
-            <div key={s.label} className="rounded-xl bg-[#f2f2f7] px-3.5 py-2.5 text-center">
+            <div key={s.label} className="rounded-xl bg-black/[0.05] px-3.5 py-2.5 text-center">
               <p className="text-xl font-bold" style={{ color: 'var(--brand)' }}>{s.value}</p>
-              <p className="text-[11px] text-[#8e8e93]">{s.label}</p>
+              <p className="text-[11px] text-[color:var(--ink-4)]">{s.label}</p>
             </div>
           ))}
         </div>
@@ -143,7 +143,7 @@ export function PraiseGenerator({
         </div>
 
         {lessonRecords.length === 0 ? (
-          <p className="text-sm text-[#8e8e93] py-8 text-center">
+          <p className="text-sm text-[color:var(--ink-4)] py-8 text-center">
             第{lessonNumber}课还没有学情记录，请先到「学情记录」保存
           </p>
         ) : praise ? (
@@ -172,7 +172,7 @@ export function PraiseGenerator({
             </Button>
           </>
         ) : (
-          <p className="text-xs text-[#8e8e93] text-center">
+          <p className="text-xs text-[color:var(--ink-4)] text-center">
             选择表彰类型后点「生成表彰」，内容基于当前课次数据自动汇总，可编辑后复制
           </p>
         )}

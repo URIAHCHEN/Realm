@@ -184,7 +184,7 @@ export function FeedbackGenerator({
       );
     }
     return (
-      <Badge variant="secondary" className="rounded-full text-[#aeaeb2] bg-[#f2f2f7]">
+      <Badge variant="secondary" className="rounded-full text-[color:var(--ink-4)] bg-black/[0.05]">
         未生成
       </Badge>
     );
@@ -202,8 +202,8 @@ export function FeedbackGenerator({
                 <FileText className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-[#1c1c1e]">私发反馈工作台 · 第{lessonNumber}课</p>
-                <p className="text-xs text-[#8e8e93]">按课次配置的反馈模板一键生成全班私发话术，逐个复制发送并跟踪进度</p>
+                <p className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</p>
+                <p className="text-xs text-[color:var(--ink-4)]">按课次配置的反馈模板一键生成全班私发话术，逐个复制发送并跟踪进度</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -215,7 +215,7 @@ export function FeedbackGenerator({
                 <Copy className="w-4 h-4" />
                 复制全部
               </Button>
-              <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 text-[#8e8e93]" onClick={handleResetStatus}>
+              <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
                 <RotateCcw className="w-3.5 h-3.5" />
                 重置状态
               </Button>
@@ -224,7 +224,7 @@ export function FeedbackGenerator({
 
           {/* 进度条 */}
           <div className="mt-4 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-[#8e8e93]">
+            <div className="flex items-center justify-between text-xs text-[color:var(--ink-4)]">
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 有记录学生 {withRecordsCount} / 共 {students.length} 人
@@ -235,7 +235,7 @@ export function FeedbackGenerator({
                 已发送 <span className="font-semibold text-emerald-600">{copiedCount}</span>
               </span>
             </div>
-            <div className="h-2 rounded-full bg-[#f2f2f7] overflow-hidden">
+            <div className="h-2 rounded-full bg-black/[0.05] overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
@@ -253,7 +253,7 @@ export function FeedbackGenerator({
         {/* 学生列表 */}
         <Card className="ios-glass-card border-0">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-[#3a3a3c]">
+            <CardTitle className="text-sm flex items-center gap-2 text-[color:var(--ink-2)]">
               <ClipboardList className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               学生列表
               <Badge variant="secondary" className="rounded-full ml-auto">{students.length} 人</Badge>
@@ -261,7 +261,7 @@ export function FeedbackGenerator({
           </CardHeader>
           <CardContent className="px-2 pb-2">
             {students.length === 0 ? (
-              <p className="text-sm text-[#8e8e93] text-center py-8">班级暂无学生</p>
+              <p className="text-sm text-[color:var(--ink-4)] text-center py-8">班级暂无学生</p>
             ) : (
               <ScrollArea className="h-[460px] pr-2">
                 <div className="space-y-1">
@@ -290,8 +290,8 @@ export function FeedbackGenerator({
                           {getNickname(s).slice(0, 1) || s.slice(0, 1)}
                         </span>
                         <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-medium text-[#1c1c1e] truncate">{getNickname(s)}</span>
-                          <span className="block text-[11px] text-[#8e8e93] truncate">
+                          <span className="block text-sm font-medium text-[color:var(--ink)] truncate">{getNickname(s)}</span>
+                          <span className="block text-[11px] text-[color:var(--ink-4)] truncate">
                             {hasRecord ? `${recordOf(s)!.totalScore}分 · 第${recordOf(s)!.rank}名` : '本课无记录'}
                           </span>
                         </span>
@@ -314,7 +314,7 @@ export function FeedbackGenerator({
         {/* 编辑区 */}
         <Card className="ios-glass-card border-0">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center justify-between gap-2 text-[#3a3a3c]">
+            <CardTitle className="text-sm flex items-center justify-between gap-2 text-[color:var(--ink-2)]">
               <span className="flex items-center gap-2">
                 <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                 {selected ? `${getNickname(selected)} 的反馈内容` : '反馈内容'}
@@ -324,15 +324,15 @@ export function FeedbackGenerator({
           </CardHeader>
           <CardContent className="space-y-3">
             {!selected ? (
-              <div className="py-16 text-center text-[#8e8e93]">
+              <div className="py-16 text-center text-[color:var(--ink-4)]">
                 <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-40" />
                 <p className="text-sm">从左侧选择学生，或点「一键生成全班」开始</p>
               </div>
             ) : !selectedRecord ? (
               <div className="py-16 text-center">
                 <CircleAlert className="w-10 h-10 mx-auto mb-3 text-amber-400" />
-                <p className="text-sm text-[#3a3a3c] font-medium">{getNickname(selected)} 在第{lessonNumber}课还没有学情记录</p>
-                <p className="text-xs text-[#8e8e93] mt-1.5">请先到「学情记录」为该生建档后再生成反馈</p>
+                <p className="text-sm text-[color:var(--ink-2)] font-medium">{getNickname(selected)} 在第{lessonNumber}课还没有学情记录</p>
+                <p className="text-xs text-[color:var(--ink-4)] mt-1.5">请先到「学情记录」为该生建档后再生成反馈</p>
               </div>
             ) : (
               <>
@@ -343,7 +343,7 @@ export function FeedbackGenerator({
                   placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
                 />
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-[#8e8e93]">
+                  <p className="text-xs text-[color:var(--ink-4)]">
                     内容可自由编辑；薄弱项与成绩详情已按班均自动计算
                   </p>
                   <Button className="ios-button gap-2" onClick={() => handleCopyOne(selected)}>

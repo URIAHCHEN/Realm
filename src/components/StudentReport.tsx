@@ -383,8 +383,8 @@ export function StudentReport({
   if (students.length === 0) {
     return (
       <div className="text-center py-16">
-        <div className="w-24 h-24 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <FileText className="w-12 h-12 text-blue-600" />
+        <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
         <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无学生数据</h3>
         <p className="text-slate-500">请先添加学生后再查看学情报告</p>
@@ -596,8 +596,8 @@ function PersonalReport({
   if (studentRecords.length === 0) {
     return (
       <div className="text-center py-16">
-        <div className="w-24 h-24 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <FileText className="w-12 h-12 text-blue-600" />
+        <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
         <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无学习记录</h3>
         <p className="text-slate-500">该学生暂无任何课次的学习记录</p>
@@ -805,7 +805,7 @@ function PersonalReport({
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                     <span className="font-medium">{qt.name}</span>
                   </div>
-                  <span className="font-bold text-blue-600">{qt.avgScore}分</span>
+                  <span className="font-bold text-[color:var(--brand)]">{qt.avgScore}分</span>
                 </div>
               ))}
             </div>
@@ -838,7 +838,7 @@ function PersonalReport({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock className="w-5 h-5 text-blue-600" />
+              <Clock className="w-5 h-5 text-[color:var(--brand)]" />
               考勤统计
             </CardTitle>
           </CardHeader>
@@ -863,7 +863,7 @@ function PersonalReport({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <BookOpen className="w-5 h-5 text-blue-600" />
+              <BookOpen className="w-5 h-5 text-[color:var(--brand)]" />
               作业完成情况
             </CardTitle>
           </CardHeader>
@@ -875,7 +875,7 @@ function PersonalReport({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-600">圆满完成</span>
-                <Badge className="bg-blue-100 text-blue-700">{studentStats?.homeworkStats.good} 次</Badge>
+                <Badge className="bg-[rgb(var(--brand-rgb)/0.13)] text-[color:var(--brand)]">{studentStats?.homeworkStats.good} 次</Badge>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-600">基本完成</span>
@@ -959,7 +959,7 @@ function PersonalReport({
                   <TableCell>
                     <Badge className={
                       record.homeworkStatus === '超赞完成' ? 'bg-green-100 text-green-700' :
-                      record.homeworkStatus === '圆满完成' ? 'bg-blue-100 text-blue-700' :
+                      record.homeworkStatus === '圆满完成' ? 'bg-[rgb(var(--brand-rgb)/0.13)] text-[color:var(--brand)]' :
                       'bg-yellow-100 text-yellow-700'
                     }>{record.homeworkStatus}</Badge>
                   </TableCell>
@@ -1008,8 +1008,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
   if (!classStats || classReportRecords.length === 0) {
     return (
       <div className="text-center py-16">
-        <div className="w-24 h-24 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <FileText className="w-12 h-12 text-blue-600" />
+        <div className="w-24 h-24 bg-[rgb(var(--brand-rgb)/0.13)] rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
         <h3 className="text-xl font-semibold text-slate-800 mb-2">暂无班级学习记录</h3>
         <p className="text-slate-500">请先录入学情数据后再查看班级报告</p>
@@ -1053,8 +1053,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
         <Card className="ios-glass-card border-0">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Target className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-xl bg-[rgb(var(--brand-rgb)/0.13)] flex items-center justify-center">
+                <Target className="w-5 h-5 text-[color:var(--brand)]" />
               </div>
               <div>
                 <p className="text-xs text-slate-500">平均分</p>
@@ -1169,7 +1169,7 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock className="w-5 h-5 text-blue-600" />
+              <Clock className="w-5 h-5 text-[color:var(--brand)]" />
               出勤概况
             </CardTitle>
           </CardHeader>
@@ -1208,9 +1208,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                 <p className="text-2xl font-bold text-green-700">{classStats.homeworkSummary.excellent}</p>
                 <p className="text-xs text-green-600">超赞完成</p>
               </div>
-              <div className="p-3 bg-blue-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-blue-700">{classStats.homeworkSummary.good}</p>
-                <p className="text-xs text-blue-600">圆满完成</p>
+              <div className="p-3 bg-[rgb(var(--brand-rgb)/0.08)] rounded-xl text-center">
+                <p className="text-2xl font-bold text-[color:var(--brand)]">{classStats.homeworkSummary.good}</p>
+                <p className="text-xs text-[color:var(--brand)]">圆满完成</p>
               </div>
               <div className="p-3 bg-yellow-50 rounded-xl text-center">
                 <p className="text-2xl font-bold text-yellow-700">{classStats.homeworkSummary.average + classStats.homeworkSummary.poor}</p>
@@ -1263,7 +1263,7 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
                     <TableCell>
                       <Badge className={
                         record.homeworkStatus === '超赞完成' ? 'bg-green-100 text-green-700' :
-                        record.homeworkStatus === '圆满完成' ? 'bg-blue-100 text-blue-700' :
+                        record.homeworkStatus === '圆满完成' ? 'bg-[rgb(var(--brand-rgb)/0.13)] text-[color:var(--brand)]' :
                         'bg-yellow-100 text-yellow-700'
                       }>{record.homeworkStatus}</Badge>
                     </TableCell>
@@ -1360,10 +1360,10 @@ function StudentFeedback({
         学习建议
       </h2>
       
-      <Card className="mb-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+      <Card className="mb-4 bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-[rgb(var(--brand-rgb)/0.10)] border-[rgb(var(--brand-rgb)/0.22)]">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-blue-600" />
+            <Sparkles className="w-4 h-4 text-[color:var(--brand)]" />
             整体表现分析
           </CardTitle>
         </CardHeader>
@@ -1385,7 +1385,7 @@ function StudentFeedback({
               {questionTypeFeedbacks.map((item, index) => (
                 <div key={index} className="p-3 bg-white rounded-lg border border-slate-100">
                   <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                    <CheckCircle2 className="w-4 h-4 text-[color:var(--brand)]" />
                     <span className="font-medium text-sm text-slate-800">{item.name}</span>
                   </div>
                   <p className="text-sm text-slate-600 leading-relaxed ml-6">{item.feedback}</p>
@@ -1435,7 +1435,7 @@ function StudentFeedback({
       </div>
       
       {avgListeningScore > 0 && (
-        <Card className="mt-4 bg-gradient-to-br from-cyan-50 to-sky-50 border-cyan-200">
+        <Card className="mt-4 bg-gradient-to-br from-cyan-50 to-[rgb(var(--brand-rgb)/0.10)] border-cyan-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-600" />

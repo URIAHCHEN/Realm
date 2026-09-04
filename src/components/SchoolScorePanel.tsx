@@ -36,11 +36,11 @@ const rateTone = (r: number): string => {
 };
 
 const rankTone = (rank?: number): { icon?: string; className: string } => {
-  if (!rank) return { className: 'text-[#8e8e93]' };
+  if (!rank) return { className: 'text-[color:var(--ink-4)]' };
   if (rank === 1) return { icon: '🥇', className: 'font-semibold text-amber-600' };
   if (rank === 2) return { icon: '🥈', className: 'font-semibold text-slate-500' };
   if (rank === 3) return { icon: '🥉', className: 'font-semibold text-orange-600' };
-  return { className: 'text-[#3a3a3c]' };
+  return { className: 'text-[color:var(--ink-2)]' };
 };
 
 export function SchoolScorePanel({
@@ -272,8 +272,8 @@ export function SchoolScorePanel({
             <TrendingUp className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-semibold text-[#1c1c1e]">校内成绩管理</p>
-            <p className="text-xs text-[#8e8e93]">按考试归组追踪班级校内成绩、正确率与排名变化</p>
+            <p className="font-semibold text-[color:var(--ink)]">校内成绩管理</p>
+            <p className="text-xs text-[color:var(--ink-4)]">按考试归组追踪班级校内成绩、正确率与排名变化</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -424,8 +424,8 @@ export function SchoolScorePanel({
                   <Icon className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-[#1c1c1e] leading-tight">{k.value}</p>
-                  <p className="text-xs text-[#8e8e93]">{k.label}</p>
+                  <p className="text-xl font-bold text-[color:var(--ink)] leading-tight">{k.value}</p>
+                  <p className="text-xs text-[color:var(--ink-4)]">{k.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -465,7 +465,7 @@ export function SchoolScorePanel({
                   </div>
                 )}
                 {importResult.errors.length > 0 && (
-                  <div className="bg-[#f2f2f7] p-4 rounded-xl max-h-40 overflow-y-auto">
+                  <div className="bg-black/[0.05] p-4 rounded-xl max-h-40 overflow-y-auto">
                     <div className="text-sm font-medium mb-2">错误信息：</div>
                     {importResult.errors.map((err, i) => (
                       <div key={i} className="text-sm text-rose-600">{err}</div>
@@ -552,20 +552,20 @@ export function SchoolScorePanel({
                                   style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
                                   {getNickname(score.studentName).slice(0, 1)}
                                 </span>
-                                <span className="font-medium text-[#1c1c1e]">{getNickname(score.studentName)}</span>
+                                <span className="font-medium text-[color:var(--ink)]">{getNickname(score.studentName)}</span>
                               </span>
                             </TableCell>
                             <TableCell>
-                              <span className="font-bold text-[#1c1c1e]">{score.score}</span>
-                              <span className="text-[#8e8e93] text-xs"> 分</span>
+                              <span className="font-bold text-[color:var(--ink)]">{score.score}</span>
+                              <span className="text-[color:var(--ink-4)] text-xs"> 分</span>
                             </TableCell>
-                            <TableCell className="text-[#8e8e93]">{score.totalScore}</TableCell>
+                            <TableCell className="text-[color:var(--ink-4)]">{score.totalScore}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Badge className={`${rateTone(correctRate)} border-0 rounded-full font-semibold`}>
                                   {correctRate}%
                                 </Badge>
-                                <div className="w-16 h-1.5 rounded-full bg-[#f2f2f7] overflow-hidden hidden md:block">
+                                <div className="w-16 h-1.5 rounded-full bg-black/[0.05] overflow-hidden hidden md:block">
                                   <div
                                     className="h-full rounded-full"
                                     style={{
@@ -610,8 +610,8 @@ export function SchoolScorePanel({
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-                  <h3 className="font-semibold text-[#1c1c1e]">进步之星</h3>
-                  <span className="text-xs text-[#8e8e93]">基于同一学生的多次考试成绩，按正确率提升幅度排序</span>
+                  <h3 className="font-semibold text-[color:var(--ink)]">进步之星</h3>
+                  <span className="text-xs text-[color:var(--ink-4)]">基于同一学生的多次考试成绩，按正确率提升幅度排序</span>
                 </div>
                 {progressStars.length > 0 ? (
                   <div className="space-y-3">
@@ -629,10 +629,10 @@ export function SchoolScorePanel({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#1c1c1e]">{s.nickname}</span>
-                            <span className="text-xs text-[#8e8e93]">共{s.examCount}次考试</span>
+                            <span className="font-semibold text-[color:var(--ink)]">{s.nickname}</span>
+                            <span className="text-xs text-[color:var(--ink-4)]">共{s.examCount}次考试</span>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-[#8e8e93]">
+                          <div className="flex items-center gap-2 text-sm text-[color:var(--ink-4)]">
                             <span>{s.firstExam} {s.firstScore}分</span>
                             <ArrowRight className="w-3 h-3" />
                             <span>{s.lastExam} {s.lastScore}分</span>
@@ -643,7 +643,7 @@ export function SchoolScorePanel({
                             <ChevronUp className="w-4 h-4" />
                             +{s.rateImprovement.toFixed(1)}%
                           </div>
-                          <div className="text-xs text-[#8e8e93]">
+                          <div className="text-xs text-[color:var(--ink-4)]">
                             {s.scoreImprovement >= 0 ? '+' : ''}{s.scoreImprovement}分
                             {s.rankImprovement !== undefined && s.rankImprovement > 0 ? ` · 排名前进了${s.rankImprovement}名` : ''}
                           </div>
@@ -652,9 +652,9 @@ export function SchoolScorePanel({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-[#8e8e93]">
+                  <div className="text-center py-12 text-[color:var(--ink-4)]">
                     <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                    <p className="font-medium text-[#3a3a3c]">暂无进步之星数据</p>
+                    <p className="font-medium text-[color:var(--ink-2)]">暂无进步之星数据</p>
                     <p className="text-sm mt-2">至少需要同一名学生的两场考试成绩</p>
                   </div>
                 )}
@@ -668,7 +668,7 @@ export function SchoolScorePanel({
                 <div className="flex flex-wrap items-center gap-4 mb-4">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-                    <h3 className="font-semibold text-[#1c1c1e]">阶段对比</h3>
+                    <h3 className="font-semibold text-[color:var(--ink)]">阶段对比</h3>
                   </div>
                   <div className="flex items-center gap-3 flex-1">
                     <Select value={compareExamA} onValueChange={setCompareExamA}>
@@ -681,7 +681,7 @@ export function SchoolScorePanel({
                         ))}
                       </SelectContent>
                     </Select>
-                    <span className="text-[#8e8e93]">对比</span>
+                    <span className="text-[color:var(--ink-4)]">对比</span>
                     <Select value={compareExamB} onValueChange={setCompareExamB}>
                       <SelectTrigger className="w-44 rounded-xl">
                         <SelectValue placeholder="选择后次考试" />
@@ -717,25 +717,25 @@ export function SchoolScorePanel({
                     <TableBody>
                       {compareData.map(item => (
                         <TableRow key={item.name} className="hover:bg-black/[0.03]">
-                          <TableCell className="font-medium text-[#1c1c1e]">{item.nickname}</TableCell>
+                          <TableCell className="font-medium text-[color:var(--ink)]">{item.nickname}</TableCell>
                           <TableCell>
                             {item.a ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.a.score}分</span>
-                                <span className="text-xs text-[#8e8e93]">{item.aRate.toFixed(1)}%</span>
+                                <span className="text-xs text-[color:var(--ink-4)]">{item.aRate.toFixed(1)}%</span>
                               </div>
                             ) : (
-                              <span className="text-[#8e8e93]">-</span>
+                              <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
                           <TableCell>
                             {item.b ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.b.score}分</span>
-                                <span className="text-xs text-[#8e8e93]">{item.bRate.toFixed(1)}%</span>
+                                <span className="text-xs text-[color:var(--ink-4)]">{item.bRate.toFixed(1)}%</span>
                               </div>
                             ) : (
-                              <span className="text-[#8e8e93]">-</span>
+                              <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -744,7 +744,7 @@ export function SchoolScorePanel({
                                 {item.scoreDiff >= 0 ? '+' : ''}{item.scoreDiff}分
                               </span>
                             ) : (
-                              <span className="text-[#8e8e93]">-</span>
+                              <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -753,17 +753,17 @@ export function SchoolScorePanel({
                                 {item.rateDiff >= 0 ? '+' : ''}{item.rateDiff.toFixed(1)}%
                               </span>
                             ) : (
-                              <span className="text-[#8e8e93]">-</span>
+                              <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
                           <TableCell>
                             {item.rankDiff !== undefined ? (
-                              <span className={`font-semibold flex items-center gap-0.5 ${item.rankDiff > 0 ? 'text-emerald-600' : item.rankDiff < 0 ? 'text-rose-600' : 'text-[#8e8e93]'}`}>
+                              <span className={`font-semibold flex items-center gap-0.5 ${item.rankDiff > 0 ? 'text-emerald-600' : item.rankDiff < 0 ? 'text-rose-600' : 'text-[color:var(--ink-4)]'}`}>
                                 {item.rankDiff > 0 ? <ChevronUp className="w-4 h-4" /> : item.rankDiff < 0 ? <ChevronDown className="w-4 h-4" /> : null}
                                 {item.rankDiff !== 0 ? `${Math.abs(item.rankDiff)}名` : '持平'}
                               </span>
                             ) : (
-                              <span className="text-[#8e8e93]">-</span>
+                              <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -771,9 +771,9 @@ export function SchoolScorePanel({
                     </TableBody>
                   </Table>
                 ) : (
-                  <div className="text-center py-12 text-[#8e8e93]">
+                  <div className="text-center py-12 text-[color:var(--ink-4)]">
                     <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                    <p className="font-medium text-[#3a3a3c]">请选择两场考试进行对比</p>
+                    <p className="font-medium text-[color:var(--ink-2)]">请选择两场考试进行对比</p>
                   </div>
                 )}
               </CardContent>
@@ -785,9 +785,9 @@ export function SchoolScorePanel({
       {/* 成绩列表（无数据时） */}
       {examEntries.length === 0 && (
         <Card className="ios-glass-card border-0">
-          <CardContent className="py-14 text-center text-[#8e8e93]">
+          <CardContent className="py-14 text-center text-[color:var(--ink-4)]">
             <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p className="font-medium text-[#3a3a3c]">暂无校内成绩记录</p>
+            <p className="font-medium text-[color:var(--ink-2)]">暂无校内成绩记录</p>
             <p className="text-sm mt-2">支持导入Excel文件，格式参考：学员姓名、学号、校区、年级、学科、得分、试卷总分、班级排名、年级排名</p>
           </CardContent>
         </Card>
@@ -885,7 +885,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
     <div className="space-y-5">
       {/* 报告头 */}
       <div className="text-center pb-3 border-b border-slate-100">
-        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-[color:var(--brand)] to-cyan-600 bg-clip-text text-transparent">
           入门测成绩趋势报告
         </h2>
         <p className="text-slate-500 mt-1">
@@ -903,9 +903,9 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
 
       {/* KPI 瓷贴 */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100">
+        <div className="p-4 rounded-xl bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-cyan-50 border border-[rgb(var(--brand-rgb)/0.22)]">
           <p className="text-xs text-slate-500 mb-1">最近正确率</p>
-          <p className="text-2xl font-bold text-blue-700">{latestRate}%</p>
+          <p className="text-2xl font-bold text-[color:var(--brand)]">{latestRate}%</p>
         </div>
         <div className={`p-4 rounded-xl border ${totalImprovement >= 0 ? 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100' : 'bg-gradient-to-br from-rose-50 to-orange-50 border-rose-100'}`}>
           <p className="text-xs text-slate-500 mb-1">总体提升</p>
@@ -923,7 +923,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
       <div className="rounded-xl border border-slate-100 p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-            <LineChartIcon className="w-4 h-4 text-blue-600" />
+            <LineChartIcon className="w-4 h-4 text-[color:var(--brand)]" />
             历次正确率趋势
           </h3>
           <span className="text-xs text-slate-500">虚线=班级平均 · 紫色=班级最高</span>
@@ -967,7 +967,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border border-slate-100 p-4">
           <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2 text-sm">
-            <Target className="w-4 h-4 text-blue-600" />
+            <Target className="w-4 h-4 text-[color:var(--brand)]" />
             各次得分分布
           </h3>
           <div style={{ height: 200 }}>
@@ -1004,13 +1004,13 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
 
       {/* 历次汇总表（参考附图） */}
       <div className="rounded-xl border border-slate-100 overflow-hidden">
-        <div className="px-4 py-2 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-blue-100">
+        <div className="px-4 py-2 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.10)] to-cyan-50 border-b border-[rgb(var(--brand-rgb)/0.22)]">
           <h3 className="font-semibold text-slate-800 text-sm">一、历次情况汇总</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gradient-to-r from-blue-600 to-blue-500 text-white">
+              <tr className="bg-gradient-to-r from-[color:var(--brand)] from-[color:var(--brand)] text-white">
                 <th className="px-3 py-2 text-left whitespace-nowrap">项目</th>
                 {lineData.map((d, i) => (
                   <th key={i} className="px-3 py-2 text-center whitespace-nowrap">{d.name}</th>
@@ -1026,7 +1026,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
                   </td>
                 ))}
               </tr>
-              <tr className="bg-blue-50/60">
+              <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
                 <td className="px-3 py-2 font-medium text-slate-700">班级最高正确率</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center text-purple-700 font-semibold">{d.classMax}%</td>
@@ -1038,7 +1038,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
                   <td key={i} className="px-3 py-2 text-center text-slate-600 font-semibold">{d.classAvg}%</td>
                 ))}
               </tr>
-              <tr className="bg-blue-50/60">
+              <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
                 <td className="px-3 py-2 font-medium text-slate-700">班级排名【前】</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center font-semibold">{d.rank > 0 ? d.rank.toFixed(2) : '-'}</td>

@@ -285,7 +285,7 @@ export function ConfigPanel({
           <CardContent className="space-y-6">
             {/* 是否过关阈值 */}
             <div>
-              <Label className="text-base font-medium text-blue-700">是否过关阈值</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">是否过关阈值</Label>
               <p className="text-xs text-slate-400 mt-1 mb-2">学员正确率达到或超过此百分比即判定为过关；学情记录表「是否过关」列将依据此阈值实时联动。</p>
               <div className="flex items-center gap-2 mt-2">
                 <Input
@@ -305,11 +305,11 @@ export function ConfigPanel({
 
             {/* 列标题自定义（自动同步当前记录表所有固定列） */}
             <div>
-              <Label className="text-base font-medium text-blue-700">题型配置</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">题型配置</Label>
               <div className="space-y-2 mt-2">
                 {localLessonConfig.questionTypes.map((qt, i) => (
-                  <div key={qt.id} className="flex items-center gap-3 bg-white/70 p-3 rounded-xl border border-blue-100">
-                    <GripVertical className="w-4 h-4 text-blue-400" />
+                  <div key={qt.id} className="flex items-center gap-3 bg-white/70 p-3 rounded-xl border border-[rgb(var(--brand-rgb)/0.22)]">
+                    <GripVertical className="w-4 h-4 text-[color:var(--brand)]" />
                     <Input
                       value={qt.name}
                       onChange={(e) => {
@@ -345,20 +345,20 @@ export function ConfigPanel({
                       <button
                         onClick={() => handleMoveQuestionType(i, 'up')}
                         disabled={i === 0}
-                        className="p-1 text-blue-400 hover:text-blue-600 disabled:opacity-30"
+                        className="p-1 text-[color:var(--brand)] hover:text-[color:var(--brand)] disabled:opacity-30"
                       >
                         <ChevronUp className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleMoveQuestionType(i, 'down')}
                         disabled={i === localLessonConfig.questionTypes.length - 1}
-                        className="p-1 text-blue-400 hover:text-blue-600 disabled:opacity-30"
+                        className="p-1 text-[color:var(--brand)] hover:text-[color:var(--brand)] disabled:opacity-30"
                       >
                         <ChevronDown className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleRemoveQuestionType(i)}
-                        className="p-1 text-blue-400 hover:text-rose-500"
+                        className="p-1 text-[color:var(--brand)] hover:text-rose-500"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

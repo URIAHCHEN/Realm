@@ -19,7 +19,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
   return (
     <Card className="ios-glass-card border-0">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
+        <CardTitle className="flex items-center gap-2 text-[color:var(--ink)]">
           <Sparkles className="w-5 h-5" style={{ color: 'var(--brand)' }} />
           个性化设置
         </CardTitle>
@@ -28,7 +28,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
 
         {/* 主题配色 */}
         <section className="space-y-2.5">
-          <h3 className="text-sm font-semibold text-[#3a3a3c] flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-[color:var(--ink-2)] flex items-center gap-1.5">
             <Palette className="w-4 h-4" />主题配色
           </h3>
           <div className="flex flex-wrap gap-2.5">
@@ -51,21 +51,21 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
 
         {/* 数据可视化 */}
         <section className="space-y-2.5">
-          <h3 className="text-sm font-semibold text-[#3a3a3c] flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-[color:var(--ink-2)] flex items-center gap-1.5">
             <BarChart3 className="w-4 h-4" />数据可视化
           </h3>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl bg-[#f2f2f7] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
                 <p className="text-sm font-medium">题型得分数据条</p>
-                <p className="text-xs text-[#8e8e93]">得分单元格内渲染比例数据条</p>
+                <p className="text-xs text-[color:var(--ink-4)]">得分单元格内渲染比例数据条</p>
               </div>
               <Switch checked={settings.showDataBars} onCheckedChange={v => update({ showDataBars: v })} />
             </div>
-            <div className="rounded-2xl bg-[#f2f2f7] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
                 <p className="text-sm font-medium">数据条规则</p>
-                <p className="text-xs text-[#8e8e93]">条长按满分占比或与班均差距计算</p>
+                <p className="text-xs text-[color:var(--ink-4)]">条长按满分占比或与班均差距计算</p>
               </div>
               <Select value={settings.dataBarMode} onValueChange={v => update({ dataBarMode: v as never })}>
                 <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
@@ -75,17 +75,17 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-2xl bg-[#f2f2f7] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
                 <p className="text-sm font-medium">排名色阶</p>
-                <p className="text-xs text-[#8e8e93]">排名与正确率徽章自动变色</p>
+                <p className="text-xs text-[color:var(--ink-4)]">排名与正确率徽章自动变色</p>
               </div>
               <Switch checked={settings.showRankHeatmap} onCheckedChange={v => update({ showRankHeatmap: v })} />
             </div>
-            <div className="rounded-2xl bg-[#f2f2f7] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
                 <p className="text-sm font-medium">色阶规则</p>
-                <p className="text-xs text-[#8e8e93]">按名次金银铜或按分数四档色阶</p>
+                <p className="text-xs text-[color:var(--ink-4)]">按名次金银铜或按分数四档色阶</p>
               </div>
               <Select value={settings.heatmapMode} onValueChange={v => update({ heatmapMode: v as never })}>
                 <SelectTrigger className="w-32 rounded-xl"><SelectValue /></SelectTrigger>
@@ -100,7 +100,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
 
         {/* 字段显示 */}
         <section className="space-y-2.5">
-          <h3 className="text-sm font-semibold text-[#3a3a3c] flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-[color:var(--ink-2)] flex items-center gap-1.5">
             <Columns3 className="w-4 h-4" />表格字段显示 / 隐藏
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -115,9 +115,9 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                   title={disabled ? '该字段始终显示' : '点击切换显示'}
                   className={`rounded-full px-3.5 py-1.5 text-sm font-medium border transition-all ${
                     disabled
-                      ? 'border-black/8 bg-[#f2f2f7] text-[#aeaeb2] cursor-not-allowed'
+                      ? 'border-black/8 bg-black/[0.05] text-[color:var(--ink-4)] cursor-not-allowed'
                       : hidden
-                        ? 'border-dashed border-black/15 bg-white/40 text-[#aeaeb2] line-through'
+                        ? 'border-dashed border-black/15 bg-white/40 text-[color:var(--ink-4)] line-through'
                         : 'border-[rgb(var(--brand-rgb)/0.35)] bg-[rgb(var(--brand-rgb)/0.08)]'
                   }`}
                   style={!disabled && !hidden ? { color: 'var(--brand)' } : undefined}
@@ -127,12 +127,12 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
               );
             })}
           </div>
-          <p className="text-xs text-[#8e8e93]">带 · 的字段始终显示；点击其他字段可切换显隐，设置即时生效。</p>
+          <p className="text-xs text-[color:var(--ink-4)]">带 · 的字段始终显示；点击其他字段可切换显隐，设置即时生效。</p>
         </section>
 
         {/* 导出样式 */}
         <section className="space-y-2.5">
-          <h3 className="text-sm font-semibold text-[#3a3a3c] flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-[color:var(--ink-2)] flex items-center gap-1.5">
             <FileDown className="w-4 h-4" />公示导出样式
           </h3>
           <div className="grid gap-3 md:grid-cols-3">
@@ -152,8 +152,8 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
               >
                 <span className="block h-10 w-full" style={{ background: s.preview }} />
                 <span className="block px-3.5 py-2.5 bg-white/70">
-                  <span className="block text-sm font-semibold text-[#1c1c1e]">{s.name}</span>
-                  <span className="block text-xs text-[#8e8e93]">{s.desc}</span>
+                  <span className="block text-sm font-semibold text-[color:var(--ink)]">{s.name}</span>
+                  <span className="block text-xs text-[color:var(--ink-4)]">{s.desc}</span>
                 </span>
               </button>
             ))}
@@ -164,7 +164,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-xl gap-1.5 text-[#8e8e93]"
+            className="rounded-xl gap-1.5 text-[color:var(--ink-4)]"
             onClick={() => { reset(); toast.success('已恢复默认显示设置'); }}
           >
             <RotateCcw className="w-4 h-4" />

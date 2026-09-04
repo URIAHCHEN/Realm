@@ -524,7 +524,7 @@ function App() {
       </header>
 
       {/* 班级选择栏 */}
-      <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
+      <div className="max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
         <ClassSelector
           classes={classes}
           currentClassId={currentClassId}
@@ -537,7 +537,7 @@ function App() {
       </div>
 
       {/* 主内容区 */}
-      <div className="max-w-[1600px] mx-auto px-4 pb-8 sm:px-6">
+      <div className="max-w-[1600px] mx-auto px-4 pb-10 sm:px-6 sm:pb-12">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="ios-tabs-list">
             <TabsTrigger value="records" className="ios-tab-trigger">

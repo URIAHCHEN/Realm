@@ -304,37 +304,34 @@ export function StudentTable({
   return (
     <Card className="liquid-glass-card">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="text-xl flex items-center gap-2 text-[color:var(--ink)]">
             学情记录表
-            <Badge variant="secondary" className="text-lg bg-gradient-to-r from-blue-100 to-sky-100 text-blue-700 border-blue-200">第{lessonNumber}课</Badge>
+            <Badge variant="secondary" className="text-base bg-[rgb(var(--brand-rgb)/0.12)] text-[color:var(--brand)] border border-[rgb(var(--brand-rgb)/0.2)]">第{lessonNumber}课</Badge>
           </CardTitle>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowAddQuestionTypeDialog(true)} variant="outline" size="sm" className="gap-2 liquid-glass-button bg-white/50 text-blue-700 border-blue-200 hover:bg-blue-50">
-              <Settings2 className="w-4 h-4" />配置题型
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setShowAddQuestionTypeDialog(true)} variant="outline" size="sm" title="配置题型" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+              <Settings2 className="w-4 h-4" /><span className="hidden sm:inline">配置题型</span>
             </Button>
-            <Button onClick={handleGenerateImage} variant="outline" size="sm" className="gap-2 liquid-glass-button bg-white/50 text-sky-700 border-sky-200 hover:bg-sky-50">
-              <Camera className="w-4 h-4" />生成图片
+            <Button onClick={handleGenerateImage} variant="outline" size="sm" title="生成公示图片" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+              <Camera className="w-4 h-4" /><span className="hidden sm:inline">生成图片</span>
             </Button>
-            <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" className="gap-2 liquid-glass-button bg-white/50">
-              <Plus className="w-4 h-4" />添加学员
+            <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" title="添加学员" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+              <Plus className="w-4 h-4" /><span className="hidden sm:inline">添加学员</span>
             </Button>
-            <Button onClick={onExportExcel} variant="outline" size="sm" className="gap-2 liquid-glass-button bg-white/50">
-              <Download className="w-4 h-4" />导出 Excel
+            <Button onClick={onExportExcel} variant="outline" size="sm" title="导出 Excel" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+              <Download className="w-4 h-4" /><span className="hidden sm:inline">导出 Excel</span>
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         {students.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-slate-400 mb-4">
-              <UserPlus className="w-12 h-12 mx-auto mb-2" />
-              <p>请先添加学生</p>
-            </div>
-            <Button onClick={() => setShowAddDialog(true)} className="gap-2 liquid-glass-button">
-              <UserPlus className="w-4 h-4" />添加学生
-            </Button>
+          <div className="empty-general">
+            <span className="empty-ico"><UserPlus className="w-6 h-6" /></span>
+            <div className="empty-t">还没有学员</div>
+            <div className="empty-d">添加学生后即可录入考勤、作业与入门测成绩。</div>
+            <Button onClick={() => setShowAddDialog(true)} className="ios-button mt-1"><UserPlus className="w-4 h-4" />添加学员</Button>
           </div>
         ) : (
           <>
@@ -641,9 +638,9 @@ export function StudentTable({
                 </Table>
               </ScrollArea>
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={() => setShowAddDialog(true)} variant="outline" className="gap-2 liquid-glass-button bg-white/50"><UserPlus className="w-4 h-4" />添加学员</Button>
-              <Button onClick={onExportData} variant="outline" className="gap-2 liquid-glass-button bg-white/50"><Download className="w-4 h-4" />导出CSV</Button>
+            <div className="flex gap-2 flex-wrap mt-4">
+              <Button onClick={() => setShowAddDialog(true)} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><UserPlus className="w-4 h-4" />添加学员</Button>
+              <Button onClick={onExportData} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><Download className="w-4 h-4" />导出CSV</Button>
             </div>
           </>
         )}

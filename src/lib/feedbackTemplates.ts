@@ -1,4 +1,5 @@
 import type { StudentRecord, ClassStats, WeakPoint, LessonConfig } from '@/types';
+import { isAbsentRecord } from '@/lib/attendance';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -19,6 +20,9 @@ export function generatePersonalFeedback(
   weakPoints: WeakPoint[],
   nickname: string
 ): string {
+  if (record.attendance === '请假' || record.attendance === '缺勤') {
+    return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
+  }
   let template = lessonConfig.feedbackTemplate;
   
   // 构建成绩详情
@@ -99,6 +103,9 @@ export function generateFourInOne(
   candidateLinks: string[] = [],
   variant = 0
 ): string {
+  if (record.attendance === '请假' || record.attendance === '缺勤') {
+    return `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
+  }
   const v = ((variant % 3) + 3) % 3;
 
   const strong = lessonConfig.questionTypes
@@ -163,9 +170,9 @@ export function generatePraise(
   let praiseContent = '';
   
   if (praiseType === 'entrance' || praiseType === 'comprehensive') {
-    // 入门测排名
+    // 入门测排名（请假/缺勤学员不计入）
     const rankedStudents = records
-      .filter(r => r.totalScore > 0)
+      .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
       .sort((a, b) => b.totalScore - a.totalScore)
       .slice(0, 10);
     

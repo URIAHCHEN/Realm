@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard } from '@/lib/feedbackTemplates';
+import { isAbsentRecord } from '@/lib/attendance';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
@@ -156,7 +157,7 @@ export function Leaderboard({
     // 如果是当前课次或自定义范围，按最后一次记录排序
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => r.totalScore > 0)
+      .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -188,7 +189,7 @@ export function Leaderboard({
   const progressStars: ProgressItem[] = useMemo(() => {
     const studentRecords = new Map<string, StudentRecord[]>();
     rangeRecords
-      .filter(r => r.totalScore > 0)
+      .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
       .forEach(r => {
         if (!studentRecords.has(r.studentName)) {
           studentRecords.set(r.studentName, []);

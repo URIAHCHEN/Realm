@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard } from '@/lib/feedbackTemplates';
+import { isAbsentRecord } from '@/lib/attendance';
 import type { StudentRecord, LessonConfig, QuestionType, WeakPoint } from '@/types';
 
 interface FeedbackGeneratorProps {
@@ -144,6 +145,11 @@ export function FeedbackGenerator({
       ? `已生成 ${fresh} 份新反馈，共 ${Object.keys(next).length} 份`
       : '全部反馈已是最新，无需重新生成'
     );
+    const absentCount = withRecords.filter(n => {
+      const r = recordOf(n);
+      return r && isAbsentRecord(r);
+    }).length;
+    if (absentCount > 0) toast.info(`其中 ${absentCount} 名本课请假/缺勤，已按请假处理（不计入平均分）`);
   };
 
   const handleCopyOne = async (name: string) => {

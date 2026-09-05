@@ -88,6 +88,8 @@ function App() {
     updateRecordField,
     deleteRecord,
     restoreRecord,
+    deleteLessonRecords,
+    restoreRecords,
     restoreStudent,
     updateAppConfig,
     getStudentSchoolScores,
@@ -205,6 +207,17 @@ function App() {
     saveLessonConfig(target.classId, target.lessonNumber, { questionTypes: [...cfg.questionTypes, ...add] });
   };
 
+  const handleDeleteLessonRecords = () => {
+    if (!currentClassId) { toast.error('请先选择班级'); return; }
+    const removed = deleteLessonRecords(currentClassId, currentLessonNumber);
+    if (removed.length === 0) { toast.info('本课还没有可删除的记录'); return; }
+    const classId = currentClassId;
+    toast.success(`已删除第${currentLessonNumber}课的 ${removed.length} 条记录`, {
+      action: { label: '撤销', onClick: () => restoreRecords(classId, removed) },
+      duration: 8000,
+    });
+  };
+
   // 登录成功（Supabase Auth 会话已建立，由 LoginPage 调用）
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -300,6 +313,31 @@ function App() {
           toast.success('记录已恢复');
         }
       }
+    });
+  };
+
+  // 一键删除所选学员本课次的学情记录（先快照再删除，撤销时原样恢复）
+  const handleDeleteStudentRecords = (studentNames: string[]) => {
+    if (!currentClass || studentNames.length === 0) return;
+    const classId = currentClass.id;
+    const removed = currentClass.records.filter(
+      r => r.lessonNumber === currentLessonNumber && studentNames.includes(r.studentName)
+    );
+    if (removed.length === 0) {
+      toast.info('所选学员在本课还没有可删除的记录');
+      return;
+    }
+    removed.forEach(r => deleteRecord(classId, r.id));
+    toast.success(`已删除 ${removed.length} 条第${currentLessonNumber}课记录（${studentNames.length} 名学员）`, {
+      description: '误删可点击「撤销」一键恢复',
+      action: {
+        label: '撤销',
+        onClick: () => {
+          restoreRecords(classId, removed);
+          toast.success(`已恢复 ${removed.length} 条记录`);
+        }
+      },
+      duration: 8000,
     });
   };
 
@@ -656,9 +694,11 @@ function App() {
                   lessonNumber={currentLessonNumber}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                   calculateClassStats={calculateClassStats}
+                  onDeleteLessonRecords={handleDeleteLessonRecords}
                   onUpdateRecord={(recordId, field, value) => currentClass && updateRecordField(currentClass.id, recordId, field, value)}
                   onCreateRecord={(studentName, record) => currentClass && saveRecord(currentClass.id, { ...record, studentName })}
                   onDeleteRecord={handleDeleteRecord}
+                  onDeleteStudentRecords={handleDeleteStudentRecords}
                   onAddStudent={handleAddStudent}
                   onRemoveStudent={handleRemoveStudent}
                   onExportData={handleExportData}

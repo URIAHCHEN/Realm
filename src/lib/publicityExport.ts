@@ -2,6 +2,7 @@
 // 排版策略：table-layout:fixed 固定列宽 + 全居中 + 等宽数字 + 统一徽章尺寸，保证截图整齐美观
 import type { Class, QuestionType, StudentRecord, CustomField } from '@/types';
 import type { ExportStyle } from '@/lib/displaySettings';
+import { isAbsentRecord } from '@/lib/attendance';
 
 interface Palette {
   pageBg: string;
@@ -129,18 +130,19 @@ export function buildPublicityHTML(
     customFields.reduce((sum, cf) => sum + (cf.kind === 'number' && cf.includeInTotal ? (cf.fullScore || 0) : 0), 0);
   const hasData = records.length > 0;
 
-  // 班级平均值
+  // 班级平均值（口径与学情表一致：请假/缺勤学员不计入平均分）
+  const presentRecords = records.filter(r => !isAbsentRecord(r));
   const avg = (nums: number[]) => nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length * 10) / 10 : 0;
-  const avgTotal = hasData ? avg(records.map(r => r.totalScore)) : 0;
-  const avgRate = hasData ? avg(records.map(r => r.correctRate)) : 0;
+  const avgTotal = presentRecords.length > 0 ? avg(presentRecords.map(r => r.totalScore)) : 0;
+  const avgRate = presentRecords.length > 0 ? avg(presentRecords.map(r => r.correctRate)) : 0;
   const avgQtScores: { [qtId: string]: number } = {};
   questionTypes.forEach(qt => {
-    avgQtScores[qt.id] = hasData ? avg(records.map(r => r.scores[qt.id] || 0).filter(s => s > 0)) : 0;
+    avgQtScores[qt.id] = presentRecords.length > 0 ? avg(presentRecords.map(r => r.scores[qt.id] || 0).filter(s => s > 0)) : 0;
   });
   const avgCustomScores: { [cfId: string]: number } = {};
   customFields.forEach(cf => {
     if (cf.kind === 'number') {
-      avgCustomScores[cf.id] = hasData ? avg(records.map(r => Number(r.customValues?.[cf.id]) || 0).filter(s => s > 0)) : 0;
+      avgCustomScores[cf.id] = presentRecords.length > 0 ? avg(presentRecords.map(r => Number(r.customValues?.[cf.id]) || 0).filter(s => s > 0)) : 0;
     }
   });
 

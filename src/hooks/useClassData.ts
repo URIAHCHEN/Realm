@@ -11,6 +11,7 @@ import type {
 } from '@/types';
 import * as XLSX from 'xlsx';
 import { buildPublicityHTML } from '@/lib/publicityExport';
+import { isAbsentRecord } from '@/lib/attendance';
 
 // 生成唯一ID
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -234,20 +235,23 @@ export function useClassData() {
   }, [currentClassId, getLessonConfig, appConfig]);
 
   // 计算班级统计数据
+  // 口径：请假/缺勤学员不计入总分与平均分（含各题型班均），0 分不再拉低统计
   const calculateClassStats = useCallback((records: StudentRecord[], questionTypes: QuestionType[]): ClassStats => {
     if (records.length === 0) {
       return { maxScore: 0, minScore: 0, avgScore: 0, avgScores: {} };
     }
 
-    const scores = records.map(r => r.totalScore);
-    const maxScore = Math.max(...scores);
-    const minScore = Math.min(...scores);
-    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    const present = records.filter(r => !isAbsentRecord(r));
+    const scores = present.map(r => r.totalScore);
+    const maxScore = scores.length ? Math.max(...scores) : 0;
+    const minScore = scores.length ? Math.min(...scores) : 0;
+    const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
     const avgScores: { [key: string]: number } = {};
     questionTypes.forEach(qt => {
-      const typeScores = records.map(r => r.scores[qt.id] || 0).filter(s => s > 0);
-      avgScores[qt.id] = typeScores.length > 0 
+      // 仅统计出勤学员，避免请假学员的 0 分/残留分数拉低题型班均
+      const typeScores = present.map(r => r.scores[qt.id] || 0).filter(s => s > 0);
+      avgScores[qt.id] = typeScores.length > 0
         ? Math.round(typeScores.reduce((a, b) => a + b, 0) / typeScores.length * 10) / 10
         : 0;
     });
@@ -558,6 +562,43 @@ export function useClassData() {
     });
   }, []);
 
+  // 一键删除某课次全部记录（返回被删记录，供撤销恢复）
+  const deleteLessonRecords = useCallback((classId: string, lessonNumber: number): StudentRecord[] => {
+    const classData = classes[classId];
+    if (!classData) return [];
+    const removed = classData.records.filter(r => r.lessonNumber === lessonNumber);
+    if (removed.length === 0) return [];
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      return { ...prev, [classId]: { ...cd, records: cd.records.filter(r => r.lessonNumber !== lessonNumber) } };
+    });
+    return removed;
+  }, [classes]);
+
+  // 批量恢复记录（撤销用），并重算受影响课次排名
+  const restoreRecords = useCallback((classId: string, records: StudentRecord[]) => {
+    if (records.length === 0) return;
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      const existingIds = new Set(cd.records.map(r => r.id));
+      const toAdd = records.filter(r => !existingIds.has(r.id));
+      if (toAdd.length === 0) return prev;
+      const newRecords = [...cd.records, ...toAdd];
+      const affected = new Set(toAdd.map(r => r.lessonNumber));
+      affected.forEach(lesson => {
+        const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
+        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
+        sorted.forEach((r, index) => {
+          const idx = newRecords.findIndex(nr => nr.id === r.id);
+          if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
+        });
+      });
+      return { ...prev, [classId]: { ...cd, records: newRecords } };
+    });
+  }, []);
+
   // 恢复被移除的学生及其全部记录（用于移除学生的撤销）
   const restoreStudent = useCallback((classId: string, studentName: string, records: StudentRecord[]) => {
     setClasses(prev => {
@@ -826,6 +867,8 @@ export function useClassData() {
     updateRecordField,
     deleteRecord,
     restoreRecord,
+    deleteLessonRecords,
+    restoreRecords,
     restoreStudent,
     updateAppConfig,
     getStudentAllRecords,

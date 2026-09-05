@@ -27,10 +27,13 @@ interface StudentTableProps {
   onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: any) => void;
   onCreateRecord: (studentName: string, record: Partial<StudentRecord>) => void;
   onDeleteRecord: (recordId: string) => void;
+  /** 一键删除所选学员本课次记录（含撤销） */
+  onDeleteStudentRecords?: (studentNames: string[]) => void;
   onAddStudent: (studentName: string) => void;
   onRemoveStudent: (studentName: string) => void;
   onExportData: () => void;
   onExportExcel: () => void;
+  onDeleteLessonRecords?: () => void;
   /** 返回当前课次的学情公示 HTML（用于生成图片） */
   getPublicityHTML: () => string;
   onViewStudentAnalysis: (studentName: string) => void;
@@ -121,11 +124,13 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats,
-  onUpdateRecord, onCreateRecord, onDeleteRecord, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, getPublicityHTML, onViewStudentAnalysis, onSaveLessonConfig
+  onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
+  onExportData, onExportExcel, onDeleteLessonRecords, getPublicityHTML, onViewStudentAnalysis, onSaveLessonConfig
 }: StudentTableProps) {
   const [newStudentName, setNewStudentName] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   const [copiedStudent, setCopiedStudent] = useState<string | null>(null);
   const [showAddQuestionTypeDialog, setShowAddQuestionTypeDialog] = useState(false);
   const [newQuestionType, setNewQuestionType] = useState({ name: '', fullScore: 100 });
@@ -372,6 +377,22 @@ export function StudentTable({
             <Button onClick={onExportExcel} variant="outline" size="sm" title="导出 Excel" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Download className="w-4 h-4" /><span className="hidden sm:inline">导出 Excel</span>
             </Button>
+            {onDeleteLessonRecords && (
+              confirmClear ? (
+                <span className="inline-flex items-center gap-1">
+                  <Button size="sm" className="h-8 gap-1 rounded-[var(--r-md)] bg-rose-500 hover:bg-rose-600 text-white"
+                    onClick={() => { onDeleteLessonRecords(); setConfirmClear(false); }}>
+                    <Check className="w-4 h-4" />确认清空
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 rounded-[var(--r-md)]" onClick={() => setConfirmClear(false)}>取消</Button>
+                </span>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-2 h-8 rounded-[var(--r-md)] border-[#ff3b30]/30 text-[#ff3b30] hover:bg-[#ff3b30]/10"
+                  onClick={() => setConfirmClear(true)} title="清空本课全部记录（可撤销）">
+                  <Trash2 className="w-4 h-4" /><span className="hidden sm:inline">清空本课</span>
+                </Button>
+              )
+            )}
           </div>
         </div>
       </CardHeader>
@@ -407,9 +428,9 @@ export function StudentTable({
                   )}
                 </span>
                 {someSelected && (
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-slate-600" onClick={() => setSelectedStudents(new Set())}>
-                    <X className="w-3 h-3" />清除选择
-                  </Button>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-slate-600" onClick={() => { setSelectedStudents(new Set()); setConfirmDeleteSelected(false); }}>
+                      <X className="w-3 h-3" />清除选择
+                    </Button>
                 )}
                 <Select value={bulkField} onValueChange={(v) => { setBulkField(v as typeof bulkField); setBulkValue(''); setBulkQtId(''); }}>
                   <SelectTrigger className="w-32 h-8 text-sm bg-white/80"><SelectValue /></SelectTrigger>
@@ -458,6 +479,26 @@ export function StudentTable({
                 <Button size="sm" className="h-8 gap-1.5 ios-button" disabled={!canApplyBulk} onClick={handleApplyBulk}>
                   <Check className="w-4 h-4" />应用到选中
                 </Button>
+                {onDeleteStudentRecords && someSelected && (
+                  confirmDeleteSelected ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Button size="sm" className="h-8 gap-1 rounded-[var(--r-md)] bg-rose-500 hover:bg-rose-600 text-white"
+                        onClick={() => {
+                          onDeleteStudentRecords(students.filter(s => selectedStudents.has(s)));
+                          setConfirmDeleteSelected(false);
+                          setSelectedStudents(new Set());
+                        }}>
+                        <Check className="w-4 h-4" />确认删除
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 rounded-[var(--r-md)]" onClick={() => setConfirmDeleteSelected(false)}>取消</Button>
+                    </span>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)] border-[#ff3b30]/30 text-[#ff3b30] hover:bg-[#ff3b30]/10"
+                      onClick={() => setConfirmDeleteSelected(true)} title="删除所选学员本课记录（可撤销）">
+                      <Trash2 className="w-4 h-4" />删除所选记录
+                    </Button>
+                  )
+                )}
               </div>
             </div>
             <div className="bg-white rounded-xl p-4">

@@ -95,7 +95,8 @@ export function generateFourInOne(
   weakPoints: WeakPoint[],
   nickname: string,
   scenarioLabel: string,
-  isNewStudent = false
+  isNewStudent = false,
+  candidateLinks: string[] = []
 ): string {
   const strengths: string[] = [];
   lessonConfig.questionTypes.forEach(qt => {
@@ -125,10 +126,16 @@ export function generateFourInOne(
     `【四个一 · ${scenarioLabel}】第${record.lessonNumber}课 · ${nickname}`,
     '',
     '🎬 ① 照片/视频（费曼讲解或笔记）：（在此粘贴1条链接）',
+  ];
+  if (candidateLinks.length > 0) {
+    lines.push('   本课素材库可选：');
+    candidateLinks.slice(0, 6).forEach(l => lines.push(`   - ${l}`));
+  }
+  lines.push(
     `🌟 ② 一个优秀表现：${strengthText}`,
     `🔍 ③ 一个当前问题：${problemText}`,
     '🛠 ④ 一个可实操方案：（填写具体动作，如“今晚重做错题X、明早听写Y、下次课前提交笔记照片”）',
-  ];
+  );
   if (isNewStudent) lines.push('💬 新学员感受：（可补充询问孩子对这堂课的感受）');
   return lines.join('\n');
 }

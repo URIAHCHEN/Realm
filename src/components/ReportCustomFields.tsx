@@ -57,14 +57,21 @@ export function ReportCustomFields({ records, customFields }: ReportCustomFields
                 )}
               </>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-1.5 mt-1">
                 {Object.entries(s.dist)
                   .sort((a, b) => b[1] - a[1])
-                  .map(([k, v]) => (
-                    <span key={k} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)]">
-                      {k}<span className="opacity-70">×{v}</span>
-                    </span>
-                  ))}
+                  .map(([k, v]) => {
+                    const pct = s.count > 0 ? Math.round((v / s.count) * 100) : 0;
+                    return (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-xs text-[color:var(--ink-2)] truncate" title={k}>{k}</span>
+                        <div className="flex-1 h-4 rounded-full bg-black/[0.06] overflow-hidden">
+                          <div className="h-full rounded-full bg-[rgb(var(--brand-rgb)/0.85)]" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[color:var(--ink-4)]">{v}</span>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

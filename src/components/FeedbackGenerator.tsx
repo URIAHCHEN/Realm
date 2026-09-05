@@ -20,6 +20,7 @@ interface FeedbackGeneratorProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
+  libraryLinks?: string[];
 }
 
 type StatusTone = 'none' | 'generated' | 'copied';
@@ -30,7 +31,8 @@ export function FeedbackGenerator({
   lessonConfig,
   lessonNumber,
   getNickname,
-  calculateClassStats
+  calculateClassStats,
+  libraryLinks = []
 }: FeedbackGeneratorProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
@@ -93,7 +95,7 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent);
+      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent, libraryLinks);
     }
     return generatePersonalFeedback(
       record,

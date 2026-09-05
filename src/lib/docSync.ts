@@ -1,7 +1,7 @@
 // 在线文档同步：腾讯文档 / 金山文档等效通道
 // 两家开放平台 API 均需企业级鉴权，纯前端无法直连；
 // 采用「剪贴板直贴 + 表格文件导入导出」实现数据回环，配合 Supabase 实时双向同步作为主通道。
-import type { QuestionType, StudentRecord } from '@/types';
+import type { QuestionType, StudentRecord, SeasonType } from '@/types';
 
 // ============ 导出：生成可直贴在线表格的 TSV（Excel 粘贴格式） ============
 
@@ -54,6 +54,8 @@ export interface ParsedRow {
   homeworkStatus?: string;
   listeningStatus?: string;
   listeningScore?: number;
+  seasons?: SeasonType[];
+  lessonNumber?: number;
   scores: { [questionTypeId: string]: number };
 }
 
@@ -112,6 +114,9 @@ export function parseClipboardTable(
   const listenIdx = findIdx(['课后任务', '乐听说']);
   const listenScoreIdx = findIdx(['课后任务分数', '乐听说分数']);
   const totalIdx = findIdx(['总分']);
+  const seasonIdx = findIdx(['成长轨迹', '学习轨迹', '轨迹']);
+  const lessonIdx = findIdx(['课次']);
+  const onlyCn = (s: string) => (s.match(/[一-龥]/g) || []).join('');
 
   const matched = [
     nameIdx >= 0 ? '姓名' : '', attIdx >= 0 ? '考勤' : '', hwIdx >= 0 ? '作业' : '',
@@ -128,7 +133,16 @@ export function parseClipboardTable(
 
     const row: ParsedRow = { studentName: name, scores: {} };
 
-    if (attIdx >= 0) row.attendance = (cells[attIdx] || '').trim() || undefined;
+    if (attIdx >= 0) row.attendance = onlyCn(cells[attIdx] || '') || undefined;
+    if (seasonIdx >= 0) {
+      const s = cells[seasonIdx] || '';
+      const found = ([...s].filter(ch => '暑秋寒春'.includes(ch)) as SeasonType[]);
+      row.seasons = Array.from(new Set(found));
+    }
+    if (lessonIdx >= 0) {
+      const n = parseInt((cells[lessonIdx] || '').replace(/\D/g, ''), 10);
+      if (!isNaN(n)) row.lessonNumber = n;
+    }
     if (hwIdx >= 0) row.homeworkStatus = (cells[hwIdx] || '').trim() || undefined;
     if (listenIdx >= 0) {
       const v = (cells[listenIdx] || '').trim();

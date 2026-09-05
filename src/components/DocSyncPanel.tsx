@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { buildMarkdown, buildTSV, parseClipboardTable, type ParsedRow } from '@/lib/docSync';
-import type { LessonConfig, StudentRecord } from '@/types';
+import type { LessonConfig, StudentRecord, QuestionType } from '@/types';
 import type { useDisplaySettings } from '@/hooks/useDisplaySettings';
 
 type Display = ReturnType<typeof useDisplaySettings>;
@@ -24,15 +24,21 @@ interface DocSyncPanelProps {
   className?: string;
   getNickname: (name: string) => string;
   display: Display;
-  onImportRows: (rows: ParsedRow[]) => void;
+  classes: { id: string; name: string }[];
+  currentClassId: string | null;
+  getQuestionTypes: (classId: string, lessonNumber: number) => QuestionType[];
+  knownLessons: number[];
+  onImportRows: (rows: ParsedRow[], target: { classId: string; lessonNumber: number }) => void;
   onExportExcel: () => void;
 }
 
 export function DocSyncPanel({
-  records, lessonConfig, lessonNumber, className, getNickname, display, onImportRows, onExportExcel,
+  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onExportExcel,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
+  const [targetClass, setTargetClass] = useState<string>(currentClassId || classes[0]?.id || '');
+  const [targetLesson, setTargetLesson] = useState<number>(lessonNumber);
 
   const handleCopyTSV = async () => {
     if (records.length === 0) { toast.error('当前课次还没有数据'); return; }
@@ -57,16 +63,19 @@ export function DocSyncPanel({
   };
 
   const handleParse = () => {
+    if (!targetClass) { toast.error('请选择导入的目标班级'); return; }
     if (!pasteText.trim()) { toast.error('请先粘贴从在线表格复制的内容（含表头）'); return; }
     setParsing(true);
     try {
-      const result = parseClipboardTable(pasteText, lessonConfig.questionTypes);
+      const qts = getQuestionTypes(targetClass, targetLesson);
+      const result = parseClipboardTable(pasteText, qts);
       if (result.rows.length === 0) {
         toast.error(result.errors[0] || '未解析到有效数据行');
       } else {
-        onImportRows(result.rows);
+        const clsName = classes.find(c => c.id === targetClass)?.name || '目标班级';
+        onImportRows(result.rows, { classId: targetClass, lessonNumber: targetLesson });
         const errNote = result.errors.length > 0 ? `，${result.errors.length} 条提示` : '';
-        toast.success(`解析成功 ${result.rows.length} 行（匹配列：${result.matchedColumns.join('、')}${errNote}）`);
+        toast.success(`已导入 ${result.rows.length} 行到「${clsName} · 第${targetLesson}课」（匹配列：${result.matchedColumns.join('、')}${errNote}）`);
         setPasteText('');
         result.errors.slice(0, 5).forEach(e => toast.warning(e));
       }
@@ -118,17 +127,39 @@ export function DocSyncPanel({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-[#8e8e93]">
-            在腾讯文档/金山文档中选中含表头的数据区复制，粘贴到下面，系统按列名自动匹配（姓名/考勤/作业/课后任务/{lessonConfig.questionTypes.map(qt => qt.name).join('/')}），同名学生数据会被更新。
+            在腾讯文档/金山文档中选中含表头的数据区复制，粘贴到下面，系统按列名自动匹配（姓名/成长轨迹/课次/考勤/作业/课后任务/{lessonConfig.questionTypes.map(qt => qt.name).join('/')}）；不在名单的学生会自动补录到目标班级。
           </p>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-[color:var(--ink-4)]">目标班级</Label>
+              <Select value={targetClass} onValueChange={setTargetClass}>
+                <SelectTrigger className="w-44 h-9 text-sm ios-input"><SelectValue placeholder="选择班级" /></SelectTrigger>
+                <SelectContent>
+                  {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-[color:var(--ink-4)]">目标课次</Label>
+              <Select value={String(targetLesson)} onValueChange={(v) => setTargetLesson(Number(v))}>
+                <SelectTrigger className="w-24 h-9 text-sm ios-input"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from(new Set([...(knownLessons || []), targetLesson, 1].filter(Boolean))).sort((a, b) => a - b).map(n => (
+                    <SelectItem key={n} value={String(n)}>第{n}课</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <Textarea
-            placeholder={'排名\t姓名\t考勤\t书面作业\t单词默写\t…\n1\t张三\t按时出勤\t超赞完成\t95\t…'}
+            placeholder={'姓名\t成长轨迹\t课次\t考勤\t语法\t完形填空\t…\n陈志佳\t暑,秋\t1\t准时👍\t15\t8\t…'}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             className="min-h-[120px] font-mono text-xs ios-input"
           />
           <Button className="ios-button gap-2" disabled={parsing} onClick={handleParse}>
             {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
-            解析并导入到第{lessonNumber}课
+            解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>
         </CardContent>
       </Card>

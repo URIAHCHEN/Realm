@@ -149,22 +149,47 @@ function App() {
   }, [isAuthenticated, refreshMembership]);
 
   // 从在线表格粘贴导入：逐行合并到当前课次
-  const handleImportDocRows = (rows: ParsedRow[]) => {
-    if (!currentClassId) {
-      toast.error('请先选择班级');
-      return;
-    }
+  const handleImportDocRows = (
+    rows: ParsedRow[],
+    target: { classId: string; lessonNumber: number }
+  ) => {
+    const { classId, lessonNumber } = target;
+    const classData = classes[classId];
+    if (!classData) { toast.error('目标班级不存在'); return; }
+
+    const cfg = getLessonConfig(classId, lessonNumber);
+    const opts = cfg.attendanceOptions || [];
+    const normAttendance = (v?: string): string | undefined => {
+      if (!v) return undefined;
+      if (opts.includes(v)) return v;
+      if (v.includes('准时') || v.includes('按时')) return opts.find(o => o.includes('按时') || o.includes('准时')) || v;
+      const hit = opts.find(o => v.includes(o));
+      return hit;
+    };
+
+    // 自动补录缺失学生
+    const missing = Array.from(new Set(rows.map(r => r.studentName).filter(n => n && !classData.students.includes(n))));
+    if (missing.length > 0) addStudents(classId, missing);
+
     rows.forEach(row => {
-      saveRecord(currentClassId, {
+      if (!row.studentName) return;
+      const att = normAttendance(row.attendance);
+      saveRecord(classId, {
         studentName: row.studentName,
-        lessonNumber: currentLessonNumber,
-        ...(row.attendance ? { attendance: row.attendance } : {}),
+        lessonNumber,
+        ...(row.seasons && row.seasons.length ? { seasons: row.seasons } : {}),
+        ...(att ? { attendance: att } : {}),
         ...(row.homeworkStatus ? { homeworkStatus: row.homeworkStatus } : {}),
         ...(row.listeningStatus ? { listeningStatus: row.listeningStatus } : {}),
         ...(row.listeningScore !== undefined ? { listeningScore: row.listeningScore } : {}),
         scores: row.scores || {}
       });
     });
+
+    // 切到目标班级+课次，确保导入结果立即可见
+    setCurrentClassId(classId);
+    setCurrentLessonNumber(lessonNumber);
+    toast.success(`已导入 ${rows.length} 条到第${lessonNumber}课${missing.length ? `，新增 ${missing.length} 名学生` : ''}`);
   };
 
   // 登录成功（Supabase Auth 会话已建立，由 LoginPage 调用）
@@ -653,6 +678,7 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+              libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
             />
             <PraiseGenerator
               records={currentClass?.records || []}
@@ -759,6 +785,10 @@ function App() {
                   lessonNumber={currentLessonNumber}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                   display={displaySettings}
+                  classes={Object.values(classes).map(c => ({ id: c.id, name: c.name }))}
+                  currentClassId={currentClassId}
+                  getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
+                  knownLessons={getAllLessons(currentClassId || undefined)}
                   onImportRows={handleImportDocRows}
                   onExportExcel={handleExportAllData}
                 />

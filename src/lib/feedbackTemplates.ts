@@ -87,6 +87,52 @@ export function generatePersonalFeedback(
   return feedback;
 }
 
+// “四个一”反馈：①照片/视频 ②优秀表现点 ③当前问题 ④可实操方案
+export function generateFourInOne(
+  record: StudentRecord,
+  lessonConfig: LessonConfig,
+  stats: ClassStats,
+  weakPoints: WeakPoint[],
+  nickname: string,
+  scenarioLabel: string,
+  isNewStudent = false
+): string {
+  const strengths: string[] = [];
+  lessonConfig.questionTypes.forEach(qt => {
+    const s = record.scores[qt.id] || 0;
+    const avg = stats.avgScores[qt.id] || 0;
+    if (avg > 0 && s - avg >= 5) strengths.push(`${qt.name}突出（${s}/${qt.fullScore}，高于班均${(s - avg).toFixed(0)}分）`);
+  });
+  if (record.homeworkStatus === '超赞完成') strengths.push('书面作业完成质量高（超赞）');
+  if (record.correctRate >= 90) strengths.push(`入门测正确率 ${record.correctRate}%`);
+  const strengthText = strengths.length ? strengths.slice(0, 3).join('；') : '课堂参与稳定（可补充一个具体亮点）';
+
+  const problems: string[] = [];
+  weakPoints.forEach(wp => problems.push(`${wp.questionTypeName}偏低（低于班均${Math.abs(wp.diff).toFixed(0)}分）`));
+  if (record.homeworkStatus === '未完成' || record.homeworkStatus === '没带') problems.push(`书面作业${record.homeworkStatus}`);
+  if (record.attendance === '缺勤') problems.push('本课缺勤');
+  else if (record.attendance === '迟到') problems.push('到课迟到');
+  else if (record.attendance === '请假') problems.push('本课请假');
+  (lessonConfig.customFields || []).forEach(cf => {
+    if (cf.kind === 'number') {
+      const v = Number(record.customValues?.[cf.id]) || 0;
+      if (cf.fullScore && v / cf.fullScore < 0.6) problems.push(`${cf.name}偏低（${v}/${cf.fullScore}）`);
+    }
+  });
+  const problemText = problems.length ? problems.slice(0, 3).join('；') : '暂无明显问题，继续保持';
+
+  const lines: string[] = [
+    `【四个一 · ${scenarioLabel}】第${record.lessonNumber}课 · ${nickname}`,
+    '',
+    '🎬 ① 照片/视频（费曼讲解或笔记）：（在此粘贴1条链接）',
+    `🌟 ② 一个优秀表现：${strengthText}`,
+    `🔍 ③ 一个当前问题：${problemText}`,
+    '🛠 ④ 一个可实操方案：（填写具体动作，如“今晚重做错题X、明早听写Y、下次课前提交笔记照片”）',
+  ];
+  if (isNewStudent) lines.push('💬 新学员感受：（可补充询问孩子对这堂课的感受）');
+  return lines.join('\n');
+}
+
 // 生成班群表彰
 export function generatePraise(
   lessonNumber: number,

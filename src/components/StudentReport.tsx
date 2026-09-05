@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ReportCustomFields } from '@/components/ReportCustomFields';
 import { 
   BarChart, 
   Bar, 
@@ -104,6 +105,15 @@ export function StudentReport({
     const lessons = Array.from(new Set(records.map(r => r.lessonNumber))).sort((a, b) => a - b);
     return lessons;
   }, [records]);
+
+  // 合并各课次自定义列（按 id 去重）供“自定义维度”统计
+  const allCustomFields = useMemo(() => {
+    const seen = new Map<string, import('@/types').CustomField>();
+    Object.values(lessonConfigs).forEach(cfg => {
+      (cfg.customFields || []).forEach(cf => { if (!seen.has(cf.id)) seen.set(cf.id, cf); });
+    });
+    return Array.from(seen.values()).sort((a, b) => a.order - b.order);
+  }, [lessonConfigs]);
 
   // 获取选中学生的所有记录
   const studentRecords = useMemo(() => {
@@ -481,6 +491,7 @@ export function StudentReport({
           distType={distType}
           setDistType={setDistType}
           lessonConfigs={lessonConfigs}
+          customFields={allCustomFields}
           personalReportRef={personalReportRef}
         />
       ) : (
@@ -491,6 +502,7 @@ export function StudentReport({
             classStats={classStats}
             classReportRecords={classReportRecords}
             getNickname={getNickname}
+            customFields={allCustomFields}
           />
         </div>
       )}
@@ -530,6 +542,7 @@ interface PersonalReportProps {
   distType: 'pie' | 'bar' | 'radar';
   setDistType: (v: 'pie' | 'bar' | 'radar') => void;
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
+  customFields: import('@/types').CustomField[];
   personalReportRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -555,6 +568,7 @@ function PersonalReport({
   distType,
   setDistType,
   lessonConfigs,
+  customFields,
   personalReportRef
 }: PersonalReportProps) {
   const [isExportingImage, setIsExportingImage] = useState(false);
@@ -686,6 +700,8 @@ function PersonalReport({
           <p className="report-info-value">{studentStats?.minScore} 分</p>
         </div>
       </div>
+
+      <ReportCustomFields records={studentRecords} customFields={customFields} />
 
       <div className="report-section">
         <h2 className="report-section-title">
@@ -1002,9 +1018,10 @@ interface ClassReportProps {
   } | null;
   classReportRecords: StudentRecord[];
   getNickname: (name: string) => string;
+  customFields: import('@/types').CustomField[];
 }
 
-function ClassReport({ currentClassName, selectedLesson, classStats, classReportRecords, getNickname }: ClassReportProps) {
+function ClassReport({ currentClassName, selectedLesson, classStats, classReportRecords, getNickname, customFields }: ClassReportProps) {
   if (!classStats || classReportRecords.length === 0) {
     return (
       <div className="text-center py-16">
@@ -1103,6 +1120,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
           </CardContent>
         </Card>
       </div>
+
+      <ReportCustomFields records={classReportRecords} customFields={customFields} />
 
       {/* 分数段分布 */}
       <div className="report-section">

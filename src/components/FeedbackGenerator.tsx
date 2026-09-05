@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
-  CircleAlert, RotateCcw, Send,
+  CircleAlert, RotateCcw, Send, Sparkles,
 } from 'lucide-react';
-import { generatePersonalFeedback, copyToClipboard } from '@/lib/feedbackTemplates';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { generatePersonalFeedback, generateFourInOne, copyToClipboard } from '@/lib/feedbackTemplates';
 import type { StudentRecord, LessonConfig, QuestionType, WeakPoint } from '@/types';
 
 interface FeedbackGeneratorProps {
@@ -35,6 +36,17 @@ export function FeedbackGenerator({
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [copiedSet, setCopiedSet] = useState<Set<string>>(new Set());
 
+  // 反馈模式：常规模板 / 四个一
+  const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
+  const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
+  const [isNewStudent, setIsNewStudent] = useState(false);
+  const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] = [
+    { value: 'daily', label: '首课&日常' },
+    { value: 'afterclass', label: '行课后' },
+    { value: 'comm', label: '沟通' },
+  ];
+  const scenarioLabel = SCENARIOS.find(s => s.value === scenario)?.label || scenario;
+
   const lessonRecords = useMemo(() =>
     records.filter(r => r.lessonNumber === lessonNumber),
     [records, lessonNumber]
@@ -51,6 +63,12 @@ export function FeedbackGenerator({
     setCopiedSet(new Set());
     setSelected(null);
   }, [lessonNumber]);
+
+  // 切换反馈模式/场景/新学员时，清空以便按新规则重算
+  useEffect(() => {
+    setGenerated({});
+    setCopiedSet(new Set());
+  }, [feedbackMode, scenario, isNewStudent]);
 
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
@@ -74,6 +92,9 @@ export function FeedbackGenerator({
   const generateFor = (name: string): string | null => {
     const record = recordOf(name);
     if (!record) return null;
+    if (feedbackMode === 'fourInOne') {
+      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent);
+    }
     return generatePersonalFeedback(
       record,
       lessonConfig,
@@ -220,6 +241,36 @@ export function FeedbackGenerator({
                 重置状态
               </Button>
             </div>
+          </div>
+
+          {/* 反馈模式 */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div role="tablist" className="inline-flex gap-1 p-1 rounded-[var(--r-md)] bg-black/[0.05]">
+              <button
+                role="tab" aria-selected={feedbackMode === 'normal'}
+                onClick={() => setFeedbackMode('normal')}
+                className={`px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'normal' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              >常规反馈</button>
+              <button
+                role="tab" aria-selected={feedbackMode === 'fourInOne'}
+                onClick={() => setFeedbackMode('fourInOne')}
+                className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'fourInOne' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              ><Sparkles className="w-3.5 h-3.5" />四个一</button>
+            </div>
+            {feedbackMode === 'fourInOne' && (
+              <>
+                <Select value={scenario} onValueChange={(v) => setScenario(v as typeof scenario)}>
+                  <SelectTrigger className="w-32 h-8 text-sm rounded-[var(--r-md)]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SCENARIOS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none">
+                  <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
+                  新学员（补充孩子感受）
+                </label>
+              </>
+            )}
           </div>
 
           {/* 进度条 */}

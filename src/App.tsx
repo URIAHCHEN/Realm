@@ -10,6 +10,7 @@ import { BUILD_SCOPE } from '@/lib/config';
 import { ensureSelfMembership, myUserId } from '@/lib/members';
 import type { Membership } from '@/lib/members';
 import { MembersPanel } from '@/components/MembersPanel';
+import { SyncStatusBanner } from '@/components/SyncStatusBanner';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { LessonManager } from '@/components/LessonManager';
@@ -131,6 +132,20 @@ function App() {
 
   // 登录后：自举首个管理员 / 刷新成员身份
   useEffect(() => { refreshMembership(); }, [refreshMembership, sessionKey]);
+
+  // 成员身份自动刷新：被管理员加入名单后，无需刷新页面即可恢复可写
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const maybeRefresh = () => { if (document.visibilityState === 'visible') refreshMembership(); };
+    window.addEventListener('focus', maybeRefresh);
+    document.addEventListener('visibilitychange', maybeRefresh);
+    const id = setInterval(maybeRefresh, 60_000);
+    return () => {
+      window.removeEventListener('focus', maybeRefresh);
+      document.removeEventListener('visibilitychange', maybeRefresh);
+      clearInterval(id);
+    };
+  }, [isAuthenticated, refreshMembership]);
 
   // 从在线表格粘贴导入：逐行合并到当前课次
   const handleImportDocRows = (rows: ParsedRow[]) => {
@@ -712,6 +727,13 @@ function App() {
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="space-y-6">
+            <SyncStatusBanner
+              status={cloudSync.status}
+              message={cloudSync.message}
+              onKeepLocal={cloudSync.resolveConflictKeepLocal}
+              onKeepCloud={cloudSync.resolveConflictKeepCloud}
+              onRefresh={refreshMembership}
+            />
             <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
             {membership.admin && (
               <div className="space-y-6">

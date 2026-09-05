@@ -18,6 +18,18 @@ export interface QuestionType {
   order: number;
 }
 
+// 自定义列：选项型（下拉）或分数型（数值，可含满分）
+export interface CustomField {
+  id: string;
+  name: string;
+  kind: 'select' | 'number';
+  /** kind==='select' 时的可选项 */
+  options?: string[];
+  /** kind==='number' 时的满分（可选，用于比例/数据条） */
+  fullScore?: number;
+  order: number;
+}
+
 // 固定列的自定义标题（可留空使用默认名）
 export interface ColumnLabels {
   seasons?: string;
@@ -46,6 +58,8 @@ export interface LessonConfig {
   /** 多套表彰模板（优先于 praiseTemplate 使用；为空时回退 praiseTemplate） */
   praiseTemplates?: PraiseTemplate[];
   homeworkText: string;
+  /** 自定义列定义（选项型/分数型），按课次配置 */
+  customFields?: CustomField[];
   /** 固定列自定义标题，如将"课后任务"改为其他名称 */
   columnLabels?: ColumnLabels;
   /** 过关正确率阈值（百分比），达到或超过判定为过关；默认 80 */
@@ -64,6 +78,8 @@ export interface StudentRecord {
   listeningStatus: string;
   listeningScore: number;
   scores: { [questionTypeId: string]: number };
+  /** 自定义列的值：选项字符串 或 分数数字，按 CustomField.id 存储 */
+  customValues?: { [fieldId: string]: string | number };
   totalScore: number;
   correctRate: number;
   rank: number;

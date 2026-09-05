@@ -342,6 +342,24 @@ export function FeedbackGenerator({
                   className="min-h-[360px] text-sm leading-relaxed ios-input"
                   placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
                 />
+                {(lessonConfig.customFields || []).length > 0 && selectedRecord && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-[color:var(--ink-4)]">可选参数（点击追加）：</span>
+                    {(lessonConfig.customFields || []).map(cf => {
+                      const v = (selectedRecord.customValues || {})[cf.id];
+                      if (v === '' || v == null) return null;
+                      const disp = cf.kind === 'number' ? `${v}分` : String(v);
+                      return (
+                        <button
+                          key={cf.id}
+                          type="button"
+                          onClick={() => setGenerated(prev => ({ ...prev, [selected]: `${prev[selected] ?? ''}\n📋 ${cf.name}：${disp}` }))}
+                          className="px-2 py-0.5 rounded-lg text-xs bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.18)] border border-[rgb(var(--brand-rgb)/0.2)] transition-colors"
+                        >+ {cf.name}：{disp}</button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-[color:var(--ink-4)]">
                     内容可自由编辑；薄弱项与成绩详情已按班均自动计算

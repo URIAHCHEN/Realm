@@ -46,6 +46,20 @@ export function generatePersonalFeedback(
     template = template.replace(/【薄弱项】/g, weakPointsText);
   }
   
+  // 自定义列：占位符替换 + 未使用的自动追加
+  const customFields = lessonConfig.customFields || [];
+  const customVals = record.customValues || {};
+  const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const customDisplay = (kind: 'select' | 'number', id: string): string => {
+    const v = customVals[id];
+    if (v === '' || v == null) return '';
+    return kind === 'number' ? `${v}分` : String(v);
+  };
+  const rawTemplate = lessonConfig.feedbackTemplate;
+  customFields.forEach(cf => {
+    template = template.replace(new RegExp('【' + escRe(cf.name) + '】', 'g'), customDisplay(cf.kind, cf.id));
+  });
+
   // 替换模板变量
   let feedback = template
     .replace(/【学生昵称】/g, nickname)
@@ -60,7 +74,16 @@ export function generatePersonalFeedback(
     .replace(/【排名】/g, record.rank.toString())
     .replace(/【正确率】/g, record.correctRate.toString())
     .replace(/【作业内容】/g, lessonConfig.homeworkText);
-  
+
+  // 模板未引用、但已填写的自定义列 → 末尾自动附上，保证“直接可用”
+  const leftover = customFields.filter(cf => {
+    const v = customVals[cf.id];
+    return (v !== '' && v != null) && !rawTemplate.includes('【' + cf.name + '】');
+  });
+  if (leftover.length > 0) {
+    feedback += '\n\n' + leftover.map(cf => `📋 ${cf.name}：${customDisplay(cf.kind, cf.id)}`).join('\n');
+  }
+
   return feedback;
 }
 

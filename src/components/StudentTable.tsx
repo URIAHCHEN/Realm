@@ -137,6 +137,7 @@ export function StudentTable({
   const [bulkQtId, setBulkQtId] = useState('');
   const { settings } = useDisplaySettings();
   const col = (id: string) => isColumnVisible(settings, id);
+  const customFields = lessonConfig.customFields || [];
 
   // 自定义列标题（留空回退默认名）
   const columnLabel = (key: string) => {
@@ -262,6 +263,14 @@ export function StudentTable({
     const newScores = { ...(record?.scores || {}), [questionTypeId]: value };
     if (record) onUpdateRecord(record.id, 'scores', newScores);
     else onCreateRecord(studentName, { studentName, lessonNumber, scores: newScores });
+  };
+
+  // 自定义列（选项/分数）写入
+  const handleCustomChange = (studentName: string, fieldId: string, value: string | number) => {
+    const record = getStudentRecord(studentName);
+    const next = { ...(record?.customValues || {}), [fieldId]: value };
+    if (record) onUpdateRecord(record.id, 'customValues', next);
+    else onCreateRecord(studentName, { studentName, lessonNumber, customValues: next });
   };
 
   const handleDeleteRecord = (studentName: string) => {
@@ -466,6 +475,7 @@ export function StudentTable({
                       {col('homework') && <TableHead className="w-28 text-base font-bold">{columnLabel('homework')}</TableHead>}
                       {col('listening') && <TableHead className="w-32 text-base font-bold">{columnLabel('listening')}</TableHead>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-20 text-center text-base font-bold">{qt.name}</TableHead>)}
+                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-24 text-center text-base font-bold" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)] text-xs"> ({cf.fullScore})</span> : null}</TableHead>)}
                       <TableHead className="w-20 text-center text-base font-bold">总分</TableHead>
                       {col('correctRate') && <TableHead className="w-20 text-center text-base font-bold">正确率</TableHead>}
                       {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">{columnLabel('pass')}</TableHead>}
@@ -572,6 +582,26 @@ export function StudentTable({
                               </TableCell>
                             );
                           })}
+                          {customFields.map(cf => (
+                            <TableCell key={cf.id} className="text-center text-base">
+                              {cf.kind === 'number' ? (
+                                <ScoreInput
+                                  value={Number(record?.customValues?.[cf.id] ?? 0)}
+                                  max={cf.fullScore}
+                                  placeholder="—"
+                                  onCommit={(n) => handleCustomChange(studentName, cf.id, n)}
+                                  className="w-16 h-9 text-center text-sm rounded-lg mx-auto"
+                                />
+                              ) : (
+                                <Select value={String(record?.customValues?.[cf.id] ?? '')} onValueChange={(v) => handleCustomChange(studentName, cf.id, v)}>
+                                  <SelectTrigger className="min-w-20 h-9 text-sm rounded-lg bg-white/80"><SelectValue placeholder="—" /></SelectTrigger>
+                                  <SelectContent>
+                                    {(cf.options || []).map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </TableCell>
+                          ))}
                           <TableCell className="text-center text-base">
                             <span className="total-bar-wrap">
                               {settings.showDataBars && fullScore > 0 && totalScore > 0 && (

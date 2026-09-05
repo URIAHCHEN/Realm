@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Pencil, Eye } from 'lucide-react';
 import type { QuestionType, LessonConfig, AppConfig, PraiseTemplate } from '@/types';
 
@@ -231,6 +232,43 @@ export function ConfigPanel({
     }));
   };
 
+  // —— 自定义列 customFields 管理 ——
+  const [newCustomField, setNewCustomField] = useState<{ name: string; kind: 'select' | 'number' }>({ name: '', kind: 'select' });
+  const customFieldsOf = () => localLessonConfig.customFields || [];
+  const handleAddCustomField = () => {
+    const name = newCustomField.name.trim();
+    if (!name) return;
+    if (customFieldsOf().some(f => f.name === name)) return;
+    const field: import('@/types').CustomField = {
+      id: 'cf_' + Date.now(),
+      name,
+      kind: newCustomField.kind,
+      order: customFieldsOf().length,
+      ...(newCustomField.kind === 'select' ? { options: ['优秀', '良好', '待提升'] } : { fullScore: 100 }),
+    };
+    setLocalLessonConfig(prev => ({ ...prev, customFields: [...(prev.customFields || []), field] }));
+    setNewCustomField({ name: '', kind: newCustomField.kind });
+  };
+  const updateCustomField = (index: number, patch: Partial<import('@/types').CustomField>) => {
+    setLocalLessonConfig(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).map((f, i) => i === index ? { ...f, ...patch } : f)
+    }));
+  };
+  const removeCustomField = (index: number) => {
+    setLocalLessonConfig(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).filter((_, i) => i !== index).map((f, i) => ({ ...f, order: i }))
+    }));
+  };
+  const moveCustomField = (index: number, dir: 'up' | 'down') => {
+    const list = [...customFieldsOf()];
+    const j = dir === 'up' ? index - 1 : index + 1;
+    if (j < 0 || j >= list.length) return;
+    [list[index], list[j]] = [list[j], list[index]];
+    setLocalLessonConfig(prev => ({ ...prev, customFields: list.map((f, i) => ({ ...f, order: i })) }));
+  };
+
   // 保存课次配置
   const handleSaveLessonConfig = () => {
     onSaveLessonConfig(lessonNumber, localLessonConfig);
@@ -389,6 +427,73 @@ export function ConfigPanel({
 
             <Separator className="bg-violet-100" />
 
+            {/* 自定义列 */}
+            <div>
+              <Label className="text-base font-medium text-[color:var(--brand)]">自定义列</Label>
+              <p className="text-xs text-[color:var(--ink-4)] mt-1 mb-2">为学情表增加可自定义的列（如“课堂表现”）：选项型可下拉、分数型可录入分值；配置后可在「反馈模板」里以【字段名】引用，或在反馈中自动带上。</p>
+              <div className="space-y-2 mt-2">
+                {(localLessonConfig.customFields || []).map((cf, i) => (
+                  <div key={cf.id} className="flex flex-wrap items-center gap-2 bg-white/70 p-3 rounded-xl border border-[rgb(var(--brand-rgb)/0.22)]">
+                    <GripVertical className="w-4 h-4 text-[color:var(--brand)]" />
+                    <Input
+                      value={cf.name}
+                      onChange={(e) => updateCustomField(i, { name: e.target.value })}
+                      placeholder="列名称"
+                      className="flex-1 min-w-28 h-8 text-sm font-medium liquid-glass-input"
+                    />
+                    <Select value={cf.kind} onValueChange={(v) => updateCustomField(i, { kind: v as 'select' | 'number' })}>
+                      <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="select">选项型</SelectItem>
+                        <SelectItem value="number">分数型</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {cf.kind === 'select' ? (
+                      <Input
+                        value={(cf.options || []).join('、')}
+                        onChange={(e) => updateCustomField(i, { options: e.target.value.split(/[、,，]/).map(s => s.trim()).filter(Boolean) })}
+                        placeholder="选项，用、或逗号分隔"
+                        className="flex-[2] min-w-40 h-8 text-sm liquid-glass-input"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-[color:var(--ink-4)]">满分</span>
+                        <Input
+                          type="number"
+                          value={cf.fullScore ?? 100}
+                          onChange={(e) => updateCustomField(i, { fullScore: parseFloat(e.target.value) || 0 })}
+                          className="w-20 h-8 text-sm liquid-glass-input"
+                        />
+                      </div>
+                    )}
+                    <div className="flex gap-1">
+                      <button onClick={() => moveCustomField(i, 'up')} disabled={i === 0} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
+                      <button onClick={() => moveCustomField(i, 'down')} disabled={i === (localLessonConfig.customFields || []).length - 1} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
+                      <button onClick={() => removeCustomField(i)} className="p-1 text-[color:var(--ink-4)] hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Input
+                  placeholder="列名称，如 课堂表现"
+                  value={newCustomField.name}
+                  onChange={(e) => setNewCustomField(prev => ({ ...prev, name: e.target.value }))}
+                  className="flex-1 liquid-glass-input"
+                />
+                <Select value={newCustomField.kind} onValueChange={(v) => setNewCustomField(prev => ({ ...prev, kind: v as 'select' | 'number' }))}>
+                  <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="select">选项型</SelectItem>
+                    <SelectItem value="number">分数型</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleAddCustomField} variant="outline" className="liquid-glass-button"><Plus className="w-4 h-4" /></Button>
+              </div>
+            </div>
+
+            <Separator className="bg-violet-100" />
+
             {/* 列标题自定义（支持新增 / 编辑 / 清除） */}
             <div>
               <div className="flex items-center justify-between">
@@ -530,6 +635,19 @@ export function ConfigPanel({
                 textareaRef={feedbackTextareaRef}
                 isLessonConfig={true}
               />
+              {(localLessonConfig.customFields || []).length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-xs text-[color:var(--ink-4)]">自定义列参数：</span>
+                  {(localLessonConfig.customFields || []).map(cf => (
+                    <button
+                      key={cf.id}
+                      type="button"
+                      onClick={() => insertVariable(feedbackTextareaRef, `【${cf.name}】`, true)}
+                      className="px-2 py-0.5 rounded-lg text-xs font-mono bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.18)] border border-[rgb(var(--brand-rgb)/0.2)] transition-colors"
+                    >【{cf.name}】</button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 表彰模板（多模板管理） */}

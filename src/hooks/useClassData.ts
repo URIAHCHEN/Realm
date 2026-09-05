@@ -64,6 +64,7 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   feedbackTemplate: appConfig.defaultFeedbackTemplate,
   praiseTemplate: appConfig.defaultPraiseTemplate,
   homeworkText: '1️⃣课后任务\n2️⃣错题本（按照要求整理）\n3️⃣开心过年',
+  customFields: [],
   passThreshold: 80
 });
 
@@ -402,6 +403,9 @@ export function useClassData() {
         newRecords = [...classData.records];
         const existing = newRecords[existingIndex];
         const updatedScores = { ...existing.scores, ...record.scores };
+        const updatedCustom = record.customValues
+          ? { ...(existing.customValues || {}), ...record.customValues }
+          : existing.customValues;
         
         let totalScore = 0;
         lessonConfig.questionTypes.forEach(qt => {
@@ -418,6 +422,7 @@ export function useClassData() {
           ...existing, 
           ...record,
           scores: updatedScores,
+          customValues: updatedCustom,
           totalScore,
           correctRate
         };
@@ -445,6 +450,7 @@ export function useClassData() {
           listeningStatus: record.listeningStatus || '具体分数',
           listeningScore: record.listeningScore || 0,
           scores,
+          customValues: record.customValues || {},
           totalScore,
           correctRate,
           rank: 0,

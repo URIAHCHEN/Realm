@@ -27,6 +27,8 @@ export interface CustomField {
   options?: string[];
   /** kind==='number' 时的满分（可选，用于比例/数据条） */
   fullScore?: number;
+  /** 仅分数型：是否计入总分与正确率分母 */
+  includeInTotal?: boolean;
   order: number;
 }
 

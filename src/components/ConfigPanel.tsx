@@ -466,6 +466,17 @@ export function ConfigPanel({
                         />
                       </div>
                     )}
+                    {cf.kind === 'number' && (
+                      <label className="flex items-center gap-1.5 text-xs text-[color:var(--ink-2)] cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!cf.includeInTotal}
+                          onChange={(e) => updateCustomField(i, { includeInTotal: e.target.checked })}
+                          className="accent-[color:var(--brand)]"
+                        />
+                        计入总分
+                      </label>
+                    )}
                     <div className="flex gap-1">
                       <button onClick={() => moveCustomField(i, 'up')} disabled={i === 0} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
                       <button onClick={() => moveCustomField(i, 'down')} disabled={i === (localLessonConfig.customFields || []).length - 1} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>

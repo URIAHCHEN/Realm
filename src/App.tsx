@@ -338,7 +338,8 @@ function App() {
       students: currentClass.students,
       records: lessonRecords,
       nicknames: nickMap,
-      questionTypes: currentLessonConfig.questionTypes
+      questionTypes: currentLessonConfig.questionTypes,
+      customFields: currentLessonConfig.customFields || []
     });
     downloadExcel(workbook, `${currentClass.name}第${currentLessonNumber}课名单.xlsx`);
     toast.success('Excel 名单已导出！');

@@ -68,6 +68,28 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   passThreshold: 80
 });
 
+// 总分/正确率统一口径：题型分数 + 计入总分的分数型自定义列
+function computeTotals(
+  scores: { [k: string]: number },
+  customValues: { [k: string]: string | number } | undefined,
+  lessonConfig: LessonConfig
+): { totalScore: number; correctRate: number } {
+  let total = 0;
+  let full = 0;
+  lessonConfig.questionTypes.forEach(qt => {
+    total += scores?.[qt.id] || 0;
+    full += qt.fullScore || 0;
+  });
+  (lessonConfig.customFields || []).forEach(cf => {
+    if (cf.kind === 'number' && cf.includeInTotal) {
+      total += Number(customValues?.[cf.id]) || 0;
+      full += cf.fullScore || 0;
+    }
+  });
+  const correctRate = full > 0 ? Math.round((total / full) * 100 * 10) / 10 : 0;
+  return { totalScore: Math.round(total * 100) / 100, correctRate };
+}
+
 export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
@@ -406,17 +428,8 @@ export function useClassData() {
         const updatedCustom = record.customValues
           ? { ...(existing.customValues || {}), ...record.customValues }
           : existing.customValues;
-        
-        let totalScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          totalScore += updatedScores[qt.id] || 0;
-        });
 
-        let fullScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          fullScore += qt.fullScore;
-        });
-        const correctRate = fullScore > 0 ? Math.round((totalScore / fullScore) * 100 * 10) / 10 : 0;
+        const { totalScore, correctRate } = computeTotals(updatedScores, updatedCustom, lessonConfig);
 
         newRecords[existingIndex] = { 
           ...existing, 
@@ -429,16 +442,7 @@ export function useClassData() {
       } else {
         // 创建新记录
         const scores = record.scores || {};
-        let totalScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          totalScore += scores[qt.id] || 0;
-        });
-
-        let fullScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          fullScore += qt.fullScore;
-        });
-        const correctRate = fullScore > 0 ? Math.round((totalScore / fullScore) * 100 * 10) / 10 : 0;
+        const { totalScore, correctRate } = computeTotals(scores, record.customValues, lessonConfig);
 
         const newRecord: StudentRecord = {
           id: generateId(),
@@ -494,26 +498,16 @@ export function useClassData() {
       const newRecords = [...classData.records];
       newRecords[recordIndex] = { ...newRecords[recordIndex], [field]: value };
 
-      // 如果修改了分数，重新计算总分和排名
-      if (field === 'scores') {
+      // 分数或自定义值变化：统一口径重算总分/正确率与排名
+      if (field === 'scores' || field === 'customValues') {
         const record = newRecords[recordIndex];
-        let totalScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          totalScore += record.scores[qt.id] || 0;
-        });
-
-        let fullScore = 0;
-        lessonConfig.questionTypes.forEach(qt => {
-          fullScore += qt.fullScore;
-        });
-        const correctRate = fullScore > 0 ? Math.round((totalScore / fullScore) * 100 * 10) / 10 : 0;
-
+        const { totalScore, correctRate } = computeTotals(record.scores, record.customValues, lessonConfig);
         newRecords[recordIndex].totalScore = totalScore;
         newRecords[recordIndex].correctRate = correctRate;
 
         // 重新计算排名
         const lessonRecords = newRecords.filter(r => r.lessonNumber === record.lessonNumber);
-        const sorted = lessonRecords.sort((a, b) => b.totalScore - a.totalScore);
+        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
         sorted.forEach((r, index) => {
           const idx = newRecords.findIndex(nr => nr.id === r.id);
           if (idx >= 0) {
@@ -799,7 +793,7 @@ export function useClassData() {
     const records = classData.records.filter(r => r.lessonNumber === lessonNumber);
     const getNick = (name: string) => nicknames[classId]?.[name] || name;
 
-    return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style);
+    return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style, lessonConfig.customFields || []);
   }, [classes, nicknames, getLessonConfig]);
 
   return {

@@ -35,6 +35,7 @@ export function exportToExcel(data: ExportData, _className: string): { workbook:
       if (lessonRecords.length === 0) return;
 
       const questionTypes = lessonConfig?.questionTypes || [];
+      const customFields = lessonConfig?.customFields || [];
       
       const recordsData = lessonRecords.map((record, index) => {
         const row: Record<string, string | number> = {
@@ -51,6 +52,11 @@ export function exportToExcel(data: ExportData, _className: string): { workbook:
         // 添加各题型分数
         questionTypes.forEach(qt => {
           row[qt.name] = record.scores[qt.id] || 0;
+        });
+        // 添加自定义列
+        customFields.forEach(cf => {
+          const v = (record.customValues || {})[cf.id];
+          row[cf.name] = (v === '' || v == null) ? '' : v;
         });
 
         row['总分'] = record.totalScore;
@@ -131,14 +137,16 @@ export function exportClassRosterToExcel(args: {
     listeningStatus?: string;
     listeningScore?: number;
     scores?: Record<string, number>;
+    customValues?: Record<string, string | number>;
     totalScore?: number;
     correctRate?: number;
     rank?: number;
   }>;
   nicknames: Record<string, string>;
   questionTypes: Array<{ id: string; name: string }>;
+  customFields?: Array<{ id: string; name: string }>;
 }): XLSX.WorkBook {
-  const { lessonNumber, students, records, nicknames, questionTypes } = args;
+  const { lessonNumber, students, records, nicknames, questionTypes, customFields = [] } = args;
   const workbook = XLSX.utils.book_new();
 
   // Sheet 1：班级学员名单
@@ -165,6 +173,10 @@ export function exportClassRosterToExcel(args: {
       row['课后任务'] = r.listeningStatus === '具体分数' ? `${r.listeningScore ?? 0}分` : (r.listeningStatus || '');
       questionTypes.forEach(qt => {
         row[qt.name] = (r.scores || {})[qt.id] ?? 0;
+      });
+      customFields.forEach(cf => {
+        const v = (r.customValues || {})[cf.id];
+        row[cf.name] = (v === '' || v == null) ? '' : v;
       });
       row['总分'] = r.totalScore ?? 0;
       row['正确率'] = `${r.correctRate ?? 0}%`;

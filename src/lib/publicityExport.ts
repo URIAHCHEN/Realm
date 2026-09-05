@@ -1,6 +1,6 @@
 // 公示导出：生成可直接发布/打印/投屏/截图的学情公示 HTML
 // 排版策略：table-layout:fixed 固定列宽 + 全居中 + 等宽数字 + 统一徽章尺寸，保证截图整齐美观
-import type { Class, QuestionType, StudentRecord } from '@/types';
+import type { Class, QuestionType, StudentRecord, CustomField } from '@/types';
 import type { ExportStyle } from '@/lib/displaySettings';
 
 interface Palette {
@@ -119,11 +119,14 @@ export function buildPublicityHTML(
   records: StudentRecord[],
   questionTypes: QuestionType[],
   getNickname: (name: string) => string,
-  style: ExportStyle = 'gradient'
+  style: ExportStyle = 'gradient',
+  customFields: CustomField[] = []
 ): string {
   const p = PALETTES[style] || PALETTES.gradient;
   const sorted = [...records].sort((a, b) => b.totalScore - a.totalScore);
-  const fullScore = questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+  const fullScore =
+    questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0) +
+    customFields.reduce((sum, cf) => sum + (cf.kind === 'number' && cf.includeInTotal ? (cf.fullScore || 0) : 0), 0);
   const hasData = records.length > 0;
 
   // 班级平均值
@@ -133,6 +136,12 @@ export function buildPublicityHTML(
   const avgQtScores: { [qtId: string]: number } = {};
   questionTypes.forEach(qt => {
     avgQtScores[qt.id] = hasData ? avg(records.map(r => r.scores[qt.id] || 0).filter(s => s > 0)) : 0;
+  });
+  const avgCustomScores: { [cfId: string]: number } = {};
+  customFields.forEach(cf => {
+    if (cf.kind === 'number') {
+      avgCustomScores[cf.id] = hasData ? avg(records.map(r => Number(r.customValues?.[cf.id]) || 0).filter(s => s > 0)) : 0;
+    }
   });
 
   // 排名徽章：前三名绿色高亮（对齐模板）
@@ -163,6 +172,11 @@ export function buildPublicityHTML(
         const score = r.scores[qt.id] || 0;
         return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score, p)}</td>`;
       }).join('')}
+      ${customFields.map(cf => {
+        const v = r.customValues?.[cf.id];
+        const disp = (v === '' || v == null) ? '-' : (cf.kind === 'number' ? `${v}` : String(v));
+        return `<td style="${td}${cf.kind === 'number' ? 'font-weight:600' : 'font-size:13px'}">${disp}</td>`;
+      }).join('')}
       <td style="${td}"><span style="display:inline-flex;align-items:center;justify-content:center;width:76px;padding:3px 0;border-radius:8px;font-weight:800;font-variant-numeric:tabular-nums;background:${totalBg};color:#16a34a">${r.totalScore}<span style="font-weight:500;font-size:11px">/${fullScore}</span></span></td>
       <td style="${td}font-weight:700;color:${rateColor}">${ratePct}%</td>
     </tr>`;
@@ -176,6 +190,7 @@ export function buildPublicityHTML(
       <td style="${td}">-</td>
       <td style="${td}">-</td>
       ${questionTypes.map(qt => `<td style="${td}">${scoreBadge(100, avgQtScores[qt.id] || 0, p, '#2563eb')}</td>`).join('')}
+      ${customFields.map(cf => `<td style="${td}">${cf.kind === 'number' ? (avgCustomScores[cf.id] || 0) : '-'}</td>`).join('')}
       <td style="${td}"><span style="color:#16a34a">${avgTotal}</span><span style="font-weight:500;font-size:11px;color:${p.muted}">/${fullScore}</span></td>
       <td style="${td}color:${avgRate < 80 ? '#dc2626' : '#16a34a'}">${avgRate}%</td>
     </tr>`;
@@ -183,8 +198,9 @@ export function buildPublicityHTML(
   // 固定列宽：保证任何数据量下列对齐一致
   const baseCols = [56, 86, 100, 96, 96, 104];
   const qtCols = questionTypes.map(() => 84);
+  const customCols = customFields.map(() => 90);
   const tailCols = [100, 76];
-  const colWidths = [...baseCols, ...qtCols, ...tailCols];
+  const colWidths = [...baseCols, ...qtCols, ...customCols, ...tailCols];
   const colgroup = `<colgroup>${colWidths.map(w => `<col style="width:${w}px" />`).join('')}</colgroup>`;
   // 容器宽度 = 列宽和 + 左右 padding
   const tableWidth = colWidths.reduce((a, b) => a + b, 0);
@@ -230,6 +246,7 @@ export function buildPublicityHTML(
             <th style="width:96px;max-width:96px">课堂练习</th>
             <th style="width:104px;max-width:104px">课后任务</th>
             ${questionTypes.map(qt => `<th title="${qt.name}" style="width:84px;max-width:84px">${qt.name}</th>`).join('')}
+            ${customFields.map(cf => `<th title="${cf.name}" style="width:90px;max-width:90px">${cf.name}${cf.kind === 'number' && cf.includeInTotal ? '*' : ''}</th>`).join('')}
             <th style="width:100px;max-width:100px">总分(${fullScore})</th>
             <th style="width:76px;max-width:76px">正确率</th>
           </tr>

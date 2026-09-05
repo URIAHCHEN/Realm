@@ -206,7 +206,8 @@ export function exportToCSV(
   _className: string,
   _lessonNumber: number
 ): string {
-  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), '总分', '正确率', '排名'];
+  const customFields = lessonConfig.customFields || [];
+  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), ...customFields.map(cf => cf.name), '总分', '正确率', '排名'];
   
   let csv = headers.join(',') + '\n';
   
@@ -219,6 +220,7 @@ export function exportToCSV(
       record.homeworkStatus,
       record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus,
       ...lessonConfig.questionTypes.map(qt => record.scores[qt.id] || 0),
+      ...customFields.map(cf => { const v = (record.customValues || {})[cf.id]; return (v === '' || v == null) ? '' : v; }),
       record.totalScore,
       `${record.correctRate}%`,
       `第${record.rank}名`

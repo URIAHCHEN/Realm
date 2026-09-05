@@ -63,6 +63,7 @@ export interface ParseResult {
   rows: ParsedRow[];
   errors: string[];
   matchedColumns: string[];
+  unmatchedColumns: { name: string; suggestedFullScore: number }[];
 }
 
 function splitLine(line: string): string[] {
@@ -90,13 +91,13 @@ export function parseClipboardTable(
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   const errors: string[] = [];
   if (lines.length < 2) {
-    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [] };
+    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [] };
   }
 
   const headers = splitLine(lines[0]).map(norm);
   const nameIdx = headers.findIndex(h => h === '姓名' || h === '学生姓名' || h === '名字' || h === '学生');
   if (nameIdx < 0) {
-    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [] };
+    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [] };
   }
 
   // 题型列映射（按名称模糊匹配）
@@ -173,5 +174,23 @@ export function parseClipboardTable(
     rows.push(row);
   });
 
-  return { rows, errors, matchedColumns: matched };
+  // 未匹配、但数据多为数值的列 → 候选新题型
+  const usedIdx = new Set<number>([nameIdx, attIdx, hwIdx, listenIdx, listenScoreIdx, totalIdx, seasonIdx, lessonIdx, ...qtIdx.map(q => q.idx)]);
+  const rawHeaders = splitLine(lines[0]);
+  const dataLines = lines.slice(1);
+  const unmatchedColumns: { name: string; suggestedFullScore: number }[] = [];
+  rawHeaders.forEach((h, idx) => {
+    if (usedIdx.has(idx)) return;
+    const label = (h || '').trim();
+    if (!label || /总分|正确率|排名|薄弱项|备注/.test(label)) return;
+    const nums = dataLines.map(l => parseFloat((splitLine(l)[idx] || '').trim())).filter(n => !isNaN(n));
+    if (nums.length === 0) return;
+    const numericRatio = nums.length / Math.max(1, dataLines.length);
+    if (numericRatio >= 0.5) {
+      const maxV = Math.max(...nums);
+      unmatchedColumns.push({ name: label, suggestedFullScore: Math.max(1, Math.ceil(maxV)) });
+    }
+  });
+
+  return { rows, errors, matchedColumns: matched, unmatchedColumns };
 }

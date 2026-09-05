@@ -765,7 +765,7 @@ export function Leaderboard({
       </div>
 
       {/* 控制栏：榜单类型 + 课次范围 + 操作按钮（导出图片时忽略此区域） */}
-      <div data-h2c-ignore className="flex flex-wrap items-end gap-4 p-4 sm:p-5 ios-glass-card rounded-[var(--r-lg)]">
+      <div data-h2c-ignore className="relative z-30 flex flex-wrap items-end gap-4 p-4 sm:p-5 ios-glass-card rounded-[var(--r-lg)]">
         <div className="space-y-1.5">
           <Label className="text-sm text-[color:var(--ink-2)]">榜单类型</Label>
           <Select value={mode} onValueChange={(v) => setMode(v as LeaderboardMode)}>
@@ -863,7 +863,7 @@ export function Leaderboard({
               {showExportMenu ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </Button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-lg shadow-xl border border-black/[0.06] overflow-hidden z-20">
+              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-lg shadow-xl border border-black/[0.06] overflow-hidden z-50">
                 <button
                   className="w-full px-4 py-2.5 text-left text-sm hover:bg-black/[0.04] flex items-center gap-2"
                   onClick={() => handleExport('text')}

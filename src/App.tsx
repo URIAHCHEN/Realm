@@ -192,6 +192,19 @@ function App() {
     toast.success(`已导入 ${rows.length} 条到第${lessonNumber}课${missing.length ? `，新增 ${missing.length} 名学生` : ''}`);
   };
 
+  const handleCreateQuestionTypes = (
+    target: { classId: string; lessonNumber: number },
+    columns: { name: string; suggestedFullScore: number }[]
+  ) => {
+    const cfg = getLessonConfig(target.classId, target.lessonNumber);
+    const existing = new Set(cfg.questionTypes.map(q => q.name));
+    const add = columns
+      .filter(c => c.name && !existing.has(c.name))
+      .map((c, i) => ({ id: 'qt_' + Date.now() + '_' + i, name: c.name, fullScore: c.suggestedFullScore || 100, order: cfg.questionTypes.length + i }));
+    if (add.length === 0) return;
+    saveLessonConfig(target.classId, target.lessonNumber, { questionTypes: [...cfg.questionTypes, ...add] });
+  };
+
   // 登录成功（Supabase Auth 会话已建立，由 LoginPage 调用）
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -790,6 +803,7 @@ function App() {
                   getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
                   knownLessons={getAllLessons(currentClassId || undefined)}
                   onImportRows={handleImportDocRows}
+                  onCreateQuestionTypes={handleCreateQuestionTypes}
                   onExportExcel={handleExportAllData}
                 />
               </div>

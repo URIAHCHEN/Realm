@@ -42,6 +42,7 @@ export function FeedbackGenerator({
   const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
   const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
   const [isNewStudent, setIsNewStudent] = useState(false);
+  const [variant, setVariant] = useState(0);
   const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] = [
     { value: 'daily', label: '首课&日常' },
     { value: 'afterclass', label: '行课后' },
@@ -66,11 +67,11 @@ export function FeedbackGenerator({
     setSelected(null);
   }, [lessonNumber]);
 
-  // 切换反馈模式/场景/新学员时，清空以便按新规则重算
+  // 切换反馈模式/场景/新学员/措辞时，清空以便按新规则重算
   useEffect(() => {
     setGenerated({});
     setCopiedSet(new Set());
-  }, [feedbackMode, scenario, isNewStudent]);
+  }, [feedbackMode, scenario, isNewStudent, variant]);
 
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
@@ -95,7 +96,7 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent, libraryLinks);
+      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant);
     }
     return generatePersonalFeedback(
       record,
@@ -271,6 +272,9 @@ export function FeedbackGenerator({
                   <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
                   新学员（补充孩子感受）
                 </label>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % 3)}>
+                  <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/3）
+                </Button>
               </>
             )}
           </div>

@@ -87,7 +87,7 @@ export function generatePersonalFeedback(
   return feedback;
 }
 
-// “四个一”反馈：①照片/视频 ②优秀表现点 ③当前问题 ④可实操方案
+// “四个一”反馈（可直接发送版）：优秀表现 / 待提升 / 下一步 / 素材，三种措辞版本
 export function generateFourInOne(
   record: StudentRecord,
   lessonConfig: LessonConfig,
@@ -96,47 +96,54 @@ export function generateFourInOne(
   nickname: string,
   scenarioLabel: string,
   isNewStudent = false,
-  candidateLinks: string[] = []
+  candidateLinks: string[] = [],
+  variant = 0
 ): string {
-  const strengths: string[] = [];
-  lessonConfig.questionTypes.forEach(qt => {
-    const s = record.scores[qt.id] || 0;
-    const avg = stats.avgScores[qt.id] || 0;
-    if (avg > 0 && s - avg >= 5) strengths.push(`${qt.name}突出（${s}/${qt.fullScore}，高于班均${(s - avg).toFixed(0)}分）`);
-  });
-  if (record.homeworkStatus === '超赞完成') strengths.push('书面作业完成质量高（超赞）');
-  if (record.correctRate >= 90) strengths.push(`入门测正确率 ${record.correctRate}%`);
-  const strengthText = strengths.length ? strengths.slice(0, 3).join('；') : '课堂参与稳定（可补充一个具体亮点）';
+  const v = ((variant % 3) + 3) % 3;
 
-  const problems: string[] = [];
-  weakPoints.forEach(wp => problems.push(`${wp.questionTypeName}偏低（低于班均${Math.abs(wp.diff).toFixed(0)}分）`));
-  if (record.homeworkStatus === '未完成' || record.homeworkStatus === '没带') problems.push(`书面作业${record.homeworkStatus}`);
-  if (record.attendance === '缺勤') problems.push('本课缺勤');
-  else if (record.attendance === '迟到') problems.push('到课迟到');
-  else if (record.attendance === '请假') problems.push('本课请假');
-  (lessonConfig.customFields || []).forEach(cf => {
-    if (cf.kind === 'number') {
-      const v = Number(record.customValues?.[cf.id]) || 0;
-      if (cf.fullScore && v / cf.fullScore < 0.6) problems.push(`${cf.name}偏低（${v}/${cf.fullScore}）`);
-    }
-  });
-  const problemText = problems.length ? problems.slice(0, 3).join('；') : '暂无明显问题，继续保持';
+  const strong = lessonConfig.questionTypes
+    .map(qt => ({ name: qt.name, s: record.scores[qt.id] || 0, avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
+    .filter(x => x.avg > 0 && x.s - x.avg >= 5)
+    .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
+  const weak = [...weakPoints].sort((a, b) => a.diff - b.diff);
+  const homeworkGood = record.homeworkStatus === '超赞完成';
+  const homeworkBad = record.homeworkStatus === '未完成' || record.homeworkStatus === '没带';
+  const attendBad = record.attendance === '缺勤' ? '缺勤' : record.attendance === '迟到' ? '迟到' : record.attendance === '请假' ? '请假' : '';
+
+  let praise: string;
+  if (strong.length) praise = `${strong[0].name}掌握得不错（${strong[0].s}/${strong[0].full}，高出班级平均${(strong[0].s - strong[0].avg).toFixed(0)}分）`;
+  else if (record.correctRate >= 90) praise = `入门测正确率 ${record.correctRate}%，整体掌握扎实`;
+  else if (homeworkGood) praise = '书面作业完成质量很高';
+  else praise = '课堂状态稳定，能跟上节奏';
+
+  const issueParts: string[] = [];
+  if (weak.length) issueParts.push(`${weak[0].questionTypeName}还有提升空间（${weak[0].studentScore}分，低于班级平均${Math.abs(weak[0].diff).toFixed(0)}分）`);
+  if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
+  if (attendBad) issueParts.push(`本课${attendBad}`);
+  const issue = issueParts.length ? issueParts.join('；') : '暂未发现明显薄弱点，继续保持';
+
+  let plan: string;
+  if (weak.length) plan = `课后针对${weak[0].questionTypeName}做同类练习巩固，把错题整理进错题本并试着讲一遍`;
+  else if (homeworkBad) plan = '今晚把本次作业补齐并订正，下次课前提交';
+  else if (attendBad) plan = '课后回看本讲回放和笔记，补齐落下的内容';
+  else plan = '保持当前节奏，按课后任务继续巩固即可';
+
+  const openers = [
+    '孩子您好，跟您反馈下这堂课的情况：',
+    '跟您同步一下孩子这堂课的表现：',
+    '本堂课学情反馈：'
+  ];
 
   const lines: string[] = [
-    `【四个一 · ${scenarioLabel}】第${record.lessonNumber}课 · ${nickname}`,
-    '',
-    '🎬 ① 照片/视频（费曼讲解或笔记）：（在此粘贴1条链接）',
+    `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】`,
+    openers[v],
+    `🌟 优秀表现：${praise}`,
+    `🔍 待提升：${issue}`,
+    `🛠 下一步：${plan}`,
+    `🎬 课堂照片/视频：${candidateLinks[0] || '见附件'}`,
   ];
-  if (candidateLinks.length > 0) {
-    lines.push('   本课素材库可选：');
-    candidateLinks.slice(0, 6).forEach(l => lines.push(`   - ${l}`));
-  }
-  lines.push(
-    `🌟 ② 一个优秀表现：${strengthText}`,
-    `🔍 ③ 一个当前问题：${problemText}`,
-    '🛠 ④ 一个可实操方案：（填写具体动作，如“今晚重做错题X、明早听写Y、下次课前提交笔记照片”）',
-  );
-  if (isNewStudent) lines.push('💬 新学员感受：（可补充询问孩子对这堂课的感受）');
+  if (isNewStudent) lines.push('也欢迎跟我说说孩子这堂课的感受，方便我们更快适配节奏～');
+  lines.push('感谢配合，我们一起帮孩子进步！');
   return lines.join('\n');
 }
 

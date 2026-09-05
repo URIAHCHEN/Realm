@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
-  CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2,
+  CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,14 +29,16 @@ interface DocSyncPanelProps {
   getQuestionTypes: (classId: string, lessonNumber: number) => QuestionType[];
   knownLessons: number[];
   onImportRows: (rows: ParsedRow[], target: { classId: string; lessonNumber: number }) => void;
+  onCreateQuestionTypes: (target: { classId: string; lessonNumber: number }, columns: { name: string; suggestedFullScore: number }[]) => void;
   onExportExcel: () => void;
 }
 
 export function DocSyncPanel({
-  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onExportExcel,
+  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onExportExcel,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
+  const [unmatched, setUnmatched] = useState<{ name: string; suggestedFullScore: number }[]>([]);
   const [targetClass, setTargetClass] = useState<string>(currentClassId || classes[0]?.id || '');
   const [targetLesson, setTargetLesson] = useState<number>(lessonNumber);
 
@@ -69,6 +71,7 @@ export function DocSyncPanel({
     try {
       const qts = getQuestionTypes(targetClass, targetLesson);
       const result = parseClipboardTable(pasteText, qts);
+      setUnmatched(result.unmatchedColumns || []);
       if (result.rows.length === 0) {
         toast.error(result.errors[0] || '未解析到有效数据行');
       } else {
@@ -161,6 +164,27 @@ export function DocSyncPanel({
             {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
             解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>
+          {unmatched.length > 0 && (
+            <div className="rounded-[var(--r-md)] bg-amber-50 border border-amber-200 p-3">
+              <p className="text-sm text-amber-800">
+                检测到 <b>{unmatched.length}</b> 个未匹配分数列：{unmatched.map(c => c.name).join('、')}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => {
+                    onCreateQuestionTypes({ classId: targetClass, lessonNumber: targetLesson }, unmatched);
+                    toast.success(`已补建 ${unmatched.length} 个题型，请再点一次“解析并导入”写入这些列`);
+                    setUnmatched([]);
+                  }}
+                >
+                  <Plus className="w-4 h-4" />一键补建为题型
+                </Button>
+                <span className="text-xs text-amber-700">补建后再点“解析并导入”即可写入这些列的分值</span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

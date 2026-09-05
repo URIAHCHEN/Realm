@@ -109,6 +109,20 @@ export interface Class {
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
 }
 
+// 预存反馈素材（全局按课次组织；素材以链接形式存储）
+export interface SavedFeedback {
+  id: string;
+  /** 课次序号，用于按第几次课排列 */
+  lessonNumber: number;
+  /** 标题/场景说明 */
+  title: string;
+  /** 正文文本 */
+  content: string;
+  /** 素材链接（图片/视频等，仅存链接） */
+  links: string[];
+  updatedAt: string;
+}
+
 // 应用配置
 export interface AppConfig {
   defaultAttendanceOptions: string[];
@@ -117,6 +131,8 @@ export interface AppConfig {
   defaultFeedbackTemplate: string;
   defaultPraiseTemplate: string;
   defaultQuestionTypes: QuestionType[];
+  /** 预存反馈素材库（全局按课次） */
+  savedFeedbacks?: SavedFeedback[];
 }
 
 // 校内成绩

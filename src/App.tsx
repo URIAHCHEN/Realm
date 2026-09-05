@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3 } from 'lucide-react';
+import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData } from '@/hooks/useClassData';
@@ -11,6 +11,7 @@ import { ensureSelfMembership, myUserId } from '@/lib/members';
 import type { Membership } from '@/lib/members';
 import { MembersPanel } from '@/components/MembersPanel';
 import { SyncStatusBanner } from '@/components/SyncStatusBanner';
+import { FeedbackLibrary } from '@/components/FeedbackLibrary';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { LessonManager } from '@/components/LessonManager';
@@ -564,6 +565,10 @@ function App() {
               <FileText className="w-5 h-5" />
               反馈生成
             </TabsTrigger>
+            <TabsTrigger value="library" className="ios-tab-trigger">
+              <BookMarked className="w-5 h-5" />
+              反馈素材
+            </TabsTrigger>
             <TabsTrigger value="leaderboard" className="ios-tab-trigger">
               <Trophy className="w-5 h-5" />
               表扬榜
@@ -655,6 +660,15 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+            />
+          </TabsContent>
+
+          {/* 反馈素材 Tab */}
+          <TabsContent value="library" className="space-y-6">
+            <FeedbackLibrary
+              items={appConfig.savedFeedbacks || []}
+              onChange={(list) => updateAppConfig({ savedFeedbacks: list })}
+              currentLesson={currentLessonNumber}
             />
           </TabsContent>
 

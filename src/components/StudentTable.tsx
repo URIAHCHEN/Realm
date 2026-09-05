@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +78,47 @@ const getHomeworkColor = (status: string) => {
   return '';
 };
 
+/** 成绩输入：自持文本以允许输入小数；提交为 number（支持 8.5 这类分值） */
+function ScoreInput({ value, max, onCommit, className, placeholder }: {
+  value: number; max?: number; onCommit: (n: number) => void; className?: string; placeholder?: string;
+}) {
+  const [text, setText] = useState(() => (value > 0 ? String(value) : ''));
+  const [focused, setFocused] = useState(false);
+
+  // 外部值变化（批量/他端拉取）且未聚焦时，回填显示
+  useEffect(() => { if (!focused) setText(value > 0 ? String(value) : ''); }, [value, focused]);
+
+  const clamp = (n: number) => {
+    if (isNaN(n)) return 0;
+    let x = Math.max(0, n);
+    if (max != null) x = Math.min(max, x);
+    return Math.round(x * 100) / 100;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d.]/g, '');
+    const dot = raw.indexOf('.');
+    if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, ''); // 仅保留一个小数点
+    setText(raw);
+    onCommit(clamp(parseFloat(raw)));
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const n = clamp(parseFloat(text));
+    setText(n > 0 ? String(n) : '');
+    onCommit(n);
+  };
+
+  return (
+    <Input
+      type="text" inputMode="decimal" placeholder={placeholder} value={text}
+      onFocus={() => setFocused(true)} onChange={handleChange} onBlur={handleBlur}
+      className={className}
+    />
+  );
+}
+
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onAddStudent, onRemoveStudent,
@@ -143,11 +184,11 @@ export function StudentTable({
       const field = bulkField === 'attendance' ? 'attendance' : bulkField === 'homework' ? 'homeworkStatus' : 'listeningStatus';
       list.forEach(s => setFieldFor(s, { [field]: bulkValue } as Partial<StudentRecord>));
     } else if (bulkField === 'listeningScore') {
-      const val = parseInt(bulkValue) || 0;
+      const val = parseFloat(bulkValue) || 0;
       list.forEach(s => setFieldFor(s, { listeningScore: val, listeningStatus: '具体分数' }));
     } else if (bulkField === 'score') {
       if (!bulkQtId) { toast.error('请先选择要设置的题型'); return; }
-      const val = parseInt(bulkValue) || 0;
+      const val = parseFloat(bulkValue) || 0;
       list.forEach(s => {
         const record = getStudentRecord(s);
         const newScores = { ...(record?.scores || {}), [bulkQtId]: val };
@@ -494,7 +535,7 @@ export function StudentTable({
                                   <SelectItem value="具体分数">具体分数</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {record?.listeningStatus === '具体分数' && <Input type="number" min={0} max={100} placeholder="0" value={(record?.listeningScore ?? 0) > 0 ? record.listeningScore : ''} onChange={(e) => handleListeningScoreChange(studentName, e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className="w-16 h-9 text-sm rounded-lg" />}
+                              {record?.listeningStatus === '具体分数' && <ScoreInput value={(record?.listeningScore ?? 0)} max={100} placeholder="0" onCommit={(n) => handleListeningScoreChange(studentName, n)} className="w-16 h-9 text-sm rounded-lg" />}
                             </div>
                           </TableCell>
                           )}
@@ -522,7 +563,7 @@ export function StudentTable({
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <Input type="number" min={0} max={qt.fullScore} placeholder="0" value={score > 0 ? score : ''} onChange={(e) => handleScoreChange(studentName, qt.id, e.target.value === '' ? 0 : (parseInt(e.target.value) || 0))} className={`${inputCls} w-18 h-9 text-center text-base rounded-lg`} />
+                                        <ScoreInput value={score} max={qt.fullScore} placeholder="0" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-18 h-9 text-center text-base rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
@@ -659,7 +700,7 @@ export function StudentTable({
           <DialogHeader><DialogTitle>添加题型配置</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
             <div><label className="text-sm font-medium mb-2 block">题型名称</label><Input placeholder="如：阅读理解" value={newQuestionType.name} onChange={(e) => setNewQuestionType(prev => ({ ...prev, name: e.target.value }))} className="liquid-glass-input" /></div>
-            <div><label className="text-sm font-medium mb-2 block">满分</label><Input type="number" placeholder="100" value={newQuestionType.fullScore} onChange={(e) => setNewQuestionType(prev => ({ ...prev, fullScore: parseInt(e.target.value) || 100 }))} className="liquid-glass-input" /></div>
+            <div><label className="text-sm font-medium mb-2 block">满分</label><Input type="number" step="0.5" placeholder="100" value={newQuestionType.fullScore} onChange={(e) => setNewQuestionType(prev => ({ ...prev, fullScore: parseFloat(e.target.value) || 100 }))} className="liquid-glass-input" /></div>
             <div className="flex gap-2">
               <Button onClick={handleAddQuestionType} className="flex-1 liquid-glass-button">添加</Button>
               <Button onClick={() => setShowAddQuestionTypeDialog(false)} variant="outline" className="flex-1">取消</Button>

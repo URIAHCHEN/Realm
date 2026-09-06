@@ -431,7 +431,7 @@ function App() {
   };
 
   // 处理导出当前课次 Excel 名单
-  const handleExportRosterExcel = () => {
+  const handleExportRosterExcel = async () => {
     if (!currentClass) {
       toast.error('请先选择班级');
       return;
@@ -439,7 +439,7 @@ function App() {
 
     const lessonRecords = currentClass.records.filter(r => r.lessonNumber === currentLessonNumber);
     const nickMap = nicknames[currentClass.id] || {};
-    const workbook = exportClassRosterToExcel({
+    const workbook = await exportClassRosterToExcel({
       className: currentClass.name,
       lessonNumber: currentLessonNumber,
       students: currentClass.students,
@@ -453,10 +453,10 @@ function App() {
   };
 
   // 处理导出所有数据为Excel（用于查看/分析，不可用于恢复）
-  const handleExportAllData = () => {
+  const handleExportAllData = async () => {
     const data = exportData();
-    const { workbook, filename } = exportToExcel(data, currentClass?.name || '所有班级');
-    downloadExcel(workbook, filename);
+    const { workbook, filename } = await exportToExcel(data, currentClass?.name || '所有班级');
+    await downloadExcel(workbook, filename);
     toast.success('数据已导出为Excel！');
   };
 

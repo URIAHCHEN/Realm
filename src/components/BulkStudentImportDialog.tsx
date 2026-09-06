@@ -1,6 +1,5 @@
 // 批量导入学员：上传「学员编码、学员名称、班级编码、班级名称」四列表格文件，自动解析、校验、按班级编码分班导入
 import { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -76,7 +75,9 @@ export function BulkStudentImportDialog({
     return { code: 0, name: 1, classCode: 2, className: 3 };
   };
 
-  const parseWorkbook = (data: Uint8Array | string, isString: boolean) => {
+  // xlsx 为大体积依赖：解析/导出时动态加载，避免随首屏 main 包携带
+  const parseWorkbook = async (data: Uint8Array | string, isString: boolean) => {
+    const XLSX = await import('xlsx');
     const workbook = isString ? XLSX.read(data as string, { type: 'string' }) : XLSX.read(data as Uint8Array, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][];
@@ -124,11 +125,11 @@ export function BulkStudentImportDialog({
     setResult(null);
     setFileName(file.name);
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const raw = e.target?.result;
         const isCsv = file.name.toLowerCase().endsWith('.csv');
-        const parsed = parseWorkbook(
+        const parsed = await parseWorkbook(
           isCsv ? String(raw) : new Uint8Array(raw as ArrayBuffer),
           isCsv
         );
@@ -184,7 +185,8 @@ export function BulkStudentImportDialog({
   };
 
   // 下载四列模板
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const template = [
       ['学员编码', '学员名称', '班级编码', '班级名称'],
       ['S0001', '张三', 'TG3ZY078', '初三双语班'],

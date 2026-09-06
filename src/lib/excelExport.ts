@@ -1,5 +1,12 @@
-import * as XLSX from 'xlsx';
 import type { AppConfig, Class, SchoolScore } from '@/types';
+import type * as XLSXTypes from 'xlsx';
+
+// xlsx 体积较大（约 424KB），仅在用户实际导出 Excel 时才需要。
+// 改为动态 import：首屏不加载 vendor-xlsx chunk，点击导出时按需拉取。
+// 对外接口由同步改为 async，功能与输出结果保持一致。
+async function loadXLSX(): Promise<typeof XLSXTypes> {
+  return import('xlsx');
+}
 
 interface ExportData {
   appConfig: AppConfig;
@@ -9,7 +16,8 @@ interface ExportData {
 }
 
 // 导出所有数据为Excel
-export function exportToExcel(data: ExportData, _className: string): { workbook: XLSX.WorkBook; filename: string } {
+export async function exportToExcel(data: ExportData, _className: string): Promise<{ workbook: XLSXTypes.WorkBook; filename: string }> {
+  const XLSX = await loadXLSX();
   const { classes, nicknames, schoolScores } = data;
   const workbook = XLSX.utils.book_new();
 
@@ -27,16 +35,16 @@ export function exportToExcel(data: ExportData, _className: string): { workbook:
 
     // 2. 学情记录表
     const allLessons = [...new Set(cls.records.map(r => r.lessonNumber))].sort((a, b) => a - b);
-    
+
     allLessons.forEach(lessonNum => {
       const lessonRecords = cls.records.filter(r => r.lessonNumber === lessonNum);
       const lessonConfig = cls.lessonConfigs[lessonNum.toString()];
-      
+
       if (lessonRecords.length === 0) return;
 
       const questionTypes = lessonConfig?.questionTypes || [];
       const customFields = lessonConfig?.customFields || [];
-      
+
       const recordsData = lessonRecords.map((record, index) => {
         const row: Record<string, string | number> = {
           '序号': index + 1,
@@ -103,21 +111,23 @@ export function exportToExcel(data: ExportData, _className: string): { workbook:
   }
 
   const filename = `LynnsRealm_数据备份_${new Date().toISOString().split('T')[0]}.xlsx`;
-  
+
   return { workbook, filename };
 }
 
 // 下载Excel文件
-export function downloadExcel(workbook: XLSX.WorkBook, filename: string) {
+export async function downloadExcel(workbook: XLSXTypes.WorkBook, filename: string) {
+  const XLSX = await loadXLSX();
   XLSX.writeFile(workbook, filename);
 }
 
 // 导出单个课次数据为Excel
-export function exportLessonToExcel(
+export async function exportLessonToExcel(
   records: Array<Record<string, string | number>>,
   _className: string,
   lessonNumber: number
-): XLSX.WorkBook {
+): Promise<XLSXTypes.WorkBook> {
+  const XLSX = await loadXLSX();
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(records);
   XLSX.utils.book_append_sheet(workbook, sheet, `第${lessonNumber}课`);
@@ -125,7 +135,7 @@ export function exportLessonToExcel(
 }
 
 // 导出当前课次名单 Excel（学情记录表用）
-export function exportClassRosterToExcel(args: {
+export async function exportClassRosterToExcel(args: {
   className: string;
   lessonNumber: number;
   students: string[];
@@ -145,7 +155,8 @@ export function exportClassRosterToExcel(args: {
   nicknames: Record<string, string>;
   questionTypes: Array<{ id: string; name: string }>;
   customFields?: Array<{ id: string; name: string }>;
-}): XLSX.WorkBook {
+}): Promise<XLSXTypes.WorkBook> {
+  const XLSX = await loadXLSX();
   const { lessonNumber, students, records, nicknames, questionTypes, customFields = [] } = args;
   const workbook = XLSX.utils.book_new();
 

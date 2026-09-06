@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceDot } from 'recharts';
-import html2canvas from 'html2canvas';
 import {
   Plus, Trash2, TrendingUp, Award, Upload, FileSpreadsheet,
   ClipboardList, Users, Target, CalendarDays, Medal, ArrowRight,
@@ -117,6 +116,7 @@ export function SchoolScorePanel({
     try {
       await new Promise(r => setTimeout(r, 200));
       const target = trendChartRef.current;
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
         backgroundColor: '#ffffff',
         scale: 2,

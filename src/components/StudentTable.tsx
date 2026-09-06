@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,6 @@ import { copyToClipboard } from '@/lib/feedbackTemplates';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
 
@@ -209,11 +208,27 @@ export function StudentTable({
     toast.success(`已批量更新 ${list.length} 名学员`);
   };
 
-  const lessonRecords = records.filter(r => r.lessonNumber === lessonNumber);
-  const stats = calculateClassStats(lessonRecords, lessonConfig.questionTypes);
+  // 性能：stats 与学号->记录映射用 useMemo 缓存，避免每次渲染（含批量选择、
+  // 弹窗开关等无关状态的更新）都重算全班统计与 O(n²) 线性查找
+  const lessonRecords = useMemo(
+    () => records.filter(r => r.lessonNumber === lessonNumber),
+    [records, lessonNumber]
+  );
+  const stats = useMemo(
+    () => calculateClassStats(lessonRecords, lessonConfig.questionTypes),
+    [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
+  );
+
+  const recordByKey = useMemo(() => {
+    const m = new Map<string, StudentRecord>();
+    records.forEach(r => {
+      if (r.lessonNumber === lessonNumber) m.set(r.studentName, r);
+    });
+    return m;
+  }, [records, lessonNumber]);
 
   const getStudentRecord = (studentName: string): StudentRecord | undefined => {
-    return records.find(r => r.studentName === studentName && r.lessonNumber === lessonNumber);
+    return recordByKey.get(studentName);
   };
 
   // 薄弱项（按板块、得分率口径）
@@ -334,6 +349,8 @@ export function StudentTable({
       // 等待 DOM 渲染与字体加载
       await new Promise(r => setTimeout(r, 400));
       const target = (container.querySelector('.container') as HTMLElement) || (container.firstElementChild as HTMLElement);
+      // html2canvas 约 200KB，仅在点击「生成图片」时按需加载
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, { backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false, width: target.offsetWidth, height: target.offsetHeight });
       const link = document.createElement('a');
       link.download = `学情公示_第${lessonNumber}课_${new Date().toISOString().split('T')[0]}.png`;

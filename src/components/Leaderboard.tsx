@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -441,6 +440,7 @@ export function Leaderboard({
     try {
       await new Promise(r => setTimeout(r, 120));
       const target = leaderboardRef.current;
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
         backgroundColor: '#f1f5f9',
         scale: 2,

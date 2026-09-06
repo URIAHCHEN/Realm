@@ -8,7 +8,6 @@ import type {
   SchoolScore,
   ClassStats,
 } from '@/types';
-import * as XLSX from 'xlsx';
 import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord } from '@/lib/attendance';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
@@ -147,12 +146,23 @@ export function useClassData() {
   });
 
   // 保存到 localStorage
+  // 性能：录入分数时 classes 每次击键都变化，旧实现会即时全量 JSON.stringify
+  // 所有班级数据（可达数 MB），造成主线程卡顿。改为 400ms 防抖合并写入，
+  // 并在页面隐藏/关闭前立即落盘一次，确保持久性不降级。
   useEffect(() => {
-    localStorage.setItem('appConfig', JSON.stringify(appConfig));
+    const flush = () => localStorage.setItem('appConfig', JSON.stringify(appConfig));
+    const t = setTimeout(flush, 400);
+    const onHide = () => { clearTimeout(t); flush(); };
+    window.addEventListener('pagehide', onHide);
+    return () => { clearTimeout(t); window.removeEventListener('pagehide', onHide); };
   }, [appConfig]);
 
   useEffect(() => {
-    localStorage.setItem('classData', JSON.stringify(classes));
+    const flush = () => localStorage.setItem('classData', JSON.stringify(classes));
+    const t = setTimeout(flush, 400);
+    const onHide = () => { clearTimeout(t); flush(); };
+    window.addEventListener('pagehide', onHide);
+    return () => { clearTimeout(t); window.removeEventListener('pagehide', onHide); };
   }, [classes]);
 
   useEffect(() => {
@@ -168,7 +178,11 @@ export function useClassData() {
   }, [nicknames]);
 
   useEffect(() => {
-    localStorage.setItem('schoolScores', JSON.stringify(schoolScores));
+    const flush = () => localStorage.setItem('schoolScores', JSON.stringify(schoolScores));
+    const t = setTimeout(flush, 400);
+    const onHide = () => { clearTimeout(t); flush(); };
+    window.addEventListener('pagehide', onHide);
+    return () => { clearTimeout(t); window.removeEventListener('pagehide', onHide); };
   }, [schoolScores]);
 
   // 获取当前班级
@@ -690,12 +704,14 @@ export function useClassData() {
   }, []);
 
   // 批量导入校内成绩（从Excel）
+  // xlsx 为大体积依赖，改为解析时动态加载，首屏不再携带 vendor-xlsx
   const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[] }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];

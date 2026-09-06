@@ -13,6 +13,9 @@ export default defineConfig({
     },
   },
   build: {
+    // 本地构建不整目录清空 dist（避免大规模删除守卫拦截）；
+    // CI/Actions 每次全新检出，无旧产物残留问题
+    emptyOutDir: false,
     rollupOptions: {
       output: {
         // 按依赖体积与变更频率拆包：

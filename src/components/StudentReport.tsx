@@ -53,7 +53,6 @@ import {
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import html2canvas from 'html2canvas';
 import {
   getQuestionTypeFeedback,
   getOverallFeedback,
@@ -345,6 +344,7 @@ export function StudentReport({
   const exportClassReportImage = async () => {
     if (!classReportRef.current) return;
     try {
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(classReportRef.current, {
         backgroundColor: '#ffffff',
         scale: 2
@@ -581,6 +581,7 @@ function PersonalReport({
     try {
       await new Promise(r => setTimeout(r, 200));
       const target = targetRef.current;
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
         backgroundColor: '#ffffff',
         scale: 2,

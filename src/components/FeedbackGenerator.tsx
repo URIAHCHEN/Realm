@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import {
   CircleAlert, RotateCcw, Send, Sparkles,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generatePersonalFeedback, generateFourInOne, copyToClipboard } from '@/lib/feedbackTemplates';
+import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
@@ -22,6 +22,7 @@ interface FeedbackGeneratorProps {
   getNickname: (name: string) => string;
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
   libraryLinks?: string[];
+  onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
 }
 
 type StatusTone = 'none' | 'generated' | 'copied';
@@ -33,11 +34,18 @@ export function FeedbackGenerator({
   lessonNumber,
   getNickname,
   calculateClassStats,
-  libraryLinks = []
+  libraryLinks = [],
+  onSaveLessonConfig
 }: FeedbackGeneratorProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [copiedSet, setCopiedSet] = useState<Set<string>>(new Set());
+
+  // 模板旁编辑 + 实时预览
+  const [showTemplate, setShowTemplate] = useState(false);
+  const [draftFeedback, setDraftFeedback] = useState(lessonConfig.feedbackTemplate);
+  const [draftFourInOne, setDraftFourInOne] = useState(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE);
+  const templateRef = useRef<HTMLTextAreaElement>(null);
 
   // 反馈模式：常规模板 / 四个一
   const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
@@ -81,14 +89,56 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant, draftFourInOne);
     }
-    return generatePersonalFeedback(
-      record,
-      lessonConfig,
-      stats,
-      getNickname(name)
-    );
+    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback);
+  };
+
+  // 模板草稿改动：若当前学生已有生成内容，实时重算预览
+  useEffect(() => {
+    if (!selected) return;
+    setGenerated(prev => prev[selected] ? { ...prev, [selected]: generateFor(selected) ?? prev[selected] } : prev);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftFeedback, draftFourInOne]);
+
+  // 外部模板变化（保存成功 / 切换课次或班级）时回填草稿
+  useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonConfig.feedbackTemplate]);
+  useEffect(() => { setDraftFourInOne(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE); }, [lessonConfig.fourInOneTemplate]);
+
+  const isFourInOne = feedbackMode === 'fourInOne';
+  const activeTemplate = isFourInOne ? draftFourInOne : draftFeedback;
+  const setActiveTemplate = (v: string) => isFourInOne ? setDraftFourInOne(v) : setDraftFeedback(v);
+
+  // 在光标处插入变量到模板
+  const insertTemplateVar = (token: string) => {
+    const ta = templateRef.current;
+    if (!ta) { setActiveTemplate(activeTemplate + token); return; }
+    const start = ta.selectionStart ?? activeTemplate.length;
+    const end = ta.selectionEnd ?? activeTemplate.length;
+    const next = activeTemplate.slice(0, start) + token + activeTemplate.slice(end);
+    setActiveTemplate(next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + token.length, start + token.length); });
+  };
+
+  // 保存当前模式模板到课次配置，并按新模板重算所有已生成反馈
+  const handleSaveTemplate = () => {
+    if (isFourInOne) {
+      onSaveLessonConfig(lessonNumber, { fourInOneTemplate: draftFourInOne });
+    } else {
+      onSaveLessonConfig(lessonNumber, { feedbackTemplate: draftFeedback });
+    }
+    setGenerated(prev => {
+      const next: Record<string, string> = {};
+      Object.keys(prev).forEach(name => { const t = generateFor(name); if (t) next[name] = t; });
+      return next;
+    });
+    toast.success('模板已保存，已按新模板重新生成');
+  };
+
+  const resetTemplateToDefault = () => {
+    if (isFourInOne) setDraftFourInOne(DEFAULT_FOUR_IN_ONE_TEMPLATE);
+    else setDraftFeedback(lessonConfig.feedbackTemplate);
+    toast.info('已恢复模板草稿');
   };
 
   const ensureGenerated = (name: string): string | null => {
@@ -365,10 +415,21 @@ export function FeedbackGenerator({
                 <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                 {selected ? `${getNickname(selected)} 的反馈内容` : '反馈内容'}
               </span>
-              {selected && statusBadge(selected)}
+              <span className="flex items-center gap-2">
+                {selected && statusBadge(selected)}
+                <button
+                  onClick={() => setShowTemplate(v => !v)}
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border transition-all ${showTemplate ? 'bg-[rgb(var(--brand-rgb)/0.12)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)]' : 'bg-black/[0.04] border-transparent text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+                  title="在右侧编辑并预览反馈模板"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />{isFourInOne ? '四个一模板' : '反馈模板'}
+                </button>
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+          <div className={showTemplate ? 'grid gap-5 lg:grid-cols-2 items-start' : ''}>
+          <div className="space-y-3">
             {!selected ? (
               <div className="py-16 text-center text-[color:var(--ink-4)]">
                 <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -417,6 +478,63 @@ export function FeedbackGenerator({
                 </div>
               </>
             )}
+          </div>
+          {showTemplate && (
+            <div className="space-y-3 rounded-2xl border border-black/8 bg-black/[0.02] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[color:var(--ink)] flex items-center gap-1.5">
+                  <Wand2 className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+                  {isFourInOne ? '四个一 · 模板编辑' : '私发反馈 · 模板编辑'}
+                </p>
+                <div className="flex gap-1.5">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg gap-1 text-[color:var(--ink-4)]" onClick={resetTemplateToDefault}>
+                    <RotateCcw className="w-3.5 h-3.5" />恢复默认
+                  </Button>
+                  <Button size="sm" className="ios-button h-7 text-xs rounded-lg gap-1" onClick={handleSaveTemplate}>
+                    <Check className="w-3.5 h-3.5" />保存模板
+                  </Button>
+                </div>
+              </div>
+              <Textarea
+                ref={templateRef}
+                value={activeTemplate}
+                onChange={(e) => setActiveTemplate(e.target.value)}
+                className="min-h-[220px] text-sm leading-relaxed font-mono ios-input"
+                placeholder="编辑模板，点击变量可插入…"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {(isFourInOne ? FOUR_IN_ONE_VARIABLES : [
+                  { key: '【学生昵称】', desc: '' }, { key: '【学生短昵称】', desc: '' }, { key: '【课次】', desc: '' },
+                  { key: '【考勤】', desc: '' }, { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
+                  { key: '【成绩详情】', desc: '' }, { key: '【总分】', desc: '' }, { key: '【满分】', desc: '' },
+                  { key: '【排名】', desc: '' }, { key: '【正确率】', desc: '' }, { key: '【薄弱项】', desc: '' },
+                  { key: '【作业内容】', desc: '' },
+                ]).map(v => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    onClick={() => insertTemplateVar(v.key)}
+                    title={v.desc || undefined}
+                    className="px-2 py-0.5 rounded-lg text-xs font-mono bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.18)] border border-[rgb(var(--brand-rgb)/0.2)] transition-colors"
+                  >{v.key}</button>
+                ))}
+                {!isFourInOne && (lessonConfig.customFields || []).map(cf => (
+                  <button
+                    key={cf.id}
+                    type="button"
+                    onClick={() => insertTemplateVar(`【${cf.name}】`)}
+                    className="px-2 py-0.5 rounded-lg text-xs font-mono bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                  >【{cf.name}】</button>
+                ))}
+              </div>
+              <p className="text-xs text-[color:var(--ink-4)] leading-relaxed">
+                {isFourInOne
+                  ? '留空将使用内置默认结构；自动内容由当期成绩、薄弱板块、作业与考勤实时生成。编辑后点「保存模板」写入本课并即时重算全班预览。'
+                  : '编辑后左侧预览实时更新；点「保存模板」写入本课，未保存的改动仅用于预览。此处编辑与「生成设置 → 表格字段」的模板互通。'}
+              </p>
+            </div>
+          )}
+          </div>
           </CardContent>
         </Card>
       </div>

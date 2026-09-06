@@ -58,6 +58,8 @@ export interface LessonConfig {
   homeworkOptions: string[];
   listeningOptions: string[];
   feedbackTemplate: string;
+  /** 「四个一」反馈模板；留空则使用内置默认结构（含【开场】【优秀表现】【待提升】【下一步】【素材】等占位符） */
+  fourInOneTemplate?: string;
   praiseTemplate: string;
   /** 多套表彰模板（优先于 praiseTemplate 使用；为空时回退 praiseTemplate） */
   praiseTemplates?: PraiseTemplate[];

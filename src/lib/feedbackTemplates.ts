@@ -18,13 +18,15 @@ export function generatePersonalFeedback(
   record: StudentRecord,
   lessonConfig: LessonConfig,
   stats: ClassStats,
-  nickname: string
+  nickname: string,
+  templateOverride?: string
 ): string {
   if (isAbsentRecord(record)) {
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
   }
   const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
-  let template = lessonConfig.feedbackTemplate;
+  const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate);
+  let template = baseTemplate;
   
   // 构建成绩详情
   const scoreDetails = lessonConfig.questionTypes.map(qt => {
@@ -60,7 +62,7 @@ export function generatePersonalFeedback(
     if (v === '' || v == null) return '';
     return kind === 'number' ? `${v}分` : String(v);
   };
-  const rawTemplate = lessonConfig.feedbackTemplate;
+  const rawTemplate = baseTemplate;
   customFields.forEach(cf => {
     template = template.replace(new RegExp('【' + escRe(cf.name) + '】', 'g'), customDisplay(cf.kind, cf.id));
   });
@@ -92,6 +94,28 @@ export function generatePersonalFeedback(
   return feedback;
 }
 
+// 「四个一」默认模板与可用占位符（可在反馈工作台旁边直接改写；留空即用此默认结构）
+export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
+`【第【课次】课 · 【昵称】【场景】】
+【开场】
+🌟 优秀表现：【优秀表现】
+🔍 待提升：【待提升】
+🛠 下一步：【下一步】
+🎬 课堂照片/视频：【素材】【新学员补充】
+感谢配合，我们一起帮孩子进步！`;
+
+export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
+  { key: '【课次】', desc: '当前课次' },
+  { key: '【昵称】', desc: '学生昵称' },
+  { key: '【场景】', desc: '场景标签（有则自动带「·」前缀，无则留空）' },
+  { key: '【开场】', desc: '开场语，随「换一版措辞」切换 3 种' },
+  { key: '【优秀表现】', desc: '自动：本讲亮点' },
+  { key: '【待提升】', desc: '自动：薄弱板块 / 作业 / 考勤' },
+  { key: '【下一步】', desc: '自动：巩固动作' },
+  { key: '【素材】', desc: '课堂照片 / 视频链接' },
+  { key: '【新学员补充】', desc: '勾选「新学员」时自动补一句，否则留空' },
+];
+
 // “四个一”反馈（可直接发送版）：优秀表现 / 待提升 / 下一步 / 素材，三种措辞版本
 export function generateFourInOne(
   record: StudentRecord,
@@ -101,7 +125,8 @@ export function generateFourInOne(
   scenarioLabel: string,
   isNewStudent = false,
   candidateLinks: string[] = [],
-  variant = 0
+  variant = 0,
+  templateOverride?: string
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
@@ -141,17 +166,19 @@ export function generateFourInOne(
     '本堂课学情反馈：'
   ];
 
-  const lines: string[] = [
-    `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】`,
-    openers[v],
-    `🌟 优秀表现：${praise}`,
-    `🔍 待提升：${issue}`,
-    `🛠 下一步：${plan}`,
-    `🎬 课堂照片/视频：${candidateLinks[0] || '见附件'}`,
-  ];
-  if (isNewStudent) lines.push('也欢迎跟我说说孩子这堂课的感受，方便我们更快适配节奏～');
-  lines.push('感谢配合，我们一起帮孩子进步！');
-  return lines.join('\n');
+  const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
+  const tpl = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
+
+  return tpl
+    .replace(/【课次】/g, String(record.lessonNumber))
+    .replace(/【昵称】/g, nickname)
+    .replace(/【场景】/g, scenarioLabel ? ' · ' + scenarioLabel : '')
+    .replace(/【开场】/g, openers[v])
+    .replace(/【优秀表现】/g, praise)
+    .replace(/【待提升】/g, issue)
+    .replace(/【下一步】/g, plan)
+    .replace(/【素材】/g, candidateLinks[0] || '见附件')
+    .replace(/【新学员补充】/g, isNewStudent ? '\n也欢迎跟我说说孩子这堂课的感受，方便我们更快适配节奏～' : '');
 }
 
 // 生成班群表彰

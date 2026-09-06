@@ -759,6 +759,7 @@ function App() {
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
+              onSaveLessonConfig={handleSaveLessonConfig}
             />
             <PraiseGenerator
               records={currentClass?.records || []}

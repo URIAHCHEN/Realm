@@ -11,6 +11,8 @@ export interface DisplaySettings {
   dataBarMode: DataBarMode;
   showRankHeatmap: boolean;
   heatmapMode: HeatmapMode;
+  /** 学习轨迹（四季）列：true=全部显示未选标灰；false=仅显示已选 */
+  showAllSeasons: boolean;
   hiddenColumns: string[];
   syncIntervalSec: number;
   exportStyle: ExportStyle;
@@ -47,6 +49,7 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   dataBarMode: 'ratio',
   showRankHeatmap: true,
   heatmapMode: 'rank',
+  showAllSeasons: true,
   hiddenColumns: [],
   syncIntervalSec: 3,
   exportStyle: 'gradient',

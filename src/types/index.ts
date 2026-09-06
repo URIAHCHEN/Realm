@@ -16,6 +16,8 @@ export interface QuestionType {
   name: string;
   fullScore: number;
   order: number;
+  /** 所属板块（用于按板块判断薄弱项）；留空则按题型名称自动归类 */
+  category?: string;
 }
 
 // 自定义列：选项型（下拉）或分数型（数值，可含满分）

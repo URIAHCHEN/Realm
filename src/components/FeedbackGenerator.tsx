@@ -12,7 +12,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
-import type { StudentRecord, LessonConfig, QuestionType, WeakPoint } from '@/types';
+import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
 interface FeedbackGeneratorProps {
   students: string[];
@@ -77,33 +77,16 @@ export function FeedbackGenerator({
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
 
-  const buildWeakPoints = (record: StudentRecord): WeakPoint[] =>
-    lessonConfig.questionTypes
-      .map(qt => {
-        const studentScore = record.scores[qt.id] || 0;
-        const classAvgScore = stats.avgScores[qt.id] || 0;
-        return {
-          questionTypeId: qt.id,
-          questionTypeName: qt.name,
-          studentScore,
-          classAvgScore,
-          diff: studentScore - classAvgScore
-        };
-      })
-      .filter(wp => wp.diff < 0)
-      .sort((a, b) => a.diff - b.diff);
-
   const generateFor = (name: string): string | null => {
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, buildWeakPoints(record), getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant);
     }
     return generatePersonalFeedback(
       record,
       lessonConfig,
       stats,
-      buildWeakPoints(record),
       getNickname(name)
     );
   };

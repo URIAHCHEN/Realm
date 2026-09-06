@@ -95,6 +95,13 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
+              <div>
+                <p className="text-sm font-medium">学习轨迹显示未选季度</p>
+                <p className="text-xs text-[color:var(--ink-4)]">开启则四季都显示、未选标灰；关闭则只显示已选</p>
+              </div>
+              <Switch checked={settings.showAllSeasons} onCheckedChange={v => update({ showAllSeasons: v })} />
+            </div>
           </div>
         </section>
 

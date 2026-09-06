@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, Settings, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, BookMarked } from 'lucide-react';
+import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData } from '@/hooks/useClassData';
@@ -51,7 +51,7 @@ import { DisplaySettingsPanel } from '@/components/DisplaySettingsPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import type { ParsedRow } from '@/lib/docSync';
 import type { SyncSnapshot } from '@/lib/cloudSync';
-import type { AppConfig, LessonConfig } from '@/types';
+import type { AppConfig, LessonConfig, StudentRecord } from '@/types';
 import './App.css';
 
 function App() {
@@ -87,6 +87,7 @@ function App() {
     saveRecord,
     updateRecordField,
     deleteRecord,
+    clearRecordContent,
     restoreRecord,
     deleteLessonRecords,
     restoreRecords,
@@ -313,6 +314,35 @@ function App() {
           toast.success('记录已恢复');
         }
       }
+    });
+  };
+
+  // 清空某条记录的全部内容（保留考勤/学习轨迹，提供撤销）——适合请假生什么都不记
+  const handleClearRecord = (recordId: string) => {
+    if (!currentClass) return;
+    const rec = currentClass.records.find(r => r.id === recordId);
+    if (!rec) return;
+    const classId = currentClass.id;
+    const snapshot = {
+      scores: rec.scores,
+      customValues: rec.customValues,
+      homeworkStatus: rec.homeworkStatus,
+      listeningStatus: rec.listeningStatus,
+      listeningScore: rec.listeningScore,
+      note: rec.note,
+      adjustReason: rec.adjustReason,
+    };
+    clearRecordContent(classId, recordId);
+    toast.success(`已清空 ${getStudentNickname(rec.studentName, classId)} 第${rec.lessonNumber}课的记录内容`, {
+      description: '考勤与学习轨迹已保留；误清空可点「撤销」恢复',
+      action: {
+        label: '撤销',
+        onClick: () => {
+          Object.entries(snapshot).forEach(([field, value]) => updateRecordField(classId, recordId, field as keyof StudentRecord, value));
+          toast.success('记录内容已恢复');
+        }
+      },
+      duration: 8000,
     });
   };
 
@@ -657,10 +687,6 @@ function App() {
               <BarChart3 className="w-5 h-5" />
               学情报告
             </TabsTrigger>
-            <TabsTrigger value="config" className="ios-tab-trigger">
-              <Settings className="w-5 h-5" />
-              系统配置
-            </TabsTrigger>
             <TabsTrigger value="cloud" className="ios-tab-trigger">
               <Cloud className="w-5 h-5" />
               同步中心
@@ -698,6 +724,7 @@ function App() {
                   onUpdateRecord={(recordId, field, value) => currentClass && updateRecordField(currentClass.id, recordId, field, value)}
                   onCreateRecord={(studentName, record) => currentClass && saveRecord(currentClass.id, { ...record, studentName })}
                   onDeleteRecord={handleDeleteRecord}
+                  onClearRecord={handleClearRecord}
                   onDeleteStudentRecords={handleDeleteStudentRecords}
                   onAddStudent={handleAddStudent}
                   onRemoveStudent={handleRemoveStudent}
@@ -740,6 +767,48 @@ function App() {
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
             />
+
+            {/* 生成设置：数据可视化 / 表格字段 / 公示样式（原「系统配置」并入此处） */}
+            <div className="pt-2">
+              <div className="flex items-baseline gap-2 mb-1">
+                <h2 className="text-lg font-semibold text-[color:var(--ink)]">生成设置</h2>
+                <span className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</span>
+              </div>
+              <Tabs defaultValue="visualization" className="space-y-4">
+                <TabsList className="grid w-full max-w-2xl grid-cols-3">
+                  <TabsTrigger value="visualization" className="gap-1.5">
+                    <BarChart3 className="w-4 h-4" />数据可视化
+                  </TabsTrigger>
+                  <TabsTrigger value="fields" className="gap-1.5">
+                    <Columns3 className="w-4 h-4" />表格字段
+                  </TabsTrigger>
+                  <TabsTrigger value="publicity" className="gap-1.5">
+                    <FileText className="w-4 h-4" />公示样式
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="visualization">
+                  <div className="max-w-4xl">
+                    <DisplaySettingsPanel display={displaySettings} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="fields">
+                  <div className="max-w-4xl">
+                    <ConfigPanel
+                      appConfig={appConfig}
+                      lessonConfig={currentLessonConfig}
+                      lessonNumber={currentLessonNumber}
+                      onSaveAppConfig={handleSaveAppConfig}
+                      onSaveLessonConfig={handleSaveLessonConfig}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="publicity">
+                  <div className="max-w-4xl">
+                    <PublicityStylePanel display={displaySettings} />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
           </TabsContent>
 
           {/* 反馈素材 Tab */}
@@ -781,43 +850,7 @@ function App() {
             </Suspense>
           </TabsContent>
 
-          {/* 系统配置 Tab */}
-          <TabsContent value="config" className="space-y-6">
-            <Tabs defaultValue="visualization" className="space-y-4">
-              <TabsList className="grid w-full max-w-2xl grid-cols-3">
-                <TabsTrigger value="visualization" className="gap-1.5">
-                  <BarChart3 className="w-4 h-4" />数据可视化
-                </TabsTrigger>
-                <TabsTrigger value="fields" className="gap-1.5">
-                  <Columns3 className="w-4 h-4" />表格字段
-                </TabsTrigger>
-                <TabsTrigger value="publicity" className="gap-1.5">
-                  <FileText className="w-4 h-4" />公示样式
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="visualization">
-                <div className="max-w-4xl">
-                  <DisplaySettingsPanel display={displaySettings} />
-                </div>
-              </TabsContent>
-              <TabsContent value="fields">
-                <div className="max-w-4xl">
-                  <ConfigPanel
-                    appConfig={appConfig}
-                    lessonConfig={currentLessonConfig}
-                    lessonNumber={currentLessonNumber}
-                    onSaveAppConfig={handleSaveAppConfig}
-                    onSaveLessonConfig={handleSaveLessonConfig}
-                  />
-                </div>
-              </TabsContent>
-              <TabsContent value="publicity">
-                <div className="max-w-4xl">
-                  <PublicityStylePanel display={displaySettings} />
-                </div>
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
+          {/* 系统配置已并入「反馈生成 → 生成设置」 */}
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="space-y-6">

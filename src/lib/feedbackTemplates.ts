@@ -1,5 +1,6 @@
-import type { StudentRecord, ClassStats, WeakPoint, LessonConfig } from '@/types';
+import type { StudentRecord, ClassStats, LessonConfig } from '@/types';
 import { isAbsentRecord } from '@/lib/attendance';
+import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -17,12 +18,12 @@ export function generatePersonalFeedback(
   record: StudentRecord,
   lessonConfig: LessonConfig,
   stats: ClassStats,
-  weakPoints: WeakPoint[],
   nickname: string
 ): string {
-  if (record.attendance === '请假' || record.attendance === '缺勤') {
+  if (isAbsentRecord(record)) {
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
   }
+  const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
   let template = lessonConfig.feedbackTemplate;
   
   // 构建成绩详情
@@ -45,8 +46,8 @@ export function generatePersonalFeedback(
     // 删除包含【薄弱项】的整行
     template = template.replace(/.*【薄弱项】.*\n?/g, '');
   } else {
-    // 构建薄弱项文本
-    const weakPointsText = weakPoints.map(wp => `${wp.questionTypeName}（低${Math.abs(wp.diff).toFixed(1)}分）`).join('、');
+    // 构建薄弱项文本（按板块）
+    const weakPointsText = weakPoints.map(formatCategoryWeakPoint).join('、');
     template = template.replace(/【薄弱项】/g, weakPointsText);
   }
   
@@ -96,23 +97,22 @@ export function generateFourInOne(
   record: StudentRecord,
   lessonConfig: LessonConfig,
   stats: ClassStats,
-  weakPoints: WeakPoint[],
   nickname: string,
   scenarioLabel: string,
   isNewStudent = false,
   candidateLinks: string[] = [],
   variant = 0
 ): string {
-  if (record.attendance === '请假' || record.attendance === '缺勤') {
+  if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
   }
   const v = ((variant % 3) + 3) % 3;
 
   const strong = lessonConfig.questionTypes
-    .map(qt => ({ name: qt.name, s: record.scores[qt.id] || 0, avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
-    .filter(x => x.avg > 0 && x.s - x.avg >= 5)
+    .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id] || 0, avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
+    .filter(x => x.avg > 0 && isQtStrong(x.qt, x.s, x.avg))
     .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
-  const weak = [...weakPoints].sort((a, b) => a.diff - b.diff);
+  const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
   const homeworkGood = record.homeworkStatus === '超赞完成';
   const homeworkBad = record.homeworkStatus === '未完成' || record.homeworkStatus === '没带';
   const attendBad = record.attendance === '缺勤' ? '缺勤' : record.attendance === '迟到' ? '迟到' : record.attendance === '请假' ? '请假' : '';
@@ -124,13 +124,13 @@ export function generateFourInOne(
   else praise = '课堂状态稳定，能跟上节奏';
 
   const issueParts: string[] = [];
-  if (weak.length) issueParts.push(`${weak[0].questionTypeName}还有提升空间（${weak[0].studentScore}分，低于班级平均${Math.abs(weak[0].diff).toFixed(0)}分）`);
+  if (weak.length) issueParts.push(`${weak[0].category}板块还有提升空间（得分率${Math.round(weak[0].studentRate * 100)}%，低于班级${Math.round(Math.abs(weak[0].diffRate) * 100)}个百分点）`);
   if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
   if (attendBad) issueParts.push(`本课${attendBad}`);
   const issue = issueParts.length ? issueParts.join('；') : '暂未发现明显薄弱点，继续保持';
 
   let plan: string;
-  if (weak.length) plan = `课后针对${weak[0].questionTypeName}做同类练习巩固，把错题整理进错题本并试着讲一遍`;
+  if (weak.length) plan = `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做同类练习巩固，把错题整理进错题本并试着讲一遍`;
   else if (homeworkBad) plan = '今晚把本次作业补齐并订正，下次课前提交';
   else if (attendBad) plan = '课后回看本讲回放和笔记，补齐落下的内容';
   else plan = '保持当前节奏，按课后任务继续巩固即可';

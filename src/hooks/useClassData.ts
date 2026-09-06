@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { 
-  Class, 
-  StudentRecord, 
+import type {
+  Class,
+  StudentRecord,
   QuestionType,
   LessonConfig,
   AppConfig,
   SchoolScore,
   ClassStats,
-  WeakPoint
 } from '@/types';
 import * as XLSX from 'xlsx';
 import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord } from '@/lib/attendance';
+import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
 
 // 生成唯一ID
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -259,33 +259,16 @@ export function useClassData() {
     return { maxScore, minScore, avgScore, avgScores };
   }, []);
 
-  // 计算学生薄弱项
-  const calculateWeakPoints = useCallback((record: StudentRecord, questionTypes: QuestionType[]): WeakPoint[] => {
+  // 计算学生薄弱项（按板块聚合，得分率口径）
+  const calculateWeakPoints = useCallback((record: StudentRecord, questionTypes: QuestionType[]): CategoryWeakPoint[] => {
     if (!currentClass) return [];
-    
+
     const lessonRecords = currentClass.records.filter(
       r => r.lessonNumber === record.lessonNumber
     );
     const stats = calculateClassStats(lessonRecords, questionTypes);
-    
-    const weakPoints: WeakPoint[] = [];
-    questionTypes.forEach(qt => {
-      const studentScore = record.scores[qt.id] || 0;
-      const classAvgScore = stats.avgScores[qt.id] || 0;
-      const diff = studentScore - classAvgScore;
-      
-      if (diff < -5) {
-        weakPoints.push({
-          questionTypeId: qt.id,
-          questionTypeName: qt.name,
-          studentScore,
-          classAvgScore,
-          diff
-        });
-      }
-    });
 
-    return weakPoints.sort((a, b) => a.diff - b.diff);
+    return computeCategoryWeakPoints(record, questionTypes, stats.avgScores);
   }, [currentClass, calculateClassStats]);
 
   // 创建新班级
@@ -536,6 +519,41 @@ export function useClassData() {
         records: prev[classId].records.filter(r => r.id !== recordId)
       }
     }));
+  }, []);
+
+  // 清空某条记录的全部内容（保留考勤/学习轨迹与学生与记录本身）——服务于「请假生什么都不用记」
+  const clearRecordContent = useCallback((classId: string, recordId: string) => {
+    setClasses(prev => {
+      const classData = prev[classId];
+      if (!classData) return prev;
+      const idx = classData.records.findIndex(r => r.id === recordId);
+      if (idx < 0) return prev;
+
+      const newRecords = [...classData.records];
+      newRecords[idx] = {
+        ...newRecords[idx],
+        scores: {},
+        customValues: {},
+        homeworkStatus: '',
+        listeningStatus: '',
+        listeningScore: 0,
+        note: '',
+        adjustReason: '',
+        totalScore: 0,
+        correctRate: 0,
+      };
+
+      // 重算该课次排名
+      const lesson = newRecords[idx].lessonNumber;
+      const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
+      const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
+      sorted.forEach((r, i) => {
+        const pos = newRecords.findIndex(nr => nr.id === r.id);
+        if (pos >= 0) newRecords[pos] = { ...newRecords[pos], rank: i + 1 };
+      });
+
+      return { ...prev, [classId]: { ...classData, records: newRecords } };
+    });
   }, []);
 
   // 恢复被删除的单条记录（保留原 id，用于删除撤销）
@@ -866,6 +884,7 @@ export function useClassData() {
     saveRecord,
     updateRecordField,
     deleteRecord,
+    clearRecordContent,
     restoreRecord,
     deleteLessonRecords,
     restoreRecords,

@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, UserPlus, UserMinus, Download, AlertTriangle, Copy, Check, Plus, Camera, Settings2, Zap, X, BarChart3 } from 'lucide-react';
+import { Trash2, UserPlus, UserMinus, Download, AlertTriangle, Copy, Check, Plus, Camera, Settings2, Zap, X, BarChart3, Eraser } from 'lucide-react';
 import { copyToClipboard } from '@/lib/feedbackTemplates';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
+import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
@@ -34,6 +35,8 @@ interface StudentTableProps {
   onExportData: () => void;
   onExportExcel: () => void;
   onDeleteLessonRecords?: () => void;
+  /** 清空某条记录的全部内容（保留考勤/学习轨迹），适合请假生 */
+  onClearRecord?: (recordId: string) => void;
   /** 返回当前课次的学情公示 HTML（用于生成图片） */
   getPublicityHTML: () => string;
   onViewStudentAnalysis: (studentName: string) => void;
@@ -125,12 +128,14 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, onDeleteLessonRecords, getPublicityHTML, onViewStudentAnalysis, onSaveLessonConfig
+  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onSaveLessonConfig
 }: StudentTableProps) {
   const [newStudentName, setNewStudentName] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
+  // 「仅显示已选」学习轨迹模式下，临时展开某行以添加季度
+  const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [copiedStudent, setCopiedStudent] = useState<string | null>(null);
   const [showAddQuestionTypeDialog, setShowAddQuestionTypeDialog] = useState(false);
   const [newQuestionType, setNewQuestionType] = useState({ name: '', fullScore: 100 });
@@ -211,16 +216,9 @@ export function StudentTable({
     return records.find(r => r.studentName === studentName && r.lessonNumber === lessonNumber);
   };
 
-  const getWeakPoints = (record: StudentRecord): { name: string; diff: number }[] => {
-    const weakPoints: { name: string; diff: number }[] = [];
-    lessonConfig.questionTypes.forEach(qt => {
-      const studentScore = record.scores[qt.id] || 0;
-      const avgScore = stats.avgScores[qt.id] || 0;
-      const diff = studentScore - avgScore;
-      if (diff < -5) weakPoints.push({ name: qt.name, diff });
-    });
-    return weakPoints.sort((a, b) => a.diff - b.diff);
-  };
+  // 薄弱项（按板块、得分率口径）
+  const getWeakPoints = (record: StudentRecord) =>
+    computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
 
   const handleSeasonToggle = (studentName: string, season: SeasonType) => {
     const record = getStudentRecord(studentName);
@@ -313,7 +311,7 @@ export function StudentTable({
       const diffText = diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
       return `• ${qt.name}：${score}/${qt.fullScore}分（班均${avgScore.toFixed(1)}，${diffText}）`;
     }).join('\n');
-    const weakPointsText = weakPoints.length > 0 ? weakPoints.map(wp => `${wp.name}（低${Math.abs(wp.diff).toFixed(1)}分）`).join('、') : '无明显薄弱项，继续保持！';
+    const weakPointsText = weakPoints.length > 0 ? weakPoints.map(formatCategoryWeakPoint).join('、') : '无明显薄弱项，继续保持！';
     const feedback = `${nickname}家长您好！\n\n📚 第${lessonNumber}课学习反馈：\n\n🏫 考勤：${record.attendance}\n📝 作业：${record.homeworkStatus}\n🎙️ 课后任务：${record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}\n\n📊 入门测成绩：\n${scoreDetails}\n💯 总分：${record.totalScore}/${fullScore}\n📈 班级排名：第${record.rank}名\n📊 正确率：${record.correctRate}%\n\n⚠️ 薄弱项：${weakPointsText}\n\n💪 加油，继续努力！`;
     const success = await copyToClipboard(feedback);
     if (success) {
@@ -511,18 +509,18 @@ export function StudentTable({
                       </TableHead>
                       <TableHead className="w-14 text-base font-bold">排名</TableHead>
                       <TableHead className="w-20 text-base font-bold">姓名</TableHead>
-                      {col('seasons') && <TableHead className="w-36 text-base font-bold">{columnLabel('seasons')}</TableHead>}
+                      {col('seasons') && <TableHead className="w-28 text-base font-bold">{columnLabel('seasons')}</TableHead>}
                       {col('attendance') && <TableHead className="w-24 text-base font-bold">{columnLabel('attendance')}</TableHead>}
-                      {col('homework') && <TableHead className="w-28 text-base font-bold">{columnLabel('homework')}</TableHead>}
-                      {col('listening') && <TableHead className="w-32 text-base font-bold">{columnLabel('listening')}</TableHead>}
-                      {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-20 text-center text-base font-bold">{qt.name}</TableHead>)}
-                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-24 text-center text-base font-bold" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)] text-xs"> ({cf.fullScore})</span> : null}</TableHead>)}
-                      <TableHead className="w-20 text-center text-base font-bold">总分</TableHead>
-                      {col('correctRate') && <TableHead className="w-20 text-center text-base font-bold">正确率</TableHead>}
+                      {col('homework') && <TableHead className="w-24 text-base font-bold">{columnLabel('homework')}</TableHead>}
+                      {col('listening') && <TableHead className="w-28 text-base font-bold">{columnLabel('listening')}</TableHead>}
+                      {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-16 text-center text-xs font-bold whitespace-normal leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}`}>{qt.name}</TableHead>)}
+                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
+                      <TableHead className="w-16 text-center text-base font-bold">总分</TableHead>
+                      {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">正确率</TableHead>}
                       {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">{columnLabel('pass')}</TableHead>}
                       {col('weakPoints') && <TableHead className="text-base font-bold">薄弱项</TableHead>}
-                      {col('note') && <TableHead className="w-28 text-base font-bold">{columnLabel('note')}</TableHead>}
-                      {col('actions') && <TableHead className="w-28 text-center text-base font-bold">操作</TableHead>}
+                      {col('note') && <TableHead className="w-24 text-base font-bold">{columnLabel('note')}</TableHead>}
+                      {col('actions') && <TableHead className="w-44 text-center text-base font-bold">操作</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -548,11 +546,32 @@ export function StudentTable({
                           <TableCell className="font-medium cursor-pointer hover:underline text-base" style={{ color: 'var(--brand)' }} onClick={() => onViewStudentAnalysis(studentName)}>{getNickname(studentName)}</TableCell>
                           {col('seasons') && (
                           <TableCell className="text-base">
-                            <div className="flex gap-1">
-                              {seasons.map(({ value, label, className }) => {
-                                const isActive = record?.seasons?.includes(value);
-                                return <button key={value} onClick={() => handleSeasonToggle(studentName, value)} className={`season-tag ${className} ${isActive ? 'active' : 'inactive'}`} title={value}>{label}</button>;
-                              })}
+                            <div className="flex gap-1 items-center flex-wrap">
+                              {(() => {
+                                const selectedSet = new Set(record?.seasons || []);
+                                const expanded = expandedSeasons.has(studentName);
+                                const shown = settings.showAllSeasons || expanded
+                                  ? seasons
+                                  : seasons.filter(s => selectedSet.has(s.value));
+                                return (
+                                  <>
+                                    {shown.map(({ value, label, className }) => {
+                                      const isActive = selectedSet.has(value);
+                                      return <button key={value} onClick={() => handleSeasonToggle(studentName, value)} className={`season-tag ${className} ${isActive ? 'active' : 'inactive'}`} title={value}>{label}</button>;
+                                    })}
+                                    {shown.length === 0 && <span className="text-slate-300 text-sm">无</span>}
+                                    {!settings.showAllSeasons && (
+                                      <button
+                                        onClick={() => setExpandedSeasons(prev => { const n = new Set(prev); n.has(studentName) ? n.delete(studentName) : n.add(studentName); return n; })}
+                                        className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-dashed border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.08)]"
+                                        title={expanded ? '收起' : '添加季度'}
+                                      >
+                                        {expanded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </TableCell>
                           )}
@@ -593,28 +612,28 @@ export function StudentTable({
                           {col('scores') && lessonConfig.questionTypes.map(qt => {
                             const score = record?.scores?.[qt.id] || 0;
                             const avgScore = stats.avgScores[qt.id] || 0;
-                            const isWeak = score < avgScore - 5;
-                            const isStrong = score > avgScore + 5;
-                            // 数据条宽度：按占满分比例，或按与班均相对差映射到 0-100%
+                            const isWeak = isQtWeak(qt, score, avgScore);
+                            const isStrong = isQtStrong(qt, score, avgScore);
+                            // 数据条宽度：按占满分比例，或按与班均相对差映射到 0-100%（封顶，不随高分继续拉长）
                             const barPct = settings.dataBarMode === 'ratio'
-                              ? Math.min(100, qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0)
-                              : Math.max(4, Math.min(100, avgScore > 0 ? 50 + ((score - avgScore) / avgScore) * 50 : 0));
+                              ? Math.min(92, qt.fullScore > 0 ? (score / qt.fullScore) * 92 : 0)
+                              : Math.max(4, Math.min(92, avgScore > 0 ? 50 + ((score - avgScore) / avgScore) * 46 : 0));
                             const inputCls = settings.showDataBars
                               ? 'score-input'
-                              : `w-18 h-9 text-center text-base rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
+                              : `w-14 h-9 text-center text-base rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
                             return (
                               <TableCell key={qt.id} className="text-base">
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className={`score-cell w-18 h-9 rounded-lg ${settings.showDataBars ? 'border border-black/10' : ''}`}>
+                                      <span className={`score-cell w-14 h-9 rounded-lg ${settings.showDataBars ? 'border border-black/10' : ''}`}>
                                         {settings.showDataBars && score > 0 && (
                                           <span
                                             className={`score-bar ${isWeak ? 'weak' : isStrong ? 'strong' : ''}`}
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <ScoreInput value={score} max={qt.fullScore} placeholder="0" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-18 h-9 text-center text-base rounded-lg`} />
+                                        <ScoreInput value={score} max={qt.fullScore} placeholder="0" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
@@ -673,8 +692,8 @@ export function StudentTable({
                                 {weakPoints.slice(0, 2).map((wp, i) => (
                                   <TooltipProvider key={i}>
                                     <Tooltip>
-                                      <TooltipTrigger><Badge variant="destructive" className="text-sm gap-1 bg-gradient-to-r from-rose-400 to-red-500 py-1 px-2"><AlertTriangle className="w-4 h-4" />{wp.name}</Badge></TooltipTrigger>
-                                      <TooltipContent><p>低于班均 {Math.abs(wp.diff).toFixed(1)} 分</p></TooltipContent>
+                                      <TooltipTrigger><Badge variant="destructive" className="text-sm gap-1 bg-gradient-to-r from-rose-400 to-red-500 py-1 px-2"><AlertTriangle className="w-4 h-4" />{wp.category}</Badge></TooltipTrigger>
+                                      <TooltipContent><p>板块：{wp.questionTypeNames.join('、')}</p><p>得分率 {Math.round(wp.studentRate * 100)}%，低于班均 {Math.round(Math.abs(wp.diffRate) * 100)} 个百分点</p></TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
                                 ))}
@@ -698,6 +717,9 @@ export function StudentTable({
                           <TableCell className="text-base">
                             <div className="flex justify-center gap-1">
                               <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
+                              {onClearRecord && (
+                                <Button variant="ghost" size="sm" onClick={() => record && onClearRecord(record.id)} disabled={!record} className="h-9 w-9 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50" title="清空记录内容（保留考勤/学习轨迹，可撤销）"><Eraser className="w-5 h-5" /></Button>
+                              )}
                               <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-9 w-9 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50" title="删除记录"><Trash2 className="w-5 h-5" /></Button>
                               <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-9 w-9 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="移除学生"><UserMinus className="w-5 h-5" /></Button>
                             </div>

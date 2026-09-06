@@ -41,6 +41,7 @@ export function useDisplaySettings() {
         dataBarMode: 'ratio',
         showRankHeatmap: true,
         heatmapMode: 'rank',
+        showAllSeasons: true,
         hiddenColumns: [],
         exportStyle: 'gradient',
         syncIntervalSec: prev.syncIntervalSec,

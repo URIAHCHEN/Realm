@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Pencil, Eye } from 'lucide-react';
 import type { QuestionType, LessonConfig, AppConfig, PraiseTemplate } from '@/types';
+import { inferCategory } from '@/lib/weakPoints';
 
 interface ConfigPanelProps {
   appConfig: AppConfig;
@@ -371,7 +372,7 @@ export function ConfigPanel({
                           const newScore = parseInt(e.target.value) || 0;
                           setLocalLessonConfig(prev => ({
                             ...prev,
-                            questionTypes: prev.questionTypes.map((t, idx) => 
+                            questionTypes: prev.questionTypes.map((t, idx) =>
                               idx === i ? { ...t, fullScore: newScore } : t
                             )
                           }));
@@ -379,6 +380,31 @@ export function ConfigPanel({
                         className="w-20 h-8 text-sm liquid-glass-input"
                       />
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500">板块：</span>
+                      <Input
+                        list="qt-category-options"
+                        value={qt.category || ''}
+                        placeholder={inferCategory(qt)}
+                        title="留空则按题型名称自动归类"
+                        onChange={(e) => {
+                          const cat = e.target.value;
+                          setLocalLessonConfig(prev => ({
+                            ...prev,
+                            questionTypes: prev.questionTypes.map((t, idx) =>
+                              idx === i ? { ...t, category: cat } : t
+                            )
+                          }));
+                        }}
+                        className="w-24 h-8 text-sm liquid-glass-input"
+                      />
+                    </div>
+                    <datalist id="qt-category-options">
+                      {Array.from(new Set([
+                        '语法', '词汇', '阅读', '完形', '写作', '听力', '口语',
+                        ...localLessonConfig.questionTypes.map(t => inferCategory(t)),
+                      ])).map(c => <option key={c} value={c} />)}
+                    </datalist>
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleMoveQuestionType(i, 'up')}

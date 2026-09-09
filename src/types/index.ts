@@ -38,6 +38,7 @@ export interface CustomField {
 export interface ColumnLabels {
   seasons?: string;
   attendance?: string;
+  classPerformance?: string;
   homework?: string;
   listening?: string;
   note?: string;
@@ -57,6 +58,10 @@ export interface LessonConfig {
   attendanceOptions: string[];
   homeworkOptions: string[];
   listeningOptions: string[];
+  /** 课堂表现选项（固定列，层级与考勤相同；未配置时用默认选项） */
+  classPerformanceOptions?: string[];
+  /** 选项颜色标记：groupKey(attendance|homework|listening|classPerformance|cf:<fieldId>) -> 选项 -> 颜色(#rrggbb) */
+  optionColors?: { [groupKey: string]: { [option: string]: string } };
   feedbackTemplate: string;
   /** 「四个一」反馈模板；留空则使用内置默认结构（含【开场】【优秀表现】【待提升】【下一步】【素材】等占位符） */
   fourInOneTemplate?: string;
@@ -79,6 +84,8 @@ export interface StudentRecord {
   lessonNumber: number;
   seasons: SeasonType[];
   attendance: string;
+  /** 课堂表现（选项型固定列，可清空） */
+  classPerformance?: string;
   adjustReason?: string;
   homeworkStatus: string;
   listeningStatus: string;

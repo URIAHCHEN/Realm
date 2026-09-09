@@ -1,5 +1,5 @@
 import type { StudentRecord, ClassStats, LessonConfig } from '@/types';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
@@ -73,6 +73,7 @@ export function generatePersonalFeedback(
     .replace(/【学生短昵称】/g, shortNickname)
     .replace(/【课次】/g, record.lessonNumber.toString())
     .replace(/【考勤】/g, record.attendance)
+    .replace(/【课堂表现】/g, record.classPerformance || '')
     .replace(/【作业】/g, record.homeworkStatus)
     .replace(/【课后任务】|【乐听说】/g, record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus)
     .replace(/【成绩详情】/g, scoreDetails)
@@ -140,7 +141,8 @@ export function generateFourInOne(
   const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
   const homeworkGood = record.homeworkStatus === '超赞完成';
   const homeworkBad = record.homeworkStatus === '未完成' || record.homeworkStatus === '没带';
-  const attendBad = record.attendance === '缺勤' ? '缺勤' : record.attendance === '迟到' ? '迟到' : record.attendance === '请假' ? '请假' : '';
+  const attendKind = attendanceKind(record.attendance);
+  const attendBad = attendKind === 'absent' ? '缺勤' : attendKind === 'late' ? '迟到' : attendKind === 'leave' ? '请假' : '';
 
   let praise: string;
   if (strong.length) praise = `${strong[0].name}掌握得不错（${strong[0].s}/${strong[0].full}，高出班级平均${(strong[0].s - strong[0].avg).toFixed(0)}分）`;
@@ -244,9 +246,9 @@ export function generatePraise(
       praiseContent += '\n\n';
     }
     
-    // 全勤学生
+    // 全勤学生（按考勤关键词归类，忽略 emoji 后缀）
     const allPresent = records
-      .filter(r => r.attendance === '按时出勤')
+      .filter(r => attendanceKind(r.attendance) === 'onTime')
       .map(r => getNickname(r.studentName));
     
     if (allPresent.length > 0) {
@@ -301,7 +303,7 @@ export function exportToCSV(
   _lessonNumber: number
 ): string {
   const customFields = lessonConfig.customFields || [];
-  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), ...customFields.map(cf => cf.name), '总分', '正确率', '排名'];
+  const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '课堂表现', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), ...customFields.map(cf => cf.name), '总分', '正确率', '排名'];
   
   let csv = headers.join(',') + '\n';
   
@@ -311,6 +313,7 @@ export function exportToCSV(
       `第${record.lessonNumber}课`,
       record.seasons.join(''),
       record.attendance,
+      record.classPerformance || '',
       record.homeworkStatus,
       record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus,
       ...lessonConfig.questionTypes.map(qt => record.scores[qt.id] || 0),

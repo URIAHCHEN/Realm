@@ -53,6 +53,7 @@ export async function exportToExcel(data: ExportData, _className: string): Promi
           '课次': `第${record.lessonNumber}课`,
           '学习轨迹': record.seasons.join(''),
           '考勤': record.attendance,
+          '课堂表现': record.classPerformance || '',
           '书面作业': record.homeworkStatus,
           '课后任务': record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus,
         };
@@ -143,6 +144,7 @@ export async function exportClassRosterToExcel(args: {
     studentName: string;
     seasons?: string[];
     attendance?: string;
+    classPerformance?: string;
     homeworkStatus?: string;
     listeningStatus?: string;
     listeningScore?: number;
@@ -180,6 +182,7 @@ export async function exportClassRosterToExcel(args: {
     if (r) {
       row['学习轨迹'] = (r.seasons || []).join('');
       row['考勤'] = r.attendance || '';
+      row['课堂表现'] = r.classPerformance || '';
       row['书面作业'] = r.homeworkStatus || '';
       row['课后任务'] = r.listeningStatus === '具体分数' ? `${r.listeningScore ?? 0}分` : (r.listeningStatus || '');
       questionTypes.forEach(qt => {

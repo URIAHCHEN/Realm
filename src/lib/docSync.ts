@@ -11,7 +11,7 @@ export function buildTSV(
   getNickname: (name: string) => string
 ): string {
   const sorted = [...records].sort((a, b) => (a.rank || 999) - (b.rank || 999));
-  const header = ['排名', '姓名', '学习轨迹', '考勤', '书面作业', '课后任务',
+  const header = ['排名', '姓名', '学习轨迹', '考勤', '课堂表现', '书面作业', '课后任务',
     ...questionTypes.map(qt => qt.name), '总分', '正确率', '薄弱项'];
   const rows = sorted.map(r => {
     return [
@@ -19,6 +19,7 @@ export function buildTSV(
       getNickname(r.studentName),
       (r.seasons || []).join(''),
       r.attendance,
+      r.classPerformance || '',
       r.homeworkStatus,
       r.listeningStatus === '具体分数' ? String(r.listeningScore) : r.listeningStatus,
       ...questionTypes.map(qt => String(r.scores[qt.id] || 0)),
@@ -51,6 +52,7 @@ export function buildMarkdown(
 export interface ParsedRow {
   studentName: string;
   attendance?: string;
+  classPerformance?: string;
   homeworkStatus?: string;
   listeningStatus?: string;
   listeningScore?: number;
@@ -111,6 +113,7 @@ export function parseClipboardTable(
     headers.findIndex(h => names.some(n => h === n || h.includes(n)));
 
   const attIdx = findIdx(['考勤']);
+  const cpIdx = findIdx(['课堂表现']);
   const hwIdx = findIdx(['作业']);
   const listenIdx = findIdx(['课后任务', '乐听说']);
   const listenScoreIdx = findIdx(['课后任务分数', '乐听说分数']);
@@ -135,6 +138,7 @@ export function parseClipboardTable(
     const row: ParsedRow = { studentName: name, scores: {} };
 
     if (attIdx >= 0) row.attendance = onlyCn(cells[attIdx] || '') || undefined;
+    if (cpIdx >= 0) row.classPerformance = (cells[cpIdx] || '').trim() || undefined;
     if (seasonIdx >= 0) {
       const s = cells[seasonIdx] || '';
       const found = ([...s].filter(ch => '暑秋寒春'.includes(ch)) as SeasonType[]);
@@ -175,7 +179,7 @@ export function parseClipboardTable(
   });
 
   // 未匹配、但数据多为数值的列 → 候选新题型
-  const usedIdx = new Set<number>([nameIdx, attIdx, hwIdx, listenIdx, listenScoreIdx, totalIdx, seasonIdx, lessonIdx, ...qtIdx.map(q => q.idx)]);
+  const usedIdx = new Set<number>([nameIdx, attIdx, cpIdx, hwIdx, listenIdx, listenScoreIdx, totalIdx, seasonIdx, lessonIdx, ...qtIdx.map(q => q.idx)]);
   const rawHeaders = splitLine(lines[0]);
   const dataLines = lines.slice(1);
   const unmatchedColumns: { name: string; suggestedFullScore: number }[] = [];

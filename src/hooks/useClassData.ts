@@ -22,6 +22,9 @@ const defaultQuestionTypes: QuestionType[] = [
   { id: 'note', name: '笔记默写', fullScore: 100, order: 3 }
 ];
 
+// 课堂表现默认选项（固定列，层级与考勤相同；旧课次配置未含该字段时兜底）
+export const DEFAULT_CLASS_PERFORMANCE_OPTIONS = ['专注高效', '积极互动', '状态一般', '需提醒'];
+
 // 默认配置
 const defaultAppConfig: AppConfig = {
   defaultAttendanceOptions: ['按时出勤', '迟到', '缺勤', '请假', '调课'],
@@ -61,11 +64,20 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   attendanceOptions: [...appConfig.defaultAttendanceOptions],
   homeworkOptions: [...appConfig.defaultHomeworkOptions],
   listeningOptions: [...appConfig.defaultListeningOptions],
+  classPerformanceOptions: [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
   feedbackTemplate: appConfig.defaultFeedbackTemplate,
   praiseTemplate: appConfig.defaultPraiseTemplate,
   homeworkText: '1️⃣课后任务\n2️⃣错题本（按照要求整理）\n3️⃣开心过年',
   customFields: [],
   passThreshold: 80
+});
+
+// 旧课次配置缺少「课堂表现」选项时兜底，保证列与配置面板始终可用
+const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
+  ...cfg,
+  classPerformanceOptions: (cfg.classPerformanceOptions && cfg.classPerformanceOptions.length)
+    ? cfg.classPerformanceOptions
+    : [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
 });
 
 // 总分/正确率统一口径：题型分数 + 计入总分的分数型自定义列
@@ -194,12 +206,12 @@ export function useClassData() {
     if (!classData) return getDefaultLessonConfig(appConfig);
     
     const config = classData.lessonConfigs[lessonNumber.toString()];
-    if (config) return config;
+    if (config) return withClassPerformanceDefaults(config);
     
     // 如果没有课次配置，尝试使用上一节课的配置
     const prevLesson = lessonNumber - 1;
     if (prevLesson > 0 && classData.lessonConfigs[prevLesson.toString()]) {
-      return classData.lessonConfigs[prevLesson.toString()];
+      return withClassPerformanceDefaults(classData.lessonConfigs[prevLesson.toString()]);
     }
     
     return getDefaultLessonConfig(appConfig);
@@ -551,6 +563,7 @@ export function useClassData() {
         homeworkStatus: '',
         listeningStatus: '',
         listeningScore: 0,
+        classPerformance: '',
         note: '',
         adjustReason: '',
         totalScore: 0,
@@ -569,6 +582,52 @@ export function useClassData() {
       return { ...prev, [classId]: { ...classData, records: newRecords } };
     });
   }, []);
+
+  // 新增课次时自动继承最近一次历史课的学习轨迹（seasons）：
+  // 有轨迹的学生在新课次建空记录并带入轨迹；已有记录但轨迹为空则回填。其余内容留空。
+  const inheritPreviousSeasons = useCallback((classId: string, newLessonNumber: number): { fromLesson: number; count: number } | null => {
+    const classData = classes[classId];
+    if (!classData) return null;
+    const prevLesson = [...new Set(classData.records.map(r => r.lessonNumber))]
+      .filter(n => n < newLessonNumber)
+      .sort((a, b) => b - a)[0];
+    if (prevLesson == null) return null;
+    const sources = classData.records.filter(r => r.lessonNumber === prevLesson && (r.seasons?.length ?? 0) > 0);
+    if (sources.length === 0) return null;
+
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      const newRecords = [...cd.records];
+      sources.forEach(src => {
+        const idx = newRecords.findIndex(r => r.studentName === src.studentName && r.lessonNumber === newLessonNumber);
+        if (idx >= 0) {
+          if (!(newRecords[idx].seasons?.length)) newRecords[idx] = { ...newRecords[idx], seasons: [...src.seasons] };
+          return;
+        }
+        newRecords.push({
+          ...src,
+          id: 'rec' + generateId(),
+          lessonNumber: newLessonNumber,
+          seasons: [...src.seasons],
+          attendance: '',
+          adjustReason: '',
+          homeworkStatus: '',
+          listeningStatus: '',
+          listeningScore: 0,
+          scores: {},
+          customValues: {},
+          totalScore: 0,
+          correctRate: 0,
+          rank: 0,
+          date: new Date().toISOString().slice(0, 10),
+          note: ''
+        });
+      });
+      return { ...prev, [classId]: { ...cd, records: newRecords } };
+    });
+    return { fromLesson: prevLesson, count: sources.length };
+  }, [classes]);
 
   // 恢复被删除的单条记录（保留原 id，用于删除撤销）
   const restoreRecord = useCallback((classId: string, record: StudentRecord) => {
@@ -901,6 +960,7 @@ export function useClassData() {
     updateRecordField,
     deleteRecord,
     clearRecordContent,
+    inheritPreviousSeasons,
     restoreRecord,
     deleteLessonRecords,
     restoreRecords,

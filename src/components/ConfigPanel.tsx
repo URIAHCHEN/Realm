@@ -24,6 +24,7 @@ interface ConfigPanelProps {
 const DEFAULT_COLUMN_LABELS: Record<string, string> = {
   seasons: '学习轨迹',
   attendance: '考勤',
+  classPerformance: '课堂表现',
   homework: '书面作业',
   listening: '课后任务',
   note: '备注',
@@ -31,20 +32,71 @@ const DEFAULT_COLUMN_LABELS: Record<string, string> = {
 };
 
 // 可自定义标题的列定义（随学情表新增列在此同步）
-const COLUMN_DEFS: { key: 'seasons' | 'attendance' | 'homework' | 'listening' | 'note' | 'pass'; label: string }[] = [
+const COLUMN_DEFS: { key: 'seasons' | 'attendance' | 'classPerformance' | 'homework' | 'listening' | 'note' | 'pass'; label: string }[] = [
   { key: 'seasons', label: '学习轨迹列' },
   { key: 'attendance', label: '考勤列' },
+  { key: 'classPerformance', label: '课堂表现列' },
   { key: 'homework', label: '书面作业列' },
   { key: 'listening', label: '课后任务列' },
   { key: 'note', label: '备注列' },
   { key: 'pass', label: '是否过关列' },
 ];
 
+// 选项组 → 课次配置键
+const OPTIONS_KEY = {
+  attendance: 'attendanceOptions',
+  classPerformance: 'classPerformanceOptions',
+  homework: 'homeworkOptions',
+  listening: 'listeningOptions',
+} as const;
+type OptGroup = keyof typeof OPTIONS_KEY;
+
+// 选项颜色预设
+const COLOR_PRESETS = ['#f43f5e', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#0ea5e9', '#8b5cf6', '#64748b'];
+
+/** 选项 chip：名称 + 颜色标记（点击圆点取色，✕ 清除颜色） + 删除 */
+function OptionChip({ label, color, onColor, onRemove }: {
+  label: string; color?: string; onColor: (c?: string) => void; onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100">
+      <span className="text-sm">{label}</span>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        title="设置颜色标记（学情表中该选项单元格自动标色）"
+        className="w-4 h-4 rounded-full border shrink-0"
+        style={{ background: color || 'transparent', borderColor: color || '#cbd5e1' }}
+      />
+      {open && (
+        <>
+          <span className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <span className="absolute left-0 top-8 z-40 flex gap-1 p-1.5 rounded-xl border border-violet-100 bg-white shadow-lg">
+            {COLOR_PRESETS.map(c => (
+              <button key={c} type="button" title={c}
+                onClick={() => { onColor(c); setOpen(false); }}
+                className="w-5 h-5 rounded-full border border-white shadow-inner" style={{ background: c }} />
+            ))}
+            <button type="button" title="清除颜色"
+              onClick={() => { onColor(undefined); setOpen(false); }}
+              className="w-5 h-5 rounded-full border border-slate-200 text-[10px] text-slate-400 flex items-center justify-center">✕</button>
+          </span>
+        </>
+      )}
+      <button onClick={onRemove} className="text-violet-400 hover:text-rose-500">
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </span>
+  );
+}
+
 // 可用变量列表
 const availableVariables = [  { key: '【学生昵称】', desc: '学生昵称（自定义）' },
   { key: '【学生短昵称】', desc: '学生短昵称（三字取后两字，两字取叠词）' },
   { key: '【课次】', desc: '当前课次' },
   { key: '【考勤】', desc: '考勤状态' },
+  { key: '【课堂表现】', desc: '课堂表现选项' },
   { key: '【作业】', desc: '作业状态' },
   { key: '【课后任务】', desc: '课后任务状态' },
   { key: '【成绩详情】', desc: '各题型成绩详情' },
@@ -66,7 +118,7 @@ export function ConfigPanel({
   const [localAppConfig, setLocalAppConfig] = useState<AppConfig>(appConfig);
   const [localLessonConfig, setLocalLessonConfig] = useState<LessonConfig>(lessonConfig);
   const [newOption, setNewOption] = useState('');
-  const [newOptionType, setNewOptionType] = useState<'attendance' | 'homework' | 'listening'>('attendance');
+  const [newOptionType, setNewOptionType] = useState<OptGroup>('attendance');
   const [newQuestionType, setNewQuestionType] = useState({ name: '', fullScore: 100 });
   // 表彰模板多模板管理：'default' 表示默认模板，其余为 praiseTemplates 中的 id
   const [activeTemplateId, setActiveTemplateId] = useState<string>('default');
@@ -118,34 +170,36 @@ export function ConfigPanel({
     }, 0);
   };
 
-  // 添加选项
+  // 添加选项（考勤/课堂表现/作业/课后任务通用）
   const handleAddOption = () => {
     if (!newOption.trim()) return;
-    
-    const key = newOptionType === 'attendance' ? 'attendanceOptions' 
-      : newOptionType === 'homework' ? 'homeworkOptions' 
-      : 'listeningOptions';
-    
-    if (localLessonConfig[key].includes(newOption.trim())) return;
-    
+    const key = OPTIONS_KEY[newOptionType];
+    if ((localLessonConfig[key] || []).includes(newOption.trim())) return;
     setLocalLessonConfig(prev => ({
       ...prev,
-      [key]: [...prev[key], newOption.trim()]
+      [key]: [...(prev[key] || []), newOption.trim()]
     }));
     setNewOption('');
   };
 
   // 移除选项
-  const handleRemoveOption = (type: 'attendance' | 'homework' | 'listening', index: number) => {
-    const key = type === 'attendance' ? 'attendanceOptions' 
-      : type === 'homework' ? 'homeworkOptions' 
-      : 'listeningOptions';
-    
+  const handleRemoveOption = (type: OptGroup, index: number) => {
+    const key = OPTIONS_KEY[type];
     setLocalLessonConfig(prev => ({
       ...prev,
-      [key]: prev[key].filter((_, i) => i !== index)
+      [key]: (prev[key] || []).filter((_, i) => i !== index)
     }));
   };
+
+  // 选项颜色标记：group 可为 attendance/classPerformance/homework/listening 或 cf:<fieldId>
+  const updateOptionColor = (group: string, option: string, color?: string) => {
+    setLocalLessonConfig(prev => {
+      const g = { ...(prev.optionColors?.[group] || {}) };
+      if (color) g[option] = color; else delete g[option];
+      return { ...prev, optionColors: { ...(prev.optionColors || {}), [group]: g } };
+    });
+  };
+  const colorOf = (group: string, option: string) => localLessonConfig.optionColors?.[group]?.[option];
 
   // 添加题型
   const handleAddQuestionType = () => {
@@ -456,7 +510,7 @@ export function ConfigPanel({
             {/* 自定义列 */}
             <div>
               <Label className="text-base font-medium text-[color:var(--brand)]">自定义列</Label>
-              <p className="text-xs text-[color:var(--ink-4)] mt-1 mb-2">为学情表增加可自定义的列（如“课堂表现”）：选项型可下拉、分数型可录入分值；配置后可在「反馈模板」里以【字段名】引用，或在反馈中自动带上。</p>
+              <p className="text-xs text-[color:var(--ink-4)] mt-1 mb-2">为学情表增加可自定义的列（如“作业质量”）：选项型可下拉、分数型可录入分值；配置后可在「反馈模板」里以【字段名】引用，或在反馈中自动带上。</p>
               <div className="space-y-2 mt-2">
                 {(localLessonConfig.customFields || []).map((cf, i) => (
                   <div key={cf.id} className="flex flex-wrap items-center gap-2 bg-white/70 p-3 rounded-xl border border-[rgb(var(--brand-rgb)/0.22)]">
@@ -492,6 +546,19 @@ export function ConfigPanel({
                         />
                       </div>
                     )}
+                    {cf.kind === 'select' && (
+                      <div className="w-full flex flex-wrap gap-1.5 pl-6 pt-1">
+                        {(cf.options || []).map(op => (
+                          <OptionChip
+                            key={`${cf.id}-${op}`}
+                            label={op}
+                            color={colorOf(`cf:${cf.id}`, op)}
+                            onColor={c => updateOptionColor(`cf:${cf.id}`, op, c)}
+                            onRemove={() => updateCustomField(i, { options: (cf.options || []).filter(o => o !== op) })}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {cf.kind === 'number' && (
                       <label className="flex items-center gap-1.5 text-xs text-[color:var(--ink-2)] cursor-pointer select-none">
                         <input
@@ -513,7 +580,7 @@ export function ConfigPanel({
               </div>
               <div className="flex gap-2 mt-3">
                 <Input
-                  placeholder="列名称，如 课堂表现"
+                  placeholder="列名称，如 作业质量"
                   value={newCustomField.name}
                   onChange={(e) => setNewCustomField(prev => ({ ...prev, name: e.target.value }))}
                   className="flex-1 liquid-glass-input"
@@ -579,68 +646,42 @@ export function ConfigPanel({
 
             <Separator className="bg-violet-100" />
 
-            {/* 考勤选项 */}
-            <div>
-              <Label className="text-base font-medium text-violet-700">考勤选项</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {localLessonConfig.attendanceOptions.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-1 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100">
-                    <span className="text-sm">{opt}</span>
-                    <button
-                      onClick={() => handleRemoveOption('attendance', i)}
-                      className="text-violet-400 hover:text-rose-500"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+            {/* 选项组（考勤/课堂表现/作业/课后任务）：支持颜色标记 */}
+            {([
+              { type: 'attendance' as OptGroup, label: '考勤选项', hint: '点击色点可为选项设置颜色，学情表单元格将自动标色' },
+              { type: 'classPerformance' as OptGroup, label: '课堂表现选项', hint: '课堂表现为固定列（层级同考勤）；导出公示图片时不包含该列' },
+              { type: 'homework' as OptGroup, label: '作业选项', hint: '' },
+              { type: 'listening' as OptGroup, label: '课后任务选项', hint: '' },
+            ]).map(({ type, label, hint }) => (
+              <div key={type}>
+                <Label className="text-base font-medium text-violet-700">{label}</Label>
+                {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(localLessonConfig[OPTIONS_KEY[type]] || []).map((opt, i) => (
+                    <OptionChip
+                      key={`${type}-${opt}-${i}`}
+                      label={opt}
+                      color={colorOf(type, opt)}
+                      onColor={c => updateOptionColor(type, opt, c)}
+                      onRemove={() => handleRemoveOption(type, i)}
+                    />
+                  ))}
+                  {(localLessonConfig[OPTIONS_KEY[type]] || []).length === 0 && (
+                    <span className="text-xs text-slate-400">暂无选项，可在下方添加</span>
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* 作业选项 */}
-            <div>
-              <Label className="text-base font-medium text-violet-700">作业选项</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {localLessonConfig.homeworkOptions.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-1 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100">
-                    <span className="text-sm">{opt}</span>
-                    <button
-                      onClick={() => handleRemoveOption('homework', i)}
-                      className="text-violet-400 hover:text-rose-500"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 课后任务选项 */}
-            <div>
-              <Label className="text-base font-medium text-violet-700">课后任务选项</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {localLessonConfig.listeningOptions.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-1 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100">
-                    <span className="text-sm">{opt}</span>
-                    <button
-                      onClick={() => handleRemoveOption('listening', i)}
-                      className="text-violet-400 hover:text-rose-500"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
 
             {/* 添加新选项 */}
             <div className="flex gap-2">
               <select
                 value={newOptionType}
-                onChange={(e) => setNewOptionType(e.target.value as any)}
+                onChange={(e) => setNewOptionType(e.target.value as OptGroup)}
                 className="px-3 py-2 border rounded-xl text-sm liquid-glass-input"
               >
                 <option value="attendance">考勤</option>
+                <option value="classPerformance">课堂表现</option>
                 <option value="homework">作业</option>
                 <option value="listening">课后任务</option>
               </select>

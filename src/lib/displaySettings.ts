@@ -23,6 +23,7 @@ export const COLUMN_LABELS: { id: string; label: string; always?: boolean }[] = 
   { id: 'name', label: '姓名', always: true },
   { id: 'seasons', label: '学习轨迹' },
   { id: 'attendance', label: '考勤' },
+  { id: 'classPerformance', label: '课堂表现' },
   { id: 'homework', label: '书面作业' },
   { id: 'listening', label: '课后任务' },
   { id: 'note', label: '备注' },

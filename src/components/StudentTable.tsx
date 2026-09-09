@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,8 @@ import { copyToClipboard } from '@/lib/feedbackTemplates';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
+import { attendanceKind } from '@/lib/attendance';
+import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
 
@@ -53,11 +55,16 @@ const seasons: { value: SeasonType; label: string; className: string }[] = [
 const DEFAULT_COLUMN_LABELS: Record<string, string> = {
   seasons: '学习轨迹',
   attendance: '考勤',
+  classPerformance: '课堂表现',
   homework: '书面作业',
   listening: '课后任务',
   note: '备注',
   pass: '是否过关',
 };
+
+// Radix Select 不允许空字符串选项值：用哨兵值实现「清空为无」
+const CLEAR_VALUE = '__clear__';
+const CLEAR_ITEM = <SelectItem value={CLEAR_VALUE} className="text-[color:var(--ink-4)] italic">（清空）</SelectItem>;
 
 // 分数色阶档位：按百分比分档
 const heatClass = (pct: number): string => {
@@ -68,20 +75,31 @@ const heatClass = (pct: number): string => {
 };
 
 const getAttendanceColor = (attendance: string) => {
-  if (attendance === '按时出勤') return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
-  if (attendance === '迟到') return 'text-amber-600 bg-amber-50/80 border-amber-200';
-  if (attendance === '缺勤') return 'text-rose-600 bg-rose-50/80 border-rose-200';
-  if (attendance === '请假') return 'text-blue-600 bg-blue-50/80 border-blue-200';
-  if (attendance === '调课') return 'text-cyan-600 bg-cyan-50/80 border-cyan-200';
-  return '';
+  switch (attendanceKind(attendance)) {
+    case 'onTime': return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
+    case 'late': return 'text-amber-600 bg-amber-50/80 border-amber-200';
+    case 'absent': return 'text-rose-600 bg-rose-50/80 border-rose-200';
+    case 'leave': return 'text-blue-600 bg-blue-50/80 border-blue-200';
+    case 'transfer': return 'text-cyan-600 bg-cyan-50/80 border-cyan-200';
+    default: return '';
+  }
 };
 
 const getHomeworkColor = (status: string) => {
-  if (status === '超赞完成') return 'text-amber-600 bg-amber-50/80 border-amber-200';
-  if (status === '圆满完成') return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
-  if (status === '未完成' || status === '没带') return 'text-rose-600 bg-rose-50/80 border-rose-200';
+  if (!status) return '';
+  if (status.includes('超赞')) return 'text-amber-600 bg-amber-50/80 border-amber-200';
+  if (status.includes('圆满') || status.includes('完成')) return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
+  if (status.includes('未完成') || status.includes('没带')) return 'text-rose-600 bg-rose-50/80 border-rose-200';
   return '';
 };
+
+// 选项颜色 → 单元格样式（浅色文字提亮为深灰保证可读）
+function optionCellStyle(hex: string | undefined): CSSProperties | undefined {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return undefined;
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const text = (0.299 * r + 0.587 * g + 0.114 * b) > 168 ? '#334155' : hex;
+  return { background: hex + '24', color: text, borderColor: hex + '66' };
+}
 
 /** 成绩输入：自持文本以允许输入小数；提交为 number（支持 8.5 这类分值） */
 function ScoreInput({ value, max, onCommit, className, placeholder }: {
@@ -249,6 +267,18 @@ export function StudentTable({
     else onCreateRecord(studentName, { studentName, lessonNumber, attendance: value });
   };
 
+  const handleClassPerformanceChange = (studentName: string, value: string) => {
+    const record = getStudentRecord(studentName);
+    if (record) onUpdateRecord(record.id, 'classPerformance', value);
+    else onCreateRecord(studentName, { studentName, lessonNumber, classPerformance: value });
+  };
+
+  // 选项颜色标记：按组（attendance/classPerformance/homework/listening/cf:<id>）+ 选项文本取色
+  const optStyleOf = (group: string, value: string | undefined) =>
+    optionCellStyle(value ? lessonConfig.optionColors?.[group]?.[value] : undefined);
+  // Select 哨兵值 → 空串（取消选择）
+  const unwrapClear = (v: string) => (v === CLEAR_VALUE ? '' : v);
+
   const handleHomeworkChange = (studentName: string, value: string) => {
     const record = getStudentRecord(studentName);
     if (record) onUpdateRecord(record.id, 'homeworkStatus', value);
@@ -327,7 +357,8 @@ export function StudentTable({
       return `• ${qt.name}：${score}/${qt.fullScore}分（班均${avgScore.toFixed(1)}，${diffText}）`;
     }).join('\n');
     const weakPointsText = weakPoints.length > 0 ? weakPoints.map(formatCategoryWeakPoint).join('、') : '无明显薄弱项，继续保持！';
-    const feedback = `${nickname}家长您好！\n\n📚 第${lessonNumber}课学习反馈：\n\n🏫 考勤：${record.attendance}\n📝 作业：${record.homeworkStatus}\n🎙️ 课后任务：${record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}\n\n📊 入门测成绩：\n${scoreDetails}\n💯 总分：${record.totalScore}/${fullScore}\n📈 班级排名：第${record.rank}名\n📊 正确率：${record.correctRate}%\n\n⚠️ 薄弱项：${weakPointsText}\n\n💪 加油，继续努力！`;
+    const cpLine = record.classPerformance ? `🙋 课堂表现：${record.classPerformance}\n` : '';
+    const feedback = `${nickname}家长您好！\n\n📚 第${lessonNumber}课学习反馈：\n\n🏫 考勤：${record.attendance}\n${cpLine}📝 作业：${record.homeworkStatus}\n🎙️ 课后任务：${record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}\n\n📊 入门测成绩：\n${scoreDetails}\n💯 总分：${record.totalScore}/${fullScore}\n📈 班级排名：第${record.rank}名\n📊 正确率：${record.correctRate}%\n\n⚠️ 薄弱项：${weakPointsText}\n\n💪 加油，继续努力！`;
     const success = await copyToClipboard(feedback);
     if (success) {
       setCopiedStudent(studentName);
@@ -528,6 +559,7 @@ export function StudentTable({
                       <TableHead className="w-20 text-base font-bold">姓名</TableHead>
                       {col('seasons') && <TableHead className="w-28 text-base font-bold">{columnLabel('seasons')}</TableHead>}
                       {col('attendance') && <TableHead className="w-24 text-base font-bold">{columnLabel('attendance')}</TableHead>}
+                      {col('classPerformance') && <TableHead className="w-24 text-base font-bold">{columnLabel('classPerformance')}</TableHead>}
                       {col('homework') && <TableHead className="w-24 text-base font-bold">{columnLabel('homework')}</TableHead>}
                       {col('listening') && <TableHead className="w-28 text-base font-bold">{columnLabel('listening')}</TableHead>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-16 text-center text-xs font-bold whitespace-normal leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}`}>{qt.name}</TableHead>)}
@@ -595,28 +627,37 @@ export function StudentTable({
                           {col('attendance') && (
                           <TableCell className="text-base">
                             <div className="space-y-1">
-                              <Select value={record?.attendance || '按时出勤'} onValueChange={(value) => handleAttendanceChange(studentName, value)}>
-                                <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${getAttendanceColor(record?.attendance || '按时出勤')}`}><SelectValue /></SelectTrigger>
-                                <SelectContent>{lessonConfig.attendanceOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                              <Select value={record?.attendance || ''} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
+                                <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.attendance ? getAttendanceColor(record.attendance) : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>{CLEAR_ITEM}{lessonConfig.attendanceOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                               </Select>
-                              {record?.attendance === '调课' && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
+                              {attendanceKind(record?.attendance) === 'transfer' && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
                             </div>
+                          </TableCell>
+                          )}
+                          {col('classPerformance') && (
+                          <TableCell className="text-base">
+                            <Select value={record?.classPerformance || ''} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
+                              <SelectTrigger className="w-24 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{CLEAR_ITEM}{(lessonConfig.classPerformanceOptions?.length ? lessonConfig.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS).map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                            </Select>
                           </TableCell>
                           )}
                           {col('homework') && (
                           <TableCell className="text-base">
-                            <Select value={record?.homeworkStatus || '圆满完成'} onValueChange={(value) => handleHomeworkChange(studentName, value)}>
-                              <SelectTrigger className={`w-28 h-9 text-sm border rounded-lg ${getHomeworkColor(record?.homeworkStatus || '圆满完成')}`}><SelectValue /></SelectTrigger>
-                              <SelectContent>{lessonConfig.homeworkOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                            <Select value={record?.homeworkStatus || ''} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
+                              <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.homeworkStatus ? getHomeworkColor(record.homeworkStatus) : ''}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{CLEAR_ITEM}{lessonConfig.homeworkOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                             </Select>
                           </TableCell>
                           )}
                           {col('listening') && (
                           <TableCell className="text-base">
                             <div className="flex items-center gap-1">
-                              <Select value={record?.listeningStatus || '具体分数'} onValueChange={(value) => handleListeningChange(studentName, value)}>
-                                <SelectTrigger className="w-28 h-9 text-sm border rounded-lg bg-white/80"><SelectValue /></SelectTrigger>
+                              <Select value={record?.listeningStatus || ''} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
+                                <SelectTrigger className="w-28 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
+                                  {CLEAR_ITEM}
                                   <SelectItem value="未完成">未完成</SelectItem>
                                   <SelectItem value="未加入">未加入</SelectItem>
                                   <SelectItem value="具体分数">具体分数</SelectItem>
@@ -670,9 +711,13 @@ export function StudentTable({
                                   className="w-16 h-9 text-center text-sm rounded-lg mx-auto"
                                 />
                               ) : (
-                                <Select value={String(record?.customValues?.[cf.id] ?? '')} onValueChange={(v) => handleCustomChange(studentName, cf.id, v)}>
-                                  <SelectTrigger className="min-w-20 h-9 text-sm rounded-lg bg-white/80"><SelectValue placeholder="—" /></SelectTrigger>
+                                <Select
+                                  value={String(record?.customValues?.[cf.id] ?? '')}
+                                  onValueChange={(v) => handleCustomChange(studentName, cf.id, unwrapClear(v))}
+                                >
+                                  <SelectTrigger className="min-w-20 h-9 text-sm rounded-lg bg-white/80" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
                                   <SelectContent>
+                                    {CLEAR_ITEM}
                                     {(cf.options || []).map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
@@ -756,6 +801,7 @@ export function StudentTable({
                       </TableCell>
                       {col('seasons') && <TableCell></TableCell>}
                       {col('attendance') && <TableCell></TableCell>}
+                      {col('classPerformance') && <TableCell></TableCell>}
                       {col('homework') && <TableCell></TableCell>}
                       {col('listening') && <TableCell></TableCell>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => (

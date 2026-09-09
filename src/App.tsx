@@ -88,6 +88,7 @@ function App() {
     updateRecordField,
     deleteRecord,
     clearRecordContent,
+    inheritPreviousSeasons,
     restoreRecord,
     deleteLessonRecords,
     restoreRecords,
@@ -182,6 +183,7 @@ function App() {
         lessonNumber,
         ...(row.seasons && row.seasons.length ? { seasons: row.seasons } : {}),
         ...(att ? { attendance: att } : {}),
+        ...(row.classPerformance ? { classPerformance: row.classPerformance } : {}),
         ...(row.homeworkStatus ? { homeworkStatus: row.homeworkStatus } : {}),
         ...(row.listeningStatus ? { listeningStatus: row.listeningStatus } : {}),
         ...(row.listeningScore !== undefined ? { listeningScore: row.listeningScore } : {}),
@@ -278,14 +280,21 @@ function App() {
     toast.success(`第${currentLessonNumber}课已保存！`);
   };
 
-  // 处理增加新课次
+  // 处理增加新课次：自动带入上一课的学习轨迹
   const handleAddLesson = (lesson: number) => {
     if (allLessons.includes(lesson)) {
       toast.error(`第${lesson}课已存在`);
       return;
     }
     setCurrentLessonNumber(lesson);
-    toast.success(`已切换到第${lesson}课`);
+    const inherited = currentClassId ? inheritPreviousSeasons(currentClassId, lesson) : null;
+    if (inherited) {
+      toast.success(`已切换到第${lesson}课`, {
+        description: `已自动带入第${inherited.fromLesson}课的学习轨迹（${inherited.count} 名学员）`
+      });
+    } else {
+      toast.success(`已切换到第${lesson}课`);
+    }
   };
 
   // 处理添加学生
@@ -329,6 +338,7 @@ function App() {
       homeworkStatus: rec.homeworkStatus,
       listeningStatus: rec.listeningStatus,
       listeningScore: rec.listeningScore,
+      classPerformance: rec.classPerformance,
       note: rec.note,
       adjustReason: rec.adjustReason,
     };

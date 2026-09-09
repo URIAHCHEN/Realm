@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore, QuestionType } from '@/types';
 
+import { attendanceRateOf } from '@/lib/attendance';
+
 interface StudentAnalysisProps {
   isOpen: boolean;
   onClose: () => void;
@@ -174,7 +176,7 @@ export function StudentAnalysis({
     const prev = records[records.length - 2];
     const trend = prev ? latest.totalScore - prev.totalScore : 0;
     const fullScore = questionTypes.reduce((s, q) => s + q.fullScore, 0);
-    const attendanceRate = Math.round(records.filter(r => r.attendance === '按时出勤').length / records.length * 100);
+    const attendanceRate = attendanceRateOf(records.map(r => r.attendance));
     return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
   }, [records, questionTypes]);
 

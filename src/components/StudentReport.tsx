@@ -51,6 +51,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
+import { attendanceKind } from '@/lib/attendance';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -169,11 +170,12 @@ export function StudentReport({
       listeningScore: r.listeningScore
     }));
 
+    const studentAttKinds = studentRecords.map(r => attendanceKind(r.attendance));
     const attendanceStats = {
       total: studentRecords.length,
-      onTime: studentRecords.filter(r => r.attendance === '按时出勤').length,
-      late: studentRecords.filter(r => r.attendance === '迟到').length,
-      absent: studentRecords.filter(r => r.attendance === '缺勤').length
+      onTime: studentAttKinds.filter(k => k === 'onTime').length,
+      late: studentAttKinds.filter(k => k === 'late').length,
+      absent: studentAttKinds.filter(k => k === 'absent' || k === 'leave').length
     };
 
     const homeworkStats = {
@@ -249,14 +251,15 @@ export function StudentReport({
       .sort((a, b) => a.correctRate - b.correctRate)
       .slice(0, 3);
 
-    // 出勤概况
+    // 出勤概况（关键词归类，忽略 emoji 后缀）
+    const classAttKinds = classReportRecords.map(r => attendanceKind(r.attendance));
     const attendanceSummary = {
       total: classReportRecords.length,
-      onTime: classReportRecords.filter(r => r.attendance === '按时出勤').length,
-      late: classReportRecords.filter(r => r.attendance === '迟到').length,
-      absent: classReportRecords.filter(r => r.attendance === '缺勤').length,
-      leave: classReportRecords.filter(r => r.attendance === '请假').length,
-      transfer: classReportRecords.filter(r => r.attendance === '调课').length
+      onTime: classAttKinds.filter(k => k === 'onTime').length,
+      late: classAttKinds.filter(k => k === 'late').length,
+      absent: classAttKinds.filter(k => k === 'absent').length,
+      leave: classAttKinds.filter(k => k === 'leave').length,
+      transfer: classAttKinds.filter(k => k === 'transfer').length
     };
 
     // 作业概况
@@ -1035,8 +1038,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
     );
   }
 
+  // 出勤率 =（按时+迟到）/ 总记录（迟到也算到场；与考勤关键词归类一致）
   const attendanceRate = classStats.attendanceSummary.total > 0
-    ? Math.round((classStats.attendanceSummary.onTime / classStats.attendanceSummary.total) * 100)
+    ? Math.round(((classStats.attendanceSummary.onTime + classStats.attendanceSummary.late) / classStats.attendanceSummary.total) * 100)
     : 0;
   const homeworkExcellentRate = classStats.homeworkSummary.total > 0
     ? Math.round(((classStats.homeworkSummary.excellent + classStats.homeworkSummary.good) / classStats.homeworkSummary.total) * 100)
@@ -1322,8 +1326,8 @@ function StudentFeedback({
   avgQuestionTypeScores 
 }: StudentFeedbackProps) {
   
-  const attendanceRate = studentStats ? 
-    (studentStats.attendanceStats.onTime / studentStats.attendanceStats.total) : 0;
+  const attendanceRate = studentStats ?
+    ((studentStats.attendanceStats.onTime + studentStats.attendanceStats.late) / studentStats.attendanceStats.total) : 0;
   
   const totalHomework = studentStats ? 
     (studentStats.homeworkStats.excellent + studentStats.homeworkStats.good + 

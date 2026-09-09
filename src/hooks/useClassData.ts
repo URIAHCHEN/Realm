@@ -10,6 +10,7 @@ import type {
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
 
 // 生成唯一ID
@@ -97,6 +98,7 @@ const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
 
 // 总分/正确率统一口径：题型分数 + 计入总分的分数型自定义列
 // 考勤含「请假」的记录：分数一律不计入总分与正确率（原始分数仍保留，改回出勤会自动重新计入）
+// 分母统一取自 getLessonFullScore（题型满分 + 计入总分的自定义列满分），随课次配置动态变化
 function computeTotals(
   scores: { [k: string]: number },
   customValues: { [k: string]: string | number } | undefined,
@@ -106,18 +108,13 @@ function computeTotals(
   if (attendanceKind(attendance) === 'leave') {
     return { totalScore: 0, correctRate: 0 };
   }
-  let total = 0;
-  let full = 0;
-  lessonConfig.questionTypes.forEach(qt => {
-    total += scores?.[qt.id] || 0;
-    full += qt.fullScore || 0;
-  });
-  (lessonConfig.customFields || []).forEach(cf => {
-    if (cf.kind === 'number' && cf.includeInTotal) {
-      total += Number(customValues?.[cf.id]) || 0;
-      full += cf.fullScore || 0;
-    }
-  });
+  const total =
+    (lessonConfig.questionTypes || []).reduce((sum, qt) => sum + (scores?.[qt.id] || 0), 0) +
+    (lessonConfig.customFields || []).reduce(
+      (sum, cf) => (cf.kind === 'number' && cf.includeInTotal ? sum + (Number(customValues?.[cf.id]) || 0) : sum),
+      0
+    );
+  const full = getLessonFullScore(lessonConfig);
   const correctRate = full > 0 ? Math.round((total / full) * 100 * 10) / 10 : 0;
   return { totalScore: Math.round(total * 100) / 100, correctRate };
 }
@@ -497,12 +494,18 @@ export function useClassData() {
 
   // 创建或更新记录
   const saveRecord = useCallback((classId: string, record: Partial<StudentRecord>) => {
-    const lessonConfig = getLessonConfig(classId, record.lessonNumber || currentLessonNumber);
-    
     setClasses(prev => {
       const classData = prev[classId];
       // 防御：班级不存在（如云端导入竞态/被删除）时静默忽略，避免 TypeError
       if (!classData) return prev;
+      const lessonNumber = record.lessonNumber || currentLessonNumber;
+      // 在 updater 内按 prev 解析配置：与满分同步等排在前面的更新顺序正确，
+      // 不会拿到过期闭包里的旧配置
+      const baseCfg = classData.lessonConfigs[lessonNumber.toString()]
+        || (lessonNumber > 1 ? classData.lessonConfigs[(lessonNumber - 1).toString()] : undefined)
+        || getDefaultLessonConfig(appConfig);
+      const lessonConfig = withClassPerformanceDefaults(baseCfg);
+
       const existingIndex = classData.records.findIndex(
         r => r.studentName === record.studentName && r.lessonNumber === record.lessonNumber
       );
@@ -552,7 +555,6 @@ export function useClassData() {
       }
 
       // 重新计算排名
-      const lessonNumber = record.lessonNumber || currentLessonNumber;
       const ranked = rerankLesson(newRecords, lessonNumber);
 
       return {
@@ -560,7 +562,7 @@ export function useClassData() {
         [classId]: { ...classData, records: ranked }
       };
     });
-  }, [currentLessonNumber, getLessonConfig]);
+  }, [currentLessonNumber, appConfig]);
 
   // 更新记录字段
   const updateRecordField = useCallback((
@@ -605,6 +607,60 @@ export function useClassData() {
       };
     });
   }, [currentLessonNumber, appConfig]);
+
+  // 同步题型真实满分并重算该课次全部记录：
+  // 在线表格导入时按列数据最大值推断各题型卷面满分（如第一次课 50、第二次 35），
+  // 回填到课次配置后，以统一分母（getLessonFullScore）重算总分/正确率/排名，
+  // 修正"分母停留在默认 300"导致三处 Tab 正确率失真的问题。
+  // 返回实际更新的题型数量。
+  const syncQuestionFullScores = useCallback((classId: string, lessonNumber: number, updates: { qtId: string; fullScore: number }[]): number => {
+    if (!updates.length) return 0;
+    const classData = classes[classId];
+    if (!classData) return 0;
+    const key = lessonNumber.toString();
+    const baseCfg = classData.lessonConfigs[key]
+      || (lessonNumber > 1 ? classData.lessonConfigs[(lessonNumber - 1).toString()] : undefined)
+      || getDefaultLessonConfig(appConfig);
+
+    const qtById = new Map(baseCfg.questionTypes.map(qt => [qt.id, qt]));
+    let applied = 0;
+    updates.forEach(u => {
+      const qt = qtById.get(u.qtId);
+      if (!qt) return;
+      const next = Math.max(0, Math.round(u.fullScore * 100) / 100);
+      if (Math.abs((qt.fullScore || 0) - next) < 0.01) return;
+      qtById.set(u.qtId, { ...qt, fullScore: next });
+      applied++;
+    });
+    if (applied === 0) return 0;
+    const questionTypes = baseCfg.questionTypes.map(qt => qtById.get(qt.id) || qt);
+    const updatedConfig = { ...baseCfg, questionTypes };
+
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      // 用新分母重算该课次全部记录（含请假口径），并重排名次
+      const ranked = rerankLesson(
+        cd.records.map(r => {
+          if (r.lessonNumber !== lessonNumber) return r;
+          const { totalScore, correctRate } = computeTotals(r.scores, r.customValues, updatedConfig, r.attendance);
+          return (r.totalScore !== totalScore || r.correctRate !== correctRate)
+            ? { ...r, totalScore, correctRate }
+            : r;
+        }),
+        lessonNumber
+      );
+      return {
+        ...prev,
+        [classId]: {
+          ...cd,
+          lessonConfigs: { ...cd.lessonConfigs, [key]: updatedConfig },
+          records: ranked
+        }
+      };
+    });
+    return applied;
+  }, [classes, appConfig]);
 
   // 删除记录
   const deleteRecord = useCallback((classId: string, recordId: string) => {
@@ -1010,6 +1066,7 @@ export function useClassData() {
     removeStudentFromClass,
     saveLessonConfig,
     saveRecord,
+    syncQuestionFullScores,
     updateRecordField,
     deleteRecord,
     clearRecordContent,

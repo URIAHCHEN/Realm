@@ -66,6 +66,8 @@ export interface ParseResult {
   errors: string[];
   matchedColumns: string[];
   unmatchedColumns: { name: string; suggestedFullScore: number }[];
+  /** 已匹配题型列的真实满分（按列数据最大值推断），与当前配置不一致时给出，用于导入时同步分母 */
+  fullScoreUpdates: { qtId: string; name: string; suggestedFullScore: number }[];
 }
 
 function splitLine(line: string): string[] {
@@ -93,13 +95,13 @@ export function parseClipboardTable(
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   const errors: string[] = [];
   if (lines.length < 2) {
-    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [] };
+    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [] };
   }
 
   const headers = splitLine(lines[0]).map(norm);
   const nameIdx = headers.findIndex(h => h === '姓名' || h === '学生姓名' || h === '名字' || h === '学生');
   if (nameIdx < 0) {
-    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [] };
+    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [] };
   }
 
   // 题型列映射（按名称模糊匹配）
@@ -196,5 +198,20 @@ export function parseClipboardTable(
     }
   });
 
-  return { rows, errors, matchedColumns: matched, unmatchedColumns };
+  // 已匹配题型列：按列数据最大值推断本次卷面真实满分，
+  // 与当前配置不一致时返回建议（导入端据此回填分母并重算正确率）
+  const fullScoreUpdates: { qtId: string; name: string; suggestedFullScore: number }[] = [];
+  qtIdx.forEach(({ qt, idx }) => {
+    const nums = dataLines
+      .map(l => parseFloat((splitLine(l)[idx] || '').trim()))
+      .filter(n => !isNaN(n) && n >= 0);
+    if (nums.length === 0) return;
+    const suggested = Math.max(1, Math.ceil(Math.max(...nums) * 100) / 100);
+    const current = qt.fullScore || 0;
+    if (current <= 0 || Math.abs(current - suggested) > 0.5) {
+      fullScoreUpdates.push({ qtId: qt.id, name: qt.name, suggestedFullScore: suggested });
+    }
+  });
+
+  return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates };
 }

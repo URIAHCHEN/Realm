@@ -85,6 +85,7 @@ function App() {
     removeStudentFromClass,
     saveLessonConfig,
     saveRecord,
+    syncQuestionFullScores,
     updateRecordField,
     deleteRecord,
     clearRecordContent,
@@ -208,6 +209,24 @@ function App() {
       .map((c, i) => ({ id: 'qt_' + Date.now() + '_' + i, name: c.name, fullScore: c.suggestedFullScore || 100, order: cfg.questionTypes.length + i }));
     if (add.length === 0) return;
     saveLessonConfig(target.classId, target.lessonNumber, { questionTypes: [...cfg.questionTypes, ...add] });
+  };
+
+  // 导入在线表格时：把已匹配题型的满分同步为当次卷面真实满分（按列最大值推断），
+  // 并以统一分母重算该课次全部记录的总分/正确率/排名（返回实际更新数，供提示）
+  const handleSyncFullScores = (
+    target: { classId: string; lessonNumber: number },
+    updates: { qtId: string; name: string; suggestedFullScore: number }[]
+  ): number => {
+    try {
+      return syncQuestionFullScores(
+        target.classId,
+        target.lessonNumber,
+        updates.map(u => ({ qtId: u.qtId, fullScore: u.suggestedFullScore }))
+      );
+    } catch (e) {
+      console.warn('同步题型满分失败', e);
+      return 0;
+    }
   };
 
   const handleDeleteLessonRecords = () => {
@@ -888,6 +907,7 @@ function App() {
                   knownLessons={getAllLessons(currentClassId || undefined)}
                   onImportRows={handleImportDocRows}
                   onCreateQuestionTypes={handleCreateQuestionTypes}
+                  onSyncFullScores={handleSyncFullScores}
                   onExportExcel={handleExportAllData}
                 />
               </div>

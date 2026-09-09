@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -140,19 +141,20 @@ export function StudentReport({
     const maxScore = Math.max(...studentRecords.map(r => r.totalScore));
     const minScore = Math.min(...studentRecords.map(r => r.totalScore));
     
-    const questionTypeScores: { [key: string]: { total: number; count: number; name: string } } = {};
+    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullScore: number } } = {};
     
     studentRecords.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
         config.questionTypes.forEach(qt => {
           if (!questionTypeScores[qt.id]) {
-            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name };
+            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullScore: qt.fullScore || 0 };
           }
           if (record.scores[qt.id] !== undefined) {
             questionTypeScores[qt.id].total += record.scores[qt.id];
             questionTypeScores[qt.id].count++;
           }
+          questionTypeScores[qt.id].fullScore = Math.max(questionTypeScores[qt.id].fullScore, qt.fullScore || 0);
         });
       }
     });
@@ -160,7 +162,8 @@ export function StudentReport({
     const avgQuestionTypeScores = Object.entries(questionTypeScores).map(([id, data]) => ({
       id,
       name: data.name,
-      avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0
+      avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
+      fullScore: data.fullScore
     }));
 
     const learningTrajectory = studentRecords.map(r => ({
@@ -305,12 +308,13 @@ export function StudentReport({
       lessonNum: r.lessonNumber,
       score: r.totalScore,
       correctRate: r.correctRate,
-      fullMark: 100
+      // 各课次真实满分（题型配置动态变化，非固定值）
+      fullMark: getLessonFullScore(lessonConfigs[r.lessonNumber]) || 100
     }));
     if (scoreSort === 'asc') list.sort((a, b) => a.score - b.score);
     if (scoreSort === 'desc') list.sort((a, b) => b.score - a.score);
     return list;
-  }, [studentRecords, scoreSort]);
+  }, [studentRecords, scoreSort, lessonConfigs]);
 
   // 折线图数据 - 学习趋势
   const trendData = useMemo(() => {
@@ -321,13 +325,13 @@ export function StudentReport({
     }));
   }, [studentRecords]);
 
-  // 雷达图数据 - 能力维度
+  // 雷达图数据 - 能力维度（坐标轴上限取各题型真实满分，而非写死 100）
   const radarData = useMemo(() => {
     if (!studentStats) return [];
     return studentStats.avgQuestionTypeScores.map(qt => ({
       subject: qt.name,
       A: qt.avgScore,
-      fullMark: 100
+      fullMark: qt.fullScore || 100
     }));
   }, [studentStats]);
 
@@ -523,7 +527,7 @@ interface PersonalReportProps {
     avgScore: number;
     maxScore: number;
     minScore: number;
-    avgQuestionTypeScores: { id: string; name: string; avgScore: number }[];
+    avgQuestionTypeScores: { id: string; name: string; avgScore: number; fullScore: number }[];
     learningTrajectory: { lesson: number; score: number; correctRate: number; listeningScore: number }[];
     attendanceStats: { total: number; onTime: number; late: number; absent: number };
     homeworkStats: { excellent: number; good: number; average: number; poor: number };
@@ -578,6 +582,11 @@ function PersonalReport({
 }: PersonalReportProps) {
   const [isExportingImage, setIsExportingImage] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
+  // 雷达图坐标轴上限：取各题型真实满分中的最大值（不再写死 100）
+  const radarMax = useMemo(() => {
+    const maxes = (radarData || []).map(d => d.fullMark).filter(v => Number.isFinite(v) && v > 0);
+    return maxes.length > 0 ? Math.max(...maxes) : 100;
+  }, [radarData]);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
 
   const handleExportPersonalImage = async () => {
@@ -846,7 +855,7 @@ function PersonalReport({
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                 <PolarGrid />
                 <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                <PolarRadiusAxis angle={30} domain={[0, radarMax]} />
                 <Radar name="当前水平" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
                 <Legend />
                 <Tooltip />
@@ -1312,7 +1321,7 @@ interface StudentFeedbackProps {
     avgScore: number;
     maxScore: number;
     minScore: number;
-    avgQuestionTypeScores: { id: string; name: string; avgScore: number }[];
+    avgQuestionTypeScores: { id: string; name: string; avgScore: number; fullScore: number }[];
     learningTrajectory: { lesson: number; score: number; correctRate: number; listeningScore: number }[];
     attendanceStats: { total: number; onTime: number; late: number; absent: number };
     homeworkStats: { excellent: number; good: number; average: number; poor: number };
@@ -1345,9 +1354,20 @@ function StudentFeedback({
   
   const trajectoryScores = studentStats?.learningTrajectory.map(t => t.score) || [];
   
-  const fullScore = studentRecords.length > 0 ?
-    studentRecords[0].totalScore / (studentRecords[0].correctRate / 100) * (100 / studentRecords[0].totalScore) * studentRecords[0].totalScore :
-    100;
+  // 整体反馈的满分基准：优先按各课次配置取真实满分（getLessonFullScore 统一来源），
+  // 多课次取平均；配置缺失时回退"总分/正确率"反推；再缺失回退 100。
+  // 原实现用绕口的反推公式（含 correctRate=0 时的除零/NaN 风险），已废弃。
+  const knownFullScores = studentRecords
+    .map(r => getLessonFullScore(lessonConfigs[r.lessonNumber]))
+    .filter(v => Number.isFinite(v) && v > 0);
+  const derivedFullScores = studentRecords
+    .filter(r => r.correctRate > 0 && r.totalScore > 0)
+    .map(r => r.totalScore / (r.correctRate / 100));
+  const fullScore = knownFullScores.length > 0
+    ? Math.round(knownFullScores.reduce((a, b) => a + b, 0) / knownFullScores.length)
+    : derivedFullScores.length > 0
+      ? Math.round(derivedFullScores.reduce((a, b) => a + b, 0) / derivedFullScores.length)
+      : 100;
   
   const questionTypeFeedbacks = avgQuestionTypeScores.map(qt => {
     let questionFullScore = 100;

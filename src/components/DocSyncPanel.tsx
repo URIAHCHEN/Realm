@@ -30,11 +30,13 @@ interface DocSyncPanelProps {
   knownLessons: number[];
   onImportRows: (rows: ParsedRow[], target: { classId: string; lessonNumber: number }) => void;
   onCreateQuestionTypes: (target: { classId: string; lessonNumber: number }, columns: { name: string; suggestedFullScore: number }[]) => void;
+  /** 导入时同步已匹配题型的真实满分（按列最大值），并重算该课次正确率；返回实际更新数 */
+  onSyncFullScores?: (target: { classId: string; lessonNumber: number }, updates: { qtId: string; name: string; suggestedFullScore: number }[]) => number;
   onExportExcel: () => void;
 }
 
 export function DocSyncPanel({
-  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onExportExcel,
+  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onSyncFullScores, onExportExcel,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -76,6 +78,13 @@ export function DocSyncPanel({
         toast.error(result.errors[0] || '未解析到有效数据行');
       } else {
         const clsName = classes.find(c => c.id === targetClass)?.name || '目标班级';
+        // 先同步题型真实满分（分母），再写入学情记录，保证正确率按当次卷面总分计算
+        if (onSyncFullScores && (result.fullScoreUpdates?.length ?? 0) > 0) {
+          const applied = onSyncFullScores({ classId: targetClass, lessonNumber: targetLesson }, result.fullScoreUpdates);
+          if (applied > 0) {
+            toast.info(`已同步 ${applied} 个题型的卷面满分，正确率分母将按当次实际总分计算`);
+          }
+        }
         onImportRows(result.rows, { classId: targetClass, lessonNumber: targetLesson });
         const errNote = result.errors.length > 0 ? `，${result.errors.length} 条提示` : '';
         toast.success(`已导入 ${result.rows.length} 行到「${clsName} · 第${targetLesson}课」（匹配列：${result.matchedColumns.join('、')}${errNote}）`);

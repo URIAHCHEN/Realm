@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -599,9 +598,9 @@ export function StudentTable({
               </div>
             </div>
             <div className="bg-white rounded-xl p-4">
-              <ScrollArea className="h-[600px] border rounded-lg">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.07)] to-[rgb(var(--brand-rgb)/0.12)] backdrop-blur-md">
+              <div className="h-[600px] border rounded-lg overflow-auto">
+                <Table className="border-separate" style={{ borderSpacing: 0 }}>
+                  <TableHeader className="bg-slate-50/80 [&_tr]:border-b [&_tr]:border-slate-200">
                     <TableRow>
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
@@ -841,20 +840,20 @@ export function StudentTable({
                         </TableRow>
                       );
                     })}
-                    {/* 底部统计行（吸底固定，滚动时保持可见） */}
-                    <TableRow className="class-stats-row bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border-t-2 border-[rgb(var(--brand-rgb)/0.25)] hover:bg-[rgb(var(--brand-rgb)/0.10)] font-semibold">
-                      <TableCell></TableCell>
-                      <TableCell className="text-sm font-bold text-slate-700" colSpan={2}>
+                    {/* 底部统计行：吸底固定，纵向滚动时始终可见；横向滚动与列对齐 */}
+                    <TableRow className="sticky bottom-0 z-20 bg-white border-t-2 border-[rgb(var(--brand-rgb)/0.3)] font-semibold hover:bg-white">
+                      <TableCell className="bg-white"></TableCell>
+                      <TableCell className="text-sm font-bold text-slate-700 bg-white" colSpan={2}>
                         <div className="flex items-center gap-2">
                           <BarChart3 className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                           <span>班级统计</span>
                         </div>
                       </TableCell>
-                      {col('seasons') && <TableCell></TableCell>}
-                      {col('attendance') && <TableCell></TableCell>}
-                      {col('classPerformance') && <TableCell></TableCell>}
-                      {col('homework') && <TableCell></TableCell>}
-                      {col('listening') && <TableCell></TableCell>}
+                      {col('seasons') && <TableCell className="bg-white"></TableCell>}
+                      {col('attendance') && <TableCell className="bg-white"></TableCell>}
+                      {col('classPerformance') && <TableCell className="bg-white"></TableCell>}
+                      {col('homework') && <TableCell className="bg-white"></TableCell>}
+                      {col('listening') && <TableCell className="bg-white"></TableCell>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => (
                         <TableCell key={qt.id} className="text-center text-sm">
                           <span className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold text-[color:var(--brand)] bg-white/70 border border-[rgb(var(--brand-rgb)/0.2)]">
@@ -877,14 +876,14 @@ export function StudentTable({
                           </span>
                         </TableCell>
                       )}
-                      {col('correctRate') && <TableCell></TableCell>}
-                      {col('weakPoints') && <TableCell></TableCell>}
-                      {col('note') && <TableCell></TableCell>}
-                      {col('actions') && <TableCell></TableCell>}
+                      {col('correctRate') && <TableCell className="bg-white"></TableCell>}
+                      {col('weakPoints') && <TableCell className="bg-white"></TableCell>}
+                      {col('note') && <TableCell className="bg-white"></TableCell>}
+                      {col('actions') && <TableCell className="bg-white"></TableCell>}
                     </TableRow>
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             </div>
             {/* 底部操作条：沉底固定，页面滚动时始终可见 */}
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2 flex-wrap justify-center items-center rounded-2xl border border-[rgb(var(--brand-rgb)/0.2)] bg-white/90 backdrop-blur-md px-4 py-2.5 shadow-[0_12px_32px_-12px_rgb(15_23_42/0.28)]">

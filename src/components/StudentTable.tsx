@@ -14,7 +14,7 @@ import { copyToClipboard } from '@/lib/feedbackTemplates';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import { attendanceKind } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
@@ -445,6 +445,8 @@ export function StudentTable({
   };
 
   const fullScore = lessonConfig.questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+  // 统计口径：请假/缺勤学员一律不计入班级整体正确率（与平均分口径一致）
+  const statsRateRecords = lessonRecords.filter(r => !isAbsentRecord(r) && r.totalScore > 0);
   const canApplyBulk = someSelected && (
     bulkField === 'score'
       ? bulkQtId !== '' && bulkValue !== ''
@@ -868,8 +870,8 @@ export function StudentTable({
                       {col('correctRate') && (
                         <TableCell className="text-center text-sm">
                           <span className={`inline-flex items-center justify-center px-2 py-1 rounded-md font-bold ${stats.avgScore >= (lessonConfig.passThreshold ?? 80) ? 'text-emerald-700 bg-emerald-50/80 border border-emerald-200' : 'text-rose-700 bg-rose-50/80 border border-rose-200'}`}>
-                            {(lessonRecords.filter(r => r.totalScore > 0).length > 0
-                              ? lessonRecords.filter(r => r.totalScore > 0).reduce((s, r) => s + r.correctRate, 0) / lessonRecords.filter(r => r.totalScore > 0).length
+                            {(statsRateRecords.length > 0
+                              ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
                               : 0
                             ).toFixed(1)}%
                           </span>
@@ -884,9 +886,10 @@ export function StudentTable({
                 </Table>
               </ScrollArea>
             </div>
-            <div className="flex gap-2 flex-wrap mt-4">
-              <Button onClick={() => setShowAddDialog(true)} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><UserPlus className="w-4 h-4" />添加学员</Button>
-              <Button onClick={onExportData} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><Download className="w-4 h-4" />导出CSV</Button>
+            {/* 底部操作条：沉底固定，页面滚动时始终可见 */}
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2 flex-wrap justify-center items-center rounded-2xl border border-[rgb(var(--brand-rgb)/0.2)] bg-white/90 backdrop-blur-md px-4 py-2.5 shadow-[0_12px_32px_-12px_rgb(15_23_42/0.28)]">
+              <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><UserPlus className="w-4 h-4" />添加学员</Button>
+              <Button onClick={onExportData} variant="outline" size="sm" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><Download className="w-4 h-4" />导出CSV</Button>
             </div>
           </>
         )}

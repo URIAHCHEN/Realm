@@ -51,7 +51,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
-import { attendanceKind } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -201,7 +201,9 @@ export function StudentReport({
   const classStats = useMemo(() => {
     if (classReportRecords.length === 0) return null;
 
-    const validRecords = classReportRecords.filter(r => r.totalScore > 0);
+    // 统计口径：请假/缺勤学员不参与任何成绩类统计（平均分/正确率/题型均分与正确率/分数段分布）
+    const scoredRecords = classReportRecords.filter(r => !isAbsentRecord(r));
+    const validRecords = scoredRecords.filter(r => r.totalScore > 0);
     const avgScore = validRecords.length > 0
       ? validRecords.reduce((sum, r) => sum + r.totalScore, 0) / validRecords.length
       : 0;
@@ -217,9 +219,9 @@ export function StudentReport({
       count: validRecords.filter(r => r.totalScore >= range.min && r.totalScore <= range.max).length
     }));
 
-    // 各题型平均分
+    // 各题型平均分（仅到课学员；请假学员的 0 分不计入分子与分母）
     const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullScore: number } } = {};
-    classReportRecords.forEach(record => {
+    scoredRecords.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
         config.questionTypes.forEach(qt => {

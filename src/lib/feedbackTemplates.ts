@@ -99,25 +99,86 @@ export function generatePersonalFeedback(
 export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
 `【第【课次】课 · 【昵称】【场景】】
 【开场】
-🌟 优秀表现：【优秀表现】
+【场景引导】🌟 优秀表现：【优秀表现】
 🔍 待提升：【待提升】
 🛠 下一步：【下一步】
 🎬 课堂照片/视频：【素材】【新学员补充】
-感谢配合，我们一起帮孩子进步！`;
+【结尾】`;
 
 export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
   { key: '【课次】', desc: '当前课次' },
   { key: '【昵称】', desc: '学生昵称' },
   { key: '【场景】', desc: '场景标签（有则自动带「·」前缀，无则留空）' },
-  { key: '【开场】', desc: '开场语，随「换一版措辞」切换 3 种' },
+  { key: '【开场】', desc: '开场语，随「换一版措辞」在同场景下轮换' },
+  { key: '【场景引导】', desc: '按首课/行课中/沟通场景自动带的一句引导语（日常场景留空）' },
   { key: '【优秀表现】', desc: '自动：本讲亮点' },
   { key: '【待提升】', desc: '自动：薄弱板块 / 作业 / 考勤' },
   { key: '【下一步】', desc: '自动：巩固动作' },
   { key: '【素材】', desc: '课堂照片 / 视频链接' },
   { key: '【新学员补充】', desc: '勾选「新学员」时自动补一句，否则留空' },
+  { key: '【结尾】', desc: '按场景轮换的收尾语 / 行动召唤' },
 ];
 
-// “四个一”反馈（可直接发送版）：优秀表现 / 待提升 / 下一步 / 素材，三种措辞版本
+// 三类场景各自的话术包：开场（6 版）、结尾（3-4 版）、场景引导语
+type FourInOnePack = { openers: string[]; closings: string[]; intro: string };
+export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOnePack> = {
+  daily: {
+    intro: '',
+    openers: [
+      '家长您好，跟您反馈下孩子这堂课的情况：',
+      '跟您同步一下孩子这堂课的课堂表现：',
+      '本堂课学情反馈来啦，您瞧瞧：',
+      '今天的课上完啦，孩子的情况跟您说几句：',
+      '这堂课的课堂观察整理如下，供您参考：',
+      '家长好，反馈一下孩子这节课的上课状态：',
+    ],
+    closings: [
+      '感谢配合，我们一起帮孩子进步！',
+      '家里有什么情况随时跟我说，咱们同步着来～',
+      '孩子有进步我会第一时间告诉您，一起加油！',
+    ],
+  },
+  afterclass: {
+    intro: '本讲处于行课阶段，重点在知识衔接与错题复盘。\n',
+    openers: [
+      '家长您好，课程进行到这里，跟您同步下孩子这堂课的状态：',
+      '这堂课接着上次的进度，孩子的表现跟您聊聊：',
+      '行课中阶段，反馈一下孩子这堂课的掌握情况：',
+      '本讲内容承接前面，孩子的落实情况如下：',
+      '课程推进中，这堂课的课堂观察跟您说说：',
+      '阶段巩固关键期，先反馈孩子这堂课的情况：',
+    ],
+    closings: [
+      '阶段内容环环相扣，落下的我课上帮着补，家里按节奏督促就好。',
+      '这个阶段巩固比赶进度更重要，咱们一起盯紧错题。',
+      '下次课前记得让孩子回看本讲笔记，有问题随时找我。',
+    ],
+  },
+  comm: {
+    intro: '',
+    openers: [
+      '家长您好，想跟您简单沟通下孩子最近的情况：',
+      '借用您一点时间，反馈并了解下孩子的学习：',
+      '家长好，关于孩子这阵子的状态，想跟您对齐一下：',
+      '跟您聊聊孩子这堂课的表现，也想听听您的观察：',
+      '孩子近况想跟您同步，也方便我们一起配合：',
+      '有几句关于孩子的反馈，顺便想跟您沟通下：',
+    ],
+    closings: [
+      '您方便的话，咱们可以约个时间细聊孩子的情况～',
+      '家里观察到什么也随时告诉我，咱们一起想办法。',
+      '感谢您的时间，有问题我们及时沟通！',
+    ],
+  },
+};
+export const FOUR_IN_ONE_VARIANT_COUNT = 6;
+export const FOUR_IN_ONE_SCENARIOS: { key: 'daily' | 'afterclass' | 'comm'; label: string }[] = [
+  { key: 'daily', label: '首课&日常' },
+  { key: 'afterclass', label: '行课中' },
+  { key: 'comm', label: '沟通' },
+];
+
+// “四个一”反馈（可直接发送版）：按首课/行课中/沟通场景区分，每场景 6 版措辞
 export function generateFourInOne(
   record: StudentRecord,
   lessonConfig: LessonConfig,
@@ -127,12 +188,17 @@ export function generateFourInOne(
   isNewStudent = false,
   candidateLinks: string[] = [],
   variant = 0,
-  templateOverride?: string
+  templateOverride?: string,
+  scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily'
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
   }
-  const v = ((variant % 3) + 3) % 3;
+  const pack = FOUR_IN_ONE_PACKS[scenarioKey] || FOUR_IN_ONE_PACKS.daily;
+  const n = FOUR_IN_ONE_VARIANT_COUNT;
+  const v = ((variant % n) + n) % n;
+  const opener = pack.openers[v % pack.openers.length];
+  const closing = pack.closings[Math.floor(v / 2) % pack.closings.length];
 
   const strong = lessonConfig.questionTypes
     .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id] || 0, avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
@@ -156,17 +222,15 @@ export function generateFourInOne(
   if (attendBad) issueParts.push(`本课${attendBad}`);
   const issue = issueParts.length ? issueParts.join('；') : '暂未发现明显薄弱点，继续保持';
 
-  let plan: string;
-  if (weak.length) plan = `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做同类练习巩固，把错题整理进错题本并试着讲一遍`;
-  else if (homeworkBad) plan = '今晚把本次作业补齐并订正，下次课前提交';
-  else if (attendBad) plan = '课后回看本讲回放和笔记，补齐落下的内容';
-  else plan = '保持当前节奏，按课后任务继续巩固即可';
-
-  const openers = [
-    '孩子您好，跟您反馈下这堂课的情况：',
-    '跟您同步一下孩子这堂课的表现：',
-    '本堂课学情反馈：'
-  ];
+  const nextAction = weak.length
+    ? `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做同类练习巩固，把错题整理进错题本并试着讲一遍`
+    : homeworkBad
+      ? '今晚把本次作业补齐并订正，下次课前提交'
+      : attendBad
+        ? '课后回看本讲回放和笔记，补齐落下的内容'
+        : '保持当前节奏，按课后任务继续巩固即可';
+  const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下：' : scenarioKey === 'comm' ? '最想请您配合的是：' : '课后建议：';
+  const plan = `${planLead}${nextAction}`;
 
   const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
   const tpl = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
@@ -175,11 +239,13 @@ export function generateFourInOne(
     .replace(/【课次】/g, String(record.lessonNumber))
     .replace(/【昵称】/g, nickname)
     .replace(/【场景】/g, scenarioLabel ? ' · ' + scenarioLabel : '')
-    .replace(/【开场】/g, openers[v])
+    .replace(/【开场】/g, opener)
+    .replace(/【场景引导】/g, pack.intro)
     .replace(/【优秀表现】/g, praise)
     .replace(/【待提升】/g, issue)
     .replace(/【下一步】/g, plan)
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
+    .replace(/【结尾】/g, closing)
     .replace(/【新学员补充】/g, isNewStudent ? '\n也欢迎跟我说说孩子这堂课的感受，方便我们更快适配节奏～' : '');
 }
 
@@ -199,18 +265,25 @@ export function generatePraise(
   let praiseContent = '';
   
   if (praiseType === 'entrance' || praiseType === 'comprehensive') {
-    // 入门测排名（请假/缺勤学员不计入）
-    const rankedStudents = records
+    // 入门测风云榜（请假/缺勤学员不计入）
+    // 默认表彰前三名；同分并列一并纳入；表彰总人数控制在 6 人以内
+    const scored = records
       .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .slice(0, 10);
-    
+      .sort((a, b) => b.totalScore - a.totalScore);
+    const distinctScores = Array.from(new Set(scored.map(r => r.totalScore)));
+    const thirdScore = distinctScores[2];
+    const tiered = thirdScore != null ? scored.filter(r => r.totalScore >= thirdScore) : scored;
+    const rankedStudents = tiered.slice(0, 6);
+    const medalFor = (score: number): string => {
+      const rk = distinctScores.indexOf(score) + 1;
+      return rk === 1 ? '🥇' : rk === 2 ? '🥈' : rk === 3 ? '🥉' : `${rk}️⃣`;
+    };
+
     if (rankedStudents.length > 0) {
       praiseContent += '🏆【入门测风云榜】\n';
-      const rankIcons = ['🥇', '🥈', '🥉', '4️⃣', '📌', '📌', '📌', '📌', '📌', '📌'];
-      rankedStudents.forEach((r, i) => {
+      rankedStudents.forEach(r => {
         const nickname = getNickname(r.studentName);
-        praiseContent += `${rankIcons[i]} ${nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
+        praiseContent += `${medalFor(r.totalScore)} ${nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
       });
       praiseContent += '\n';
     }

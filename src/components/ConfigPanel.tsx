@@ -11,6 +11,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Pencil, Eye } from 'lucide-react';
 import type { QuestionType, LessonConfig, AppConfig, PraiseTemplate } from '@/types';
 import { inferCategory } from '@/lib/weakPoints';
+import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
+
+/** 默认选项可编辑列表（新增/删除），用于「默认配置」页 */
+function DefaultOptionList({ title, desc, options, onChange }: {
+  title: string; desc?: string; options: string[]; onChange: (v: string[]) => void;
+}) {
+  const [val, setVal] = useState('');
+  const add = () => {
+    const t = val.trim();
+    if (!t || options.includes(t)) return;
+    onChange([...options, t]);
+    setVal('');
+  };
+  return (
+    <div>
+      <Label className="text-base font-medium text-violet-700">{title}</Label>
+      {desc && <p className="text-xs text-slate-400 mt-1">{desc}</p>}
+      <div className="flex flex-wrap gap-2 mt-2">
+        {options.map((o, i) => (
+          <span key={o} className="inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100 text-sm">
+            {o}
+            <button onClick={() => onChange(options.filter((_, idx) => idx !== i))} className="text-violet-400 hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
+          </span>
+        ))}
+        {options.length === 0 && <span className="text-xs text-slate-400">暂无选项</span>}
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="新增选项，回车添加" className="h-9 text-sm liquid-glass-input" />
+        <Button variant="outline" onClick={add} className="h-9 liquid-glass-button"><Plus className="w-4 h-4" /></Button>
+      </div>
+    </div>
+  );
+}
 
 interface ConfigPanelProps {
   appConfig: AppConfig;
@@ -839,6 +872,39 @@ export function ConfigPanel({
             <CardTitle className="text-violet-700">默认配置（用于新课次）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* 默认选项（用于新课次） */}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Settings className="w-4 h-4 text-violet-700" />
+                <Label className="text-base font-semibold text-violet-700">默认选项（用于新课次）</Label>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">修改后保存，新建课次的考勤 / 课堂表现 / 作业 / 课后任务选项将采用这里的默认值；已存在的课次配置不受影响，可在「表格字段」单独调整。</p>
+              <div className="grid gap-5 md:grid-cols-2">
+                <DefaultOptionList
+                  title="考勤选项"
+                  options={localAppConfig.defaultAttendanceOptions}
+                  onChange={v => setLocalAppConfig(p => ({ ...p, defaultAttendanceOptions: v }))}
+                />
+                <DefaultOptionList
+                  title="课堂表现选项"
+                  options={localAppConfig.defaultClassPerformanceOptions || DEFAULT_CLASS_PERFORMANCE_OPTIONS}
+                  onChange={v => setLocalAppConfig(p => ({ ...p, defaultClassPerformanceOptions: v }))}
+                />
+                <DefaultOptionList
+                  title="作业选项"
+                  options={localAppConfig.defaultHomeworkOptions}
+                  onChange={v => setLocalAppConfig(p => ({ ...p, defaultHomeworkOptions: v }))}
+                />
+                <DefaultOptionList
+                  title="课后任务选项"
+                  options={localAppConfig.defaultListeningOptions}
+                  onChange={v => setLocalAppConfig(p => ({ ...p, defaultListeningOptions: v }))}
+                />
+              </div>
+            </div>
+
+            <Separator className="bg-violet-100" />
+
             {/* 默认反馈模板 */}
             <div>
               <Label className="text-base font-medium text-violet-700">默认私发反馈模板</Label>

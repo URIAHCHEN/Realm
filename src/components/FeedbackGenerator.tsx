@@ -10,7 +10,7 @@ import {
   CircleAlert, RotateCcw, Send, Sparkles,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES } from '@/lib/feedbackTemplates';
+import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
@@ -52,11 +52,8 @@ export function FeedbackGenerator({
   const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
   const [isNewStudent, setIsNewStudent] = useState(false);
   const [variant, setVariant] = useState(0);
-  const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] = [
-    { value: 'daily', label: '首课&日常' },
-    { value: 'afterclass', label: '行课后' },
-    { value: 'comm', label: '沟通' },
-  ];
+  const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] =
+    FOUR_IN_ONE_SCENARIOS.map(s => ({ value: s.key, label: s.label }));
   const scenarioLabel = SCENARIOS.find(s => s.value === scenario)?.label || scenario;
 
   const lessonRecords = useMemo(() =>
@@ -89,7 +86,7 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant, draftFourInOne);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant, draftFourInOne, scenario);
     }
     return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback);
   };
@@ -311,8 +308,8 @@ export function FeedbackGenerator({
                   <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
                   新学员（补充孩子感受）
                 </label>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % 3)}>
-                  <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/3）
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % FOUR_IN_ONE_VARIANT_COUNT)}>
+                  <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/{FOUR_IN_ONE_VARIANT_COUNT}）
                 </Button>
               </>
             )}

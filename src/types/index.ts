@@ -139,6 +139,8 @@ export interface AppConfig {
   defaultAttendanceOptions: string[];
   defaultHomeworkOptions: string[];
   defaultListeningOptions: string[];
+  /** 课堂表现默认选项（用于新课次） */
+  defaultClassPerformanceOptions?: string[];
   defaultFeedbackTemplate: string;
   defaultPraiseTemplate: string;
   defaultQuestionTypes: QuestionType[];

@@ -124,11 +124,12 @@ export function buildPublicityHTML(
   customFields: CustomField[] = []
 ): string {
   const p = PALETTES[style] || PALETTES.gradient;
-  const sorted = [...records].sort((a, b) => b.totalScore - a.totalScore);
+  // 公示只列出到课学员：请假/缺勤者不出现在名单中（平均分本就不计入）
+  const sorted = [...records].filter(r => !isAbsentRecord(r)).sort((a, b) => b.totalScore - a.totalScore);
   const fullScore =
     questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0) +
     customFields.reduce((sum, cf) => sum + (cf.kind === 'number' && cf.includeInTotal ? (cf.fullScore || 0) : 0), 0);
-  const hasData = records.length > 0;
+  const hasData = sorted.length > 0;
 
   // 班级平均值（口径与学情表一致：请假/缺勤学员不计入平均分）
   const presentRecords = records.filter(r => !isAbsentRecord(r));
@@ -146,13 +147,16 @@ export function buildPublicityHTML(
     }
   });
 
-  // 排名徽章：前三名绿色高亮（对齐模板）
-  const rankBadge = (i: number, rank: number) => {
-    if (i < 3) {
-      const bg = i === 0 ? '#16a34a' : i === 1 ? '#22c55e' : '#4ade80';
-      return `<span style="display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-weight:800;background:${bg};color:#ffffff;box-shadow:0 2px 6px ${bg}55">${rank || i + 1}</span>`;
+  // 排名徽章：前三名金银铜渐变高亮（按真实名次着色，非位置）
+  const rankBadge = (rank: number) => {
+    if (rank === 1 || rank === 2 || rank === 3) {
+      const grad = rank === 1 ? 'linear-gradient(135deg,#fcd34d,#f0a92c)'
+        : rank === 2 ? 'linear-gradient(135deg,#e5eaf0,#a9b4c3)'
+        : 'linear-gradient(135deg,#f3b98f,#cd7f45)';
+      const glow = rank === 1 ? '#f0a92c' : rank === 2 ? '#94a3b8' : '#cd7f45';
+      return `<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-weight:800;background:${grad};color:#ffffff;box-shadow:0 2px 7px ${glow}66;font-size:14px">${rank}</span>`;
     }
-    return `<span style="display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-weight:600;background:${style === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};color:${p.muted}">${rank || i + 1}</span>`;
+    return `<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-weight:600;background:${style === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};color:${p.muted};font-size:13px">${rank}</span>`;
   };
 
   // 统一单元格样式：全居中、固定行高、底部细分隔线；溢出裁剪，保证固定列宽不错位
@@ -160,11 +164,12 @@ export function buildPublicityHTML(
 
   const rows = sorted.map((r, i) => {
     const ratePct = r.correctRate || 0;
+    const rankVal = r.rank || i + 1;
     // 正确率：<80 红色，≥80 绿色
     const rateColor = ratePct < 80 ? '#dc2626' : (style === 'dark' ? p.text : '#16a34a');
     const totalBg = style === 'dark' ? 'rgba(34,197,94,0.18)' : '#e8f8ee';
     return `<tr style="${i % 2 === 1 ? 'background:' + p.altRowBg + ';' : ''}">
-      <td style="${td}">${rankBadge(i, r.rank)}</td>
+      <td style="${td}">${rankBadge(rankVal)}</td>
       <td style="${td}font-weight:600">${getNickname(r.studentName)}</td>
       <td style="${td}white-space:nowrap">${seasonChips(r.seasons || [])}</td>
       <td style="${td}white-space:nowrap;font-size:13px">${attendanceEmoji(r.attendance)}</td>
@@ -215,26 +220,32 @@ export function buildPublicityHTML(
 <title>Day${lessonNumber}学情公示 · ${classData.name}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif; background: ${p.pageBg}; min-height: 100vh; padding: 24px; color: ${p.text}; }
-  .container { width: fit-content; max-width: 100%; margin: 0 auto; background: ${p.cardBg}; border-radius: 20px; overflow: hidden; box-shadow: 0 16px 48px rgba(30,95,214,0.16); }
-  .banner { background: ${p.bannerBg}; color: ${p.bannerText}; padding: 26px 32px; text-align: center; }
-  .banner h1 { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-bottom: 6px; }
-  .banner p { opacity: ${style === 'gradient' ? '0.9' : '0.7'}; font-size: 14.5px; }
-  .banner .meta { display:block; margin-top:6px; font-size:11.5px; opacity:0.6; letter-spacing:0.2px; }
-  .content { padding: 18px 16px 20px; overflow-x: auto; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif; background: ${p.pageBg}; min-height: 100vh; padding: 28px; color: ${p.text}; }
+  .container { width: fit-content; max-width: 100%; margin: 0 auto; background: ${p.cardBg}; border-radius: 22px; overflow: hidden; box-shadow: 0 18px 52px rgba(30,95,214,0.18); }
+  .accent { height: 5px; background: linear-gradient(90deg, ${p.accent}, ${p.headBg}); }
+  .banner { background: ${p.bannerBg}; color: ${p.bannerText}; padding: 28px 34px 24px; text-align: center; }
+  .banner h1 { font-size: 30px; font-weight: 800; letter-spacing: 3px; margin-bottom: 8px; }
+  .banner p { opacity: ${style === 'gradient' ? '0.92' : '0.72'}; font-size: 14.5px; font-weight: 500; }
+  .banner .meta { display:inline-block; margin-top:10px; padding:3px 12px; border-radius:999px; font-size:11.5px; letter-spacing:0.3px; background:${style === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.22)'}; opacity:0.9; }
+  .content { padding: 18px 18px 16px; overflow-x: auto; }
   table { width: ${tableWidth}px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
-  th { background: ${p.headBg}; color: ${p.headText}; padding: 11px 6px; font-weight: 700; white-space: nowrap; font-size: 13px; letter-spacing: 0.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+  th { background: ${p.headBg}; color: ${p.headText}; padding: 12px 6px; font-weight: 700; white-space: nowrap; font-size: 13px; letter-spacing: 0.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
   thead th:first-child { border-radius: 10px 0 0 0; }
   thead th:last-child { border-radius: 0 10px 0 0; }
+  tbody tr { transition: none; }
+  .legend { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 18px 18px; font-size:12px; color:${p.muted}; }
+  .legend .l { display:inline-flex; align-items:center; gap:5px; }
+  .legend .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
   @media print { body { padding: 0; background: ${style === 'dark' ? p.pageBg : '#fff'}; } .container { box-shadow: none; border-radius: 0; } }
 </style>
 </head>
 <body>
   <div class="container">
+    <div class="accent"></div>
     <div class="banner">
       <h1>Day${lessonNumber}学情公示</h1>
       <p>${classData.name}${classData.term ? ' · ' + classData.term : ''}${classData.batchCode ? ' · 批次 ' + classData.batchCode : ''}</p>
-      <div class="meta">共 ${records.length} 人 · 满分 ${fullScore} 分 · ${new Date().toLocaleDateString('zh-CN')}</div>
+      <div class="meta">满分 ${fullScore} 分 · ${new Date().toLocaleDateString('zh-CN')}</div>
     </div>
     <div class="content">
       <table>
@@ -255,8 +266,12 @@ export function buildPublicityHTML(
         </thead>
         <tbody>${rows}${hasData ? avgRow : ''}</tbody>
       </table>
-      ${!hasData ? '<p style="text-align:center;padding:40px;color:#94a3b8">本课次暂无学情数据</p>' : ''}
+      ${!hasData ? '<p style="text-align:center;padding:40px;color:#94a3b8">本课次暂无到课学员的学情数据</p>' : ''}
     </div>
+    ${hasData ? `<div class="legend">
+      <span class="l">🥇🥈🥉 前三名（同分并列）</span>
+      <span class="l"><span class="dot" style="background:#16a34a"></span>正确率≥80%　<span class="dot" style="background:#dc2626"></span>&lt;80%</span>
+    </div>` : ''}
   </div>
 </body>
 </html>`;

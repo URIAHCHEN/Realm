@@ -30,6 +30,7 @@ const defaultAppConfig: AppConfig = {
   defaultAttendanceOptions: ['按时出勤', '迟到', '缺勤', '请假', '调课'],
   defaultHomeworkOptions: ['超赞完成', '圆满完成', '未完成', '没带'],
   defaultListeningOptions: ['具体分数', '未加入课后任务', '未完成'],
+  defaultClassPerformanceOptions: ['专注高效', '积极互动', '状态一般', '需提醒'],
   defaultFeedbackTemplate: `【学生昵称】家长您好！
 
 📚 第【课次】课学习反馈：
@@ -64,7 +65,7 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   attendanceOptions: [...appConfig.defaultAttendanceOptions],
   homeworkOptions: [...appConfig.defaultHomeworkOptions],
   listeningOptions: [...appConfig.defaultListeningOptions],
-  classPerformanceOptions: [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
+  classPerformanceOptions: [...(appConfig.defaultClassPerformanceOptions || DEFAULT_CLASS_PERFORMANCE_OPTIONS)],
   feedbackTemplate: appConfig.defaultFeedbackTemplate,
   praiseTemplate: appConfig.defaultPraiseTemplate,
   homeworkText: '1️⃣课后任务\n2️⃣错题本（按照要求整理）\n3️⃣开心过年',
@@ -106,7 +107,7 @@ export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('appConfig');
-    return saved ? JSON.parse(saved) : defaultAppConfig;
+    return saved ? { ...defaultAppConfig, ...JSON.parse(saved) } : defaultAppConfig;
   });
 
   // 班级数据

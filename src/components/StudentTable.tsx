@@ -253,6 +253,42 @@ export function StudentTable({
   const getWeakPoints = (record: StudentRecord) =>
     computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
 
+  // —— 列排序：姓名（按姓氏拼音）/ 排名 / 总分 / 正确率 / 各题型分数；点击表头 升→降→取消 ——
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const collator = useMemo(() => new Intl.Collator('zh-Hans-CN-u-co-pinyin', { sensitivity: 'base' }), []);
+  const toggleSort = (key: string) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortKey(null); setSortDir('asc'); }
+  };
+  const sortValueOf = (name: string, key: string): string | number => {
+    if (key === 'name') return name;
+    const r = recordByKey.get(name);
+    if (key === 'rank') {
+      if (r?.rank) return r.rank;
+      // 无排名的学员：任何方向都排在末尾
+      return sortDir === 'asc' ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+    }
+    if (key === 'total') return r?.totalScore || 0;
+    if (key === 'rate') return r?.correctRate || 0;
+    if (key.startsWith('qt:')) return r?.scores?.[key.slice(3)] || 0;
+    return 0;
+  };
+  const orderedStudents = useMemo(() => {
+    if (!sortKey) return students;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...students].sort((a, b) => {
+      const va = sortValueOf(a, sortKey);
+      const vb = sortValueOf(b, sortKey);
+      if (typeof va === 'string' || typeof vb === 'string') return collator.compare(String(va), String(vb)) * dir;
+      return (va - vb) * dir;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, sortKey, sortDir, recordByKey]);
+  const sortCaret = (key: string) =>
+    sortKey === key ? <span className="ml-0.5 font-bold" style={{ color: 'var(--brand)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span> : null;
+
   const handleSeasonToggle = (studentName: string, season: SeasonType) => {
     const record = getStudentRecord(studentName);
     const currentSeasons = record?.seasons || [];
@@ -555,17 +591,17 @@ export function StudentTable({
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
                       </TableHead>
-                      <TableHead className="w-14 text-base font-bold">排名</TableHead>
-                      <TableHead className="w-20 text-base font-bold">姓名</TableHead>
+                      <TableHead className="w-14 text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('rank')}>排名{sortCaret('rank')}</TableHead>
+                      <TableHead className="w-20 text-base font-bold cursor-pointer select-none" title="按姓氏拼音排序（升→降→取消）" onClick={() => toggleSort('name')}>姓名{sortCaret('name')}</TableHead>
                       {col('seasons') && <TableHead className="w-28 text-base font-bold">{columnLabel('seasons')}</TableHead>}
                       {col('attendance') && <TableHead className="w-24 text-base font-bold">{columnLabel('attendance')}</TableHead>}
                       {col('classPerformance') && <TableHead className="w-24 text-base font-bold">{columnLabel('classPerformance')}</TableHead>}
                       {col('homework') && <TableHead className="w-24 text-base font-bold">{columnLabel('homework')}</TableHead>}
                       {col('listening') && <TableHead className="w-28 text-base font-bold">{columnLabel('listening')}</TableHead>}
-                      {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-16 text-center text-xs font-bold whitespace-normal leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}`}>{qt.name}</TableHead>)}
-                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
-                      <TableHead className="w-16 text-center text-base font-bold">总分</TableHead>
-                      {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">正确率</TableHead>}
+                      {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-16 text-center text-xs font-bold whitespace-normal break-all leading-tight cursor-pointer select-none" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`} onClick={() => toggleSort(`qt:${qt.id}`)}>{qt.name}{sortCaret(`qt:${qt.id}`)}</TableHead>)}
+                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold break-all leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
+                      <TableHead className="w-16 text-center text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('total')}>总分{sortCaret('total')}</TableHead>
+                      {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('rate')}>正确率{sortCaret('rate')}</TableHead>}
                       {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">{columnLabel('pass')}</TableHead>}
                       {col('weakPoints') && <TableHead className="text-base font-bold">薄弱项</TableHead>}
                       {col('note') && <TableHead className="w-24 text-base font-bold">{columnLabel('note')}</TableHead>}
@@ -573,7 +609,7 @@ export function StudentTable({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {students.map((studentName) => {
+                    {orderedStudents.map((studentName) => {
                       const record = getStudentRecord(studentName);
                       const weakPoints = record ? getWeakPoints(record) : [];
                       const totalScore = record?.totalScore || 0;
@@ -790,8 +826,8 @@ export function StudentTable({
                         </TableRow>
                       );
                     })}
-                    {/* 底部统计行 */}
-                    <TableRow className="bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border-t-2 border-[rgb(var(--brand-rgb)/0.25)] hover:bg-[rgb(var(--brand-rgb)/0.10)] font-semibold">
+                    {/* 底部统计行（吸底固定，滚动时保持可见） */}
+                    <TableRow className="class-stats-row bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border-t-2 border-[rgb(var(--brand-rgb)/0.25)] hover:bg-[rgb(var(--brand-rgb)/0.10)] font-semibold">
                       <TableCell></TableCell>
                       <TableCell className="text-sm font-bold text-slate-700" colSpan={2}>
                         <div className="flex items-center gap-2">

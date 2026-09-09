@@ -1598,3 +1598,13 @@ body{
   .honor-wall{ gap:var(--sp-4); }
   .listening-grid{ gap:var(--sp-3); }
 }
+
+/* 学情表底部「班级统计」行：吸底固定，滚动时保持可见 */
+.class-stats-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background-color: #eef3fa;
+  background-image: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.08), rgb(var(--brand-rgb) / 0.14));
+  box-shadow: 0 -6px 12px -8px rgb(15 23 42 / 0.18);
+}

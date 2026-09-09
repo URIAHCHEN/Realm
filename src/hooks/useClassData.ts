@@ -9,7 +9,7 @@ import type {
   ClassStats,
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
 
 // 生成唯一ID
@@ -82,11 +82,16 @@ const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
 });
 
 // 总分/正确率统一口径：题型分数 + 计入总分的分数型自定义列
+// 考勤含「请假」的记录：分数一律不计入总分与正确率（原始分数仍保留，改回出勤会自动重新计入）
 function computeTotals(
   scores: { [k: string]: number },
   customValues: { [k: string]: string | number } | undefined,
-  lessonConfig: LessonConfig
+  lessonConfig: LessonConfig,
+  attendance?: string
 ): { totalScore: number; correctRate: number } {
+  if (attendanceKind(attendance) === 'leave') {
+    return { totalScore: 0, correctRate: 0 };
+  }
   let total = 0;
   let full = 0;
   lessonConfig.questionTypes.forEach(qt => {
@@ -103,6 +108,37 @@ function computeTotals(
   return { totalScore: Math.round(total * 100) / 100, correctRate };
 }
 
+// 历史数据规范化：把「请假」记录的已计总分/正确率清零并重排各课次名次（旧数据加载/云端导入时执行）
+function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
+  let changed = false;
+  const next: { [key: string]: Class } = {};
+  Object.entries(all).forEach(([cid, cls]) => {
+    if (!cls?.records) { next[cid] = cls; return; }
+    let clsChanged = false;
+    let records = cls.records.map(r => {
+      if (attendanceKind(r.attendance) === 'leave' && (r.totalScore > 0 || r.correctRate > 0)) {
+        clsChanged = true;
+        return { ...r, totalScore: 0, correctRate: 0 };
+      }
+      return r;
+    });
+    if (clsChanged) {
+      changed = true;
+      const lessons = new Set(records.map(r => r.lessonNumber));
+      records = [...records];
+      lessons.forEach(lesson => {
+        const sorted = records.filter(r => r.lessonNumber === lesson).sort((a, b) => b.totalScore - a.totalScore);
+        sorted.forEach((r, i) => {
+          const idx = records.findIndex(x => x.id === r.id);
+          if (idx >= 0 && records[idx].rank !== i + 1) records[idx] = { ...records[idx], rank: i + 1 };
+        });
+      });
+    }
+    next[cid] = clsChanged ? { ...cls, records } : cls;
+  });
+  return changed ? next : all;
+}
+
 export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
@@ -114,7 +150,7 @@ export function useClassData() {
   const [classes, setClasses] = useState<{ [key: string]: Class }>(() => {
     const saved = localStorage.getItem('classData');
     if (saved) {
-      return JSON.parse(saved);
+      return normalizeLeaveTotals(JSON.parse(saved));
     }
     // 初始化示例数据
     return {
@@ -443,7 +479,7 @@ export function useClassData() {
           ? { ...(existing.customValues || {}), ...record.customValues }
           : existing.customValues;
 
-        const { totalScore, correctRate } = computeTotals(updatedScores, updatedCustom, lessonConfig);
+        const { totalScore, correctRate } = computeTotals(updatedScores, updatedCustom, lessonConfig, record.attendance ?? existing.attendance);
 
         newRecords[existingIndex] = { 
           ...existing, 
@@ -456,7 +492,7 @@ export function useClassData() {
       } else {
         // 创建新记录
         const scores = record.scores || {};
-        const { totalScore, correctRate } = computeTotals(scores, record.customValues, lessonConfig);
+        const { totalScore, correctRate } = computeTotals(scores, record.customValues, lessonConfig, record.attendance);
 
         const newRecord: StudentRecord = {
           id: generateId(),
@@ -512,10 +548,10 @@ export function useClassData() {
       const newRecords = [...classData.records];
       newRecords[recordIndex] = { ...newRecords[recordIndex], [field]: value };
 
-      // 分数或自定义值变化：统一口径重算总分/正确率与排名
-      if (field === 'scores' || field === 'customValues') {
+      // 分数、自定义值或考勤变化：统一口径重算总分/正确率与排名（请假→总分清零，恢复出勤→重新计入）
+      if (field === 'scores' || field === 'customValues' || field === 'attendance') {
         const record = newRecords[recordIndex];
-        const { totalScore, correctRate } = computeTotals(record.scores, record.customValues, lessonConfig);
+        const { totalScore, correctRate } = computeTotals(record.scores, record.customValues, lessonConfig, record.attendance);
         newRecords[recordIndex].totalScore = totalScore;
         newRecords[recordIndex].correctRate = correctRate;
 
@@ -914,7 +950,7 @@ export function useClassData() {
     schoolScores: { [studentName: string]: SchoolScore[] };
   }) => {
     setAppConfig(data.appConfig);
-    setClasses(data.classes);
+    setClasses(normalizeLeaveTotals(data.classes));
     setNicknames(data.nicknames);
     setSchoolScores(data.schoolScores);
   }, []);

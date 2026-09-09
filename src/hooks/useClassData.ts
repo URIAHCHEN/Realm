@@ -15,6 +15,20 @@ import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoi
 // 生成唯一ID
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
+// localStorage JSON 安全解析：数据损坏（写入中断/手动改坏）时回退默认值，
+// 避免初始化阶段抛异常导致整页白屏且无法自愈（坏数据一直留在 localStorage）
+function safeParse<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return (parsed ?? fallback) as T;
+  } catch {
+    console.warn(`[load] ${key} 数据损坏，已回退默认值`);
+    return fallback;
+  }
+}
+
 // 默认题型
 const defaultQuestionTypes: QuestionType[] = [
   { id: 'vocab', name: '单词默写', fullScore: 100, order: 1 },
@@ -108,6 +122,21 @@ function computeTotals(
   return { totalScore: Math.round(total * 100) / 100, correctRate };
 }
 
+// 重算某课次排名（按总分降序），返回新数组（不可变，不改动入参对象）。
+// 用 Map 定位代替逐条 findIndex，将 O(n²) 降为 O(n log n)；统一所有写路径的排名口径
+function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRecord[] {
+  const posById = new Map<string, number>();
+  records
+    .filter(r => r.lessonNumber === lessonNumber)
+    .sort((a, b) => b.totalScore - a.totalScore)
+    .forEach((r, i) => posById.set(r.id, i + 1));
+  return records.map(r => {
+    if (r.lessonNumber !== lessonNumber) return r;
+    const pos = posById.get(r.id);
+    return pos != null && r.rank !== pos ? { ...r, rank: pos } : r;
+  });
+}
+
 // 历史数据规范化：把「请假」记录的已计总分/正确率清零并重排各课次名次（旧数据加载/云端导入时执行）
 function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
   let changed = false;
@@ -125,14 +154,11 @@ function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: C
     if (clsChanged) {
       changed = true;
       const lessons = new Set(records.map(r => r.lessonNumber));
-      records = [...records];
+      let ranked = records;
       lessons.forEach(lesson => {
-        const sorted = records.filter(r => r.lessonNumber === lesson).sort((a, b) => b.totalScore - a.totalScore);
-        sorted.forEach((r, i) => {
-          const idx = records.findIndex(x => x.id === r.id);
-          if (idx >= 0 && records[idx].rank !== i + 1) records[idx] = { ...records[idx], rank: i + 1 };
-        });
+        ranked = rerankLesson(ranked, lesson);
       });
+      records = ranked;
     }
     next[cid] = clsChanged ? { ...cls, records } : cls;
   });
@@ -142,15 +168,15 @@ function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: C
 export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
-    const saved = localStorage.getItem('appConfig');
-    return saved ? { ...defaultAppConfig, ...JSON.parse(saved) } : defaultAppConfig;
+    const saved = safeParse<Partial<AppConfig>>('appConfig', {});
+    return { ...defaultAppConfig, ...saved };
   });
 
   // 班级数据
   const [classes, setClasses] = useState<{ [key: string]: Class }>(() => {
-    const saved = localStorage.getItem('classData');
-    if (saved) {
-      return normalizeLeaveTotals(JSON.parse(saved));
+    const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
+    if (saved && typeof saved === 'object') {
+      return normalizeLeaveTotals(saved);
     }
     // 初始化示例数据
     return {
@@ -179,19 +205,19 @@ export function useClassData() {
 
   const [currentLessonNumber, setCurrentLessonNumber] = useState<number>(() => {
     const saved = localStorage.getItem('currentLessonNumber');
-    return saved ? parseInt(saved) : 1;
+    const n = saved ? parseInt(saved, 10) : 1;
+    // 损坏值（NaN/非正数）回退第 1 课，避免 NaN 课次导致所有过滤为空
+    return Number.isFinite(n) && n > 0 ? n : 1;
   });
 
   // 学生昵称（按班级）
   const [nicknames, setNicknames] = useState<{ [classId: string]: { [studentName: string]: string } }>(() => {
-    const saved = localStorage.getItem('studentNicknames');
-    return saved ? JSON.parse(saved) : {};
+    return safeParse('studentNicknames', {});
   });
 
   // 校内成绩
   const [schoolScores, setSchoolScores] = useState<{ [studentName: string]: SchoolScore[] }>(() => {
-    const saved = localStorage.getItem('schoolScores');
-    return saved ? JSON.parse(saved) : {};
+    return safeParse('schoolScores', {});
   });
 
   // 保存到 localStorage
@@ -376,6 +402,13 @@ export function useClassData() {
       delete newClasses[classId];
       return newClasses;
     });
+    // 同步清理该班的昵称，避免数据残留无限增长
+    setNicknames(prev => {
+      if (!(classId in prev)) return prev;
+      const next = { ...prev };
+      delete next[classId];
+      return next;
+    });
     if (currentClassId === classId) {
       const remainingClasses = Object.keys(classes).filter(id => id !== classId);
       setCurrentClassId(remainingClasses[0] || null);
@@ -386,8 +419,8 @@ export function useClassData() {
   const addStudentToClass = useCallback((classId: string, studentName: string) => {
     setClasses(prev => {
       const classData = prev[classId];
-      if (classData.students.includes(studentName)) return prev;
-      
+      if (!classData || classData.students.includes(studentName)) return prev;
+
       return {
         ...prev,
         [classId]: {
@@ -407,8 +440,11 @@ export function useClassData() {
   const addStudents = useCallback((classId: string, studentNames: string[]) => {
     setClasses(prev => {
       const classData = prev[classId];
-      const newStudents = studentNames.filter(name => !classData.students.includes(name));
-      
+      // 防御：班级不存在时忽略，避免 undefined.students 崩溃
+      if (!classData) return prev;
+      const known = new Set(classData.students);
+      const newStudents = studentNames.filter(name => name && !known.has(name));
+
       return {
         ...prev,
         [classId]: {
@@ -465,6 +501,8 @@ export function useClassData() {
     
     setClasses(prev => {
       const classData = prev[classId];
+      // 防御：班级不存在（如云端导入竞态/被删除）时静默忽略，避免 TypeError
+      if (!classData) return prev;
       const existingIndex = classData.records.findIndex(
         r => r.studentName === record.studentName && r.lessonNumber === record.lessonNumber
       );
@@ -508,40 +546,32 @@ export function useClassData() {
           totalScore,
           correctRate,
           rank: 0,
-          date: new Date().toLocaleDateString('zh-CN')
+          date: new Date().toISOString().slice(0, 10)
         };
         newRecords = [...classData.records, newRecord];
       }
 
       // 重新计算排名
       const lessonNumber = record.lessonNumber || currentLessonNumber;
-      const lessonRecords = newRecords.filter(r => r.lessonNumber === lessonNumber);
-      const sorted = lessonRecords.sort((a, b) => b.totalScore - a.totalScore);
-      sorted.forEach((r, index) => {
-        const idx = newRecords.findIndex(nr => nr.id === r.id);
-        if (idx >= 0) {
-          newRecords[idx].rank = index + 1;
-        }
-      });
+      const ranked = rerankLesson(newRecords, lessonNumber);
 
       return {
         ...prev,
-        [classId]: { ...classData, records: newRecords }
+        [classId]: { ...classData, records: ranked }
       };
     });
   }, [currentLessonNumber, getLessonConfig]);
 
   // 更新记录字段
   const updateRecordField = useCallback((
-    classId: string, 
-    recordId: string, 
-    field: keyof StudentRecord, 
+    classId: string,
+    recordId: string,
+    field: keyof StudentRecord,
     value: any
   ) => {
-    const lessonConfig = getLessonConfig(classId, currentLessonNumber);
-    
     setClasses(prev => {
       const classData = prev[classId];
+      if (!classData) return prev;
       const recordIndex = classData.records.findIndex(r => r.id === recordId);
       if (recordIndex < 0) return prev;
 
@@ -551,19 +581,22 @@ export function useClassData() {
       // 分数、自定义值或考勤变化：统一口径重算总分/正确率与排名（请假→总分清零，恢复出勤→重新计入）
       if (field === 'scores' || field === 'customValues' || field === 'attendance') {
         const record = newRecords[recordIndex];
+        // 关键：用记录自身所属课次的配置重算（原实现固定取当前课次，跨课次更新会算错）
+        const lesson = record.lessonNumber || currentLessonNumber;
+        const lessonConfig =
+          classData.lessonConfigs[lesson.toString()] ||
+          (lesson > 1 ? classData.lessonConfigs[(lesson - 1).toString()] : undefined) ||
+          getDefaultLessonConfig(appConfig);
         const { totalScore, correctRate } = computeTotals(record.scores, record.customValues, lessonConfig, record.attendance);
         newRecords[recordIndex].totalScore = totalScore;
         newRecords[recordIndex].correctRate = correctRate;
 
         // 重新计算排名
-        const lessonRecords = newRecords.filter(r => r.lessonNumber === record.lessonNumber);
-        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
-        sorted.forEach((r, index) => {
-          const idx = newRecords.findIndex(nr => nr.id === r.id);
-          if (idx >= 0) {
-            newRecords[idx].rank = index + 1;
-          }
-        });
+        const ranked = rerankLesson(newRecords, lesson);
+        return {
+          ...prev,
+          [classId]: { ...classData, records: ranked }
+        };
       }
 
       return {
@@ -571,7 +604,7 @@ export function useClassData() {
         [classId]: { ...classData, records: newRecords }
       };
     });
-  }, [currentLessonNumber, getLessonConfig]);
+  }, [currentLessonNumber, appConfig]);
 
   // 删除记录
   const deleteRecord = useCallback((classId: string, recordId: string) => {
@@ -609,14 +642,9 @@ export function useClassData() {
 
       // 重算该课次排名
       const lesson = newRecords[idx].lessonNumber;
-      const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
-      const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
-      sorted.forEach((r, i) => {
-        const pos = newRecords.findIndex(nr => nr.id === r.id);
-        if (pos >= 0) newRecords[pos] = { ...newRecords[pos], rank: i + 1 };
-      });
+      const ranked = rerankLesson(newRecords, lesson);
 
-      return { ...prev, [classId]: { ...classData, records: newRecords } };
+      return { ...prev, [classId]: { ...classData, records: ranked } };
     });
   }, []);
 
@@ -679,14 +707,9 @@ export function useClassData() {
 
       const newRecords = [...classData.records, record];
       // 重算该课次排名，与 saveRecord 保持一致
-      const lessonRecords = newRecords.filter(r => r.lessonNumber === record.lessonNumber);
-      const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
-      sorted.forEach((r, index) => {
-        const idx = newRecords.findIndex(nr => nr.id === r.id);
-        if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
-      });
+      const ranked = rerankLesson(newRecords, record.lessonNumber);
 
-      return { ...prev, [classId]: { ...classData, records: newRecords } };
+      return { ...prev, [classId]: { ...classData, records: ranked } };
     });
   }, []);
 
@@ -714,16 +737,12 @@ export function useClassData() {
       const toAdd = records.filter(r => !existingIds.has(r.id));
       if (toAdd.length === 0) return prev;
       const newRecords = [...cd.records, ...toAdd];
+      let ranked = newRecords;
       const affected = new Set(toAdd.map(r => r.lessonNumber));
       affected.forEach(lesson => {
-        const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
-        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
-        sorted.forEach((r, index) => {
-          const idx = newRecords.findIndex(nr => nr.id === r.id);
-          if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
-        });
+        ranked = rerankLesson(ranked, lesson);
       });
-      return { ...prev, [classId]: { ...cd, records: newRecords } };
+      return { ...prev, [classId]: { ...cd, records: ranked } };
     });
   }, []);
 
@@ -743,17 +762,12 @@ export function useClassData() {
       const toRestore = records.filter(
         r => !existingKeys.has(`${r.studentName}#${r.lessonNumber}`)
       );
-      const newRecords = [...classData.records, ...toRestore];
+      let newRecords = [...classData.records, ...toRestore];
 
       // 重算受影响课次的排名
       const affectedLessons = new Set(toRestore.map(r => r.lessonNumber));
       affectedLessons.forEach(lesson => {
-        const lessonRecords = newRecords.filter(r => r.lessonNumber === lesson);
-        const sorted = [...lessonRecords].sort((a, b) => b.totalScore - a.totalScore);
-        sorted.forEach((r, index) => {
-          const idx = newRecords.findIndex(nr => nr.id === r.id);
-          if (idx >= 0) newRecords[idx] = { ...newRecords[idx], rank: index + 1 };
-        });
+        newRecords = rerankLesson(newRecords, lesson);
       });
 
       return { ...prev, [classId]: { ...classData, students, records: newRecords } };
@@ -949,10 +963,12 @@ export function useClassData() {
     nicknames: { [classId: string]: { [studentName: string]: string } };
     schoolScores: { [studentName: string]: SchoolScore[] };
   }) => {
-    setAppConfig(data.appConfig);
-    setClasses(normalizeLeaveTotals(data.classes));
-    setNicknames(data.nicknames);
-    setSchoolScores(data.schoolScores);
+    // 防御：字段缺失/为 null 时回退空对象；appConfig 与默认值合并，
+    // 避免旧备份缺新字段（如课堂表现选项）导致新课次配置残缺
+    setAppConfig({ ...defaultAppConfig, ...(data?.appConfig || {}) });
+    setClasses(normalizeLeaveTotals(data?.classes || {}));
+    setNicknames(data?.nicknames || {});
+    setSchoolScores(data?.schoolScores || {});
   }, []);
 
   // 导出为HTML（公示页，样式可选：gradient/minimal/dark）

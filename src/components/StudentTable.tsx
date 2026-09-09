@@ -212,11 +212,18 @@ export function StudentTable({
       const field = bulkField === 'attendance' ? 'attendance' : bulkField === 'homework' ? 'homeworkStatus' : 'listeningStatus';
       list.forEach(s => setFieldFor(s, { [field]: bulkValue } as Partial<StudentRecord>));
     } else if (bulkField === 'listeningScore') {
-      const val = parseFloat(bulkValue) || 0;
+      // 与单格 ScoreInput 相同的 clamp 口径：[0, 100]，两位小数
+      const raw = parseFloat(bulkValue);
+      const val = Number.isFinite(raw) ? Math.round(Math.max(0, Math.min(100, raw)) * 100) / 100 : 0;
       list.forEach(s => setFieldFor(s, { listeningScore: val, listeningStatus: '具体分数' }));
     } else if (bulkField === 'score') {
       if (!bulkQtId) { toast.error('请先选择要设置的题型'); return; }
-      const val = parseFloat(bulkValue) || 0;
+      const raw = parseFloat(bulkValue);
+      if (!Number.isFinite(raw)) { toast.error('请输入有效分数'); return; }
+      const qt = lessonConfig.questionTypes.find(q => q.id === bulkQtId);
+      const cap = qt?.fullScore;
+      // 与单格输入一致：钳制到 [0, 题型满分]，避免负数/超满分混入统计
+      const val = Math.round(Math.max(0, cap != null ? Math.min(cap, raw) : raw) * 100) / 100;
       list.forEach(s => {
         const record = getStudentRecord(s);
         const newScores = { ...(record?.scores || {}), [bulkQtId]: val };
@@ -372,7 +379,13 @@ export function StudentTable({
 
   const handleAddQuestionType = () => {
     if (!newQuestionType.name.trim()) return;
-    const newQt = { id: 'qt_' + Date.now(), name: newQuestionType.name.trim(), fullScore: newQuestionType.fullScore, order: lessonConfig.questionTypes.length };
+    // 满分校验：非法/非正数回退 100，避免负满分污染正确率计算
+    const fullScore = Number.isFinite(newQuestionType.fullScore) && newQuestionType.fullScore > 0
+      ? newQuestionType.fullScore
+      : 100;
+    const dup = lessonConfig.questionTypes.some(qt => qt.name === newQuestionType.name.trim());
+    if (dup) { toast.error('已存在同名题型'); return; }
+    const newQt = { id: 'qt_' + Date.now(), name: newQuestionType.name.trim(), fullScore, order: lessonConfig.questionTypes.length };
     onSaveLessonConfig(lessonNumber, { questionTypes: [...lessonConfig.questionTypes, newQt] });
     setNewQuestionType({ name: '', fullScore: 100 });
     setShowAddQuestionTypeDialog(false);
@@ -892,7 +905,7 @@ export function StudentTable({
           <DialogHeader><DialogTitle>添加题型配置</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
             <div><label className="text-sm font-medium mb-2 block">题型名称</label><Input placeholder="如：阅读理解" value={newQuestionType.name} onChange={(e) => setNewQuestionType(prev => ({ ...prev, name: e.target.value }))} className="liquid-glass-input" /></div>
-            <div><label className="text-sm font-medium mb-2 block">满分</label><Input type="number" step="0.5" placeholder="100" value={newQuestionType.fullScore} onChange={(e) => setNewQuestionType(prev => ({ ...prev, fullScore: parseFloat(e.target.value) || 100 }))} className="liquid-glass-input" /></div>
+            <div><label className="text-sm font-medium mb-2 block">满分</label><Input type="number" min="1" step="0.5" placeholder="100" value={newQuestionType.fullScore} onChange={(e) => { const n = parseFloat(e.target.value); setNewQuestionType(prev => ({ ...prev, fullScore: Number.isFinite(n) ? n : 100 })); }} className="liquid-glass-input" /></div>
             <div className="flex gap-2">
               <Button onClick={handleAddQuestionType} className="flex-1 liquid-glass-button">添加</Button>
               <Button onClick={() => setShowAddQuestionTypeDialog(false)} variant="outline" className="flex-1">取消</Button>

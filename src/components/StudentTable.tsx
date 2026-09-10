@@ -781,7 +781,7 @@ export function StudentTable({
                               )}
                               <span className="relative z-[1] font-bold text-lg" style={{ color: 'var(--brand)' }}>{totalScore}</span>
                             </span>
-                            <span className="text-sm text-slate-400">/{fullScore}</span>
+                            {fullScore > 0 && <span className="text-sm text-slate-400">/{fullScore}</span>}
                           </TableCell>
                           {col('correctRate') && (
                           <TableCell className="text-center text-base">
@@ -885,10 +885,10 @@ export function StudentTable({
                 </Table>
               </div>
             </div>
-            {/* 底部操作条：沉底固定，页面滚动时始终可见 */}
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2 flex-wrap justify-center items-center rounded-2xl border border-[rgb(var(--brand-rgb)/0.2)] bg-white/90 backdrop-blur-md px-4 py-2.5 shadow-[0_12px_32px_-12px_rgb(15_23_42/0.28)]">
-              <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><UserPlus className="w-4 h-4" />添加学员</Button>
-              <Button onClick={onExportData} variant="outline" size="sm" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><Download className="w-4 h-4" />导出CSV</Button>
+            {/* 底部操作条：常规文档流（不再固定），随页面正常滚动 */}
+            <div className="flex gap-2 flex-wrap mt-4">
+              <Button onClick={() => setShowAddDialog(true)} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><UserPlus className="w-4 h-4" />添加学员</Button>
+              <Button onClick={onExportData} variant="outline" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"><Download className="w-4 h-4" />导出CSV</Button>
             </div>
           </>
         )}

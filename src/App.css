@@ -1598,3 +1598,17 @@ body{
   .honor-wall{ gap:var(--sp-4); }
   .listening-grid{ gap:var(--sp-3); }
 }
+
+/* 学情表「班级统计」行：吸底固定在滚动容器底部，纵向滚动查看学员时始终可见；
+   因与表格同处一个横向滚动容器，列宽/对齐/横向滚动天然与上方列一致。
+   td 设不透明背景 + 较高 z-index，避免被行内容或表头遮挡。 */
+.class-stats-row > td,
+.class-stats-row > th {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background-color: #eef3fa;
+  background-image: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.10), rgb(var(--brand-rgb) / 0.16));
+  box-shadow: 0 -6px 14px -8px rgb(15 23 42 / 0.20);
+  border-top: 2px solid rgb(var(--brand-rgb) / 0.25);
+}

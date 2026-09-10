@@ -134,6 +134,43 @@ function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRe
   });
 }
 
+// 解析某课次生效配置（与 getLessonConfig 同口径的纯函数版本，供加载期/导入期迁移使用）
+function resolveLessonConfigPure(classData: Class, lessonNumber: number, appConfig: AppConfig): LessonConfig {
+  const cfgs = classData.lessonConfigs || {};
+  const cfg = cfgs[lessonNumber.toString()];
+  if (cfg) return withClassPerformanceDefaults(cfg);
+  const prev = lessonNumber - 1;
+  if (prev > 0 && cfgs[prev.toString()]) return withClassPerformanceDefaults(cfgs[prev.toString()]);
+  return getDefaultLessonConfig(appConfig);
+}
+
+// 以「当前课次配置的真实满分」重算全部记录的正确率。
+// 修复历史数据分母停留在默认 300（默认题型 3×100）导致学情表/表扬榜/学情报告正确率失真的问题；
+// 分母统一取自 getLessonFullScore，与保存路径 computeTotals 完全同口径；分母为 0/缺失时正确率记 0，避免除零。
+function recomputeRatesInClass(classData: Class, appConfig: AppConfig): Class {
+  if (!classData?.records) return classData;
+  let changed = false;
+  const records = classData.records.map(r => {
+    const full = getLessonFullScore(resolveLessonConfigPure(classData, r.lessonNumber, appConfig));
+    const rate = full > 0 ? Math.round((r.totalScore / full) * 100 * 10) / 10 : 0;
+    if (rate === r.correctRate) return r;
+    changed = true;
+    return { ...r, correctRate: rate };
+  });
+  return changed ? { ...classData, records } : classData;
+}
+
+function recomputeAllRates(classes: { [key: string]: Class }, appConfig: AppConfig): { [key: string]: Class } {
+  let changed = false;
+  const next: { [key: string]: Class } = {};
+  Object.entries(classes).forEach(([id, c]) => {
+    const nc = recomputeRatesInClass(c, appConfig);
+    if (nc !== c) changed = true;
+    next[id] = nc;
+  });
+  return changed ? next : classes;
+}
+
 // 历史数据规范化：把「请假」记录的已计总分/正确率清零并重排各课次名次（旧数据加载/云端导入时执行）
 function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
   let changed = false;
@@ -173,7 +210,8 @@ export function useClassData() {
   const [classes, setClasses] = useState<{ [key: string]: Class }>(() => {
     const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
     if (saved && typeof saved === 'object') {
-      return normalizeLeaveTotals(saved);
+      // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
+      return recomputeAllRates(normalizeLeaveTotals(saved), appConfig);
     }
     // 初始化示例数据
     return {
@@ -510,18 +548,17 @@ export function useClassData() {
   const saveLessonConfig = useCallback((classId: string, lessonNumber: number, config: Partial<LessonConfig>) => {
     setClasses(prev => {
       const classData = prev[classId];
+      if (!classData) return prev;
       const existingConfig = classData.lessonConfigs[lessonNumber.toString()] || getDefaultLessonConfig(appConfig);
-      
-      return {
-        ...prev,
-        [classId]: {
-          ...classData,
-          lessonConfigs: {
-            ...classData.lessonConfigs,
-            [lessonNumber.toString()]: { ...existingConfig, ...config }
-          }
+      const updated: Class = {
+        ...classData,
+        lessonConfigs: {
+          ...classData.lessonConfigs,
+          [lessonNumber.toString()]: { ...existingConfig, ...config }
         }
       };
+      // 课次配置变化（增删题型/改满分/计入总分开关）后，用新满分重算该班全部记录正确率，保持三处口径一致
+      return { ...prev, [classId]: recomputeRatesInClass(updated, appConfig) };
     });
   }, [appConfig]);
 
@@ -1056,8 +1093,10 @@ export function useClassData() {
   }) => {
     // 防御：字段缺失/为 null 时回退空对象；appConfig 与默认值合并，
     // 避免旧备份缺新字段（如课堂表现选项）导致新课次配置残缺
-    setAppConfig({ ...defaultAppConfig, ...(data?.appConfig || {}) });
-    setClasses(normalizeLeaveTotals(data?.classes || {}));
+    const mergedAppConfig = { ...defaultAppConfig, ...(data?.appConfig || {}) };
+    setAppConfig(mergedAppConfig);
+    // 导入期迁移：请假清零 + 以课次真实满分重算正确率
+    setClasses(recomputeAllRates(normalizeLeaveTotals(data?.classes || {}), mergedAppConfig));
     setNicknames(data?.nicknames || {});
     setSchoolScores(data?.schoolScores || {});
   }, []);

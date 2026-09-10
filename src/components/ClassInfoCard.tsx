@@ -50,13 +50,13 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
     <Card className="rounded-2xl bg-white/60 backdrop-blur border border-black/5 shadow-sm overflow-hidden">
       {/* 渐变头部 */}
       <div className="bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.12)] to-[rgb(var(--brand-rgb)/0.25)] px-5 pt-4 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shadow-sm shrink-0">
               <Users className="w-4.5 h-4.5 text-[color:var(--brand)]" />
             </div>
-            <div>
-              <p className="font-bold text-slate-800 leading-tight">{classData.name}</p>
+            <div className="min-w-0">
+              <p className="font-bold text-slate-800 leading-tight truncate">{classData.name}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {classData.term && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/70 text-[color:var(--brand)] flex items-center gap-0.5">
@@ -69,14 +69,14 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {onTransferStudent && (
-              <Button variant="outline" size="sm" onClick={onTransferStudent} className="gap-1.5 rounded-xl h-8 bg-white/70 border-white" title="学生转班（保留本班历史记录）">
+              <Button variant="outline" size="sm" onClick={onTransferStudent} className="gap-1 rounded-xl h-8 px-2.5 bg-white/70 border-white" title="学生转班（保留本班历史记录）">
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 转班
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={onManageStudents} className="gap-1.5 rounded-xl h-8 bg-white/70 border-white">
+            <Button variant="outline" size="sm" onClick={onManageStudents} className="gap-1 rounded-xl h-8 px-2.5 bg-white/70 border-white">
               <UserPlus className="w-3.5 h-3.5" />
               管理
             </Button>

@@ -151,13 +151,19 @@ function recomputeRatesInClass(classData: Class, appConfig: AppConfig): Class {
   if (!classData?.records) return classData;
   let changed = false;
   const records = classData.records.map(r => {
-    const full = getLessonFullScore(resolveLessonConfigPure(classData, r.lessonNumber, appConfig));
-    const rate = full > 0 ? Math.round((r.totalScore / full) * 100 * 10) / 10 : 0;
-    if (rate === r.correctRate) return r;
+    const cfg = resolveLessonConfigPure(classData, r.lessonNumber, appConfig);
+    const { totalScore, correctRate } = computeTotals(r.scores, r.customValues, cfg, r.attendance);
+    if (totalScore === r.totalScore && correctRate === r.correctRate) return r;
     changed = true;
-    return { ...r, correctRate: rate };
+    return { ...r, totalScore, correctRate };
   });
-  return changed ? { ...classData, records } : classData;
+  if (!changed) return classData;
+  // 总分变化后同步重排各课次名次，保证排名与总分一致
+  let ranked = records;
+  new Set(records.map(r => r.lessonNumber)).forEach(lesson => {
+    ranked = rerankLesson(ranked, lesson);
+  });
+  return { ...classData, records: ranked };
 }
 
 function recomputeAllRates(classes: { [key: string]: Class }, appConfig: AppConfig): { [key: string]: Class } {
@@ -373,8 +379,8 @@ export function useClassData() {
 
     const avgScores: { [key: string]: number } = {};
     questionTypes.forEach(qt => {
-      // 仅统计出勤学员，避免请假学员的 0 分/残留分数拉低题型班均
-      const typeScores = present.map(r => r.scores[qt.id] || 0).filter(s => s > 0);
+      // 仅统计出勤学员；到课学员的 0 分也计入班均（不再用 >0 过滤，避免班均虚高）
+      const typeScores = present.map(r => r.scores[qt.id] || 0);
       avgScores[qt.id] = typeScores.length > 0
         ? Math.round(typeScores.reduce((a, b) => a + b, 0) / typeScores.length * 10) / 10
         : 0;
@@ -499,16 +505,23 @@ export function useClassData() {
     }));
   }, []);
 
-  // 从班级移除学生
+  // 从班级移除学生（连带删除其记录），并重排受影响课次名次
   const removeStudentFromClass = useCallback((classId: string, studentName: string) => {
-    setClasses(prev => ({
-      ...prev,
-      [classId]: {
-        ...prev[classId],
-        students: prev[classId].students.filter(s => s !== studentName),
-        records: prev[classId].records.filter(r => r.studentName !== studentName)
-      }
-    }));
+    setClasses(prev => {
+      const cls = prev[classId];
+      if (!cls) return prev;
+      const lessons = new Set(cls.records.filter(r => r.studentName === studentName).map(r => r.lessonNumber));
+      let records = cls.records.filter(r => r.studentName !== studentName);
+      lessons.forEach(l => { records = rerankLesson(records, l); });
+      return {
+        ...prev,
+        [classId]: {
+          ...cls,
+          students: cls.students.filter(s => s !== studentName),
+          records
+        }
+      };
+    });
   }, []);
 
   // 转班：只移动名单，不动任何学情记录。
@@ -734,13 +747,14 @@ export function useClassData() {
 
   // 删除记录
   const deleteRecord = useCallback((classId: string, recordId: string) => {
-    setClasses(prev => ({
-      ...prev,
-      [classId]: {
-        ...prev[classId],
-        records: prev[classId].records.filter(r => r.id !== recordId)
-      }
-    }));
+    setClasses(prev => {
+      const cls = prev[classId];
+      if (!cls) return prev;
+      const removed = cls.records.find(r => r.id === recordId);
+      const filtered = cls.records.filter(r => r.id !== recordId);
+      const records = removed ? rerankLesson(filtered, removed.lessonNumber) : filtered;
+      return { ...prev, [classId]: { ...cls, records } };
+    });
   }, []);
 
   // 清空某条记录的全部内容（保留考勤/学习轨迹与学生与记录本身）——服务于「请假生什么都不用记」
@@ -1107,7 +1121,9 @@ export function useClassData() {
     if (!classData) return '';
 
     const lessonConfig = getLessonConfig(classId, lessonNumber);
-    const records = classData.records.filter(r => r.lessonNumber === lessonNumber);
+    // 公示只列当前名单内学员：已转出者不上海报、不计入海报平均
+    const roster = new Set(classData.students);
+    const records = classData.records.filter(r => r.lessonNumber === lessonNumber && roster.has(r.studentName));
     const getNick = (name: string) => nicknames[classId]?.[name] || name;
 
     return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style, lessonConfig.customFields || []);

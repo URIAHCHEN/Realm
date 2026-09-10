@@ -1,6 +1,7 @@
 import type { StudentRecord, ClassStats, LessonConfig } from '@/types';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -37,8 +38,8 @@ export function generatePersonalFeedback(
     return `• ${qt.name}：${score}/${qt.fullScore}分（班均${avgScore.toFixed(1)}，${diffText}）`;
   }).join('\n');
   
-  // 计算满分
-  const fullScore = lessonConfig.questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+  // 计算满分（统一来源：题型满分 + 计入总分的自定义列满分）
+  const fullScore = getLessonFullScore(lessonConfig);
   
   // 生成短昵称
   const shortNickname = generateShortNickname(nickname);
@@ -292,7 +293,7 @@ export function generatePraise(
   if (praiseType === 'listening' || praiseType === 'comprehensive') {
     // 课后任务排名
     const listeningRanked = records
-      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0)
+      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0 && !isAbsentRecord(r))
       .sort((a, b) => b.listeningScore - a.listeningScore)
       .slice(0, 5);
     
@@ -310,7 +311,7 @@ export function generatePraise(
   if (praiseType === 'comprehensive') {
     // 作业优秀
     const homeworkExcellent = records
-      .filter(r => r.homeworkStatus === '超赞完成')
+      .filter(r => r.homeworkStatus === '超赞完成' && !isAbsentRecord(r))
       .map(r => getNickname(r.studentName));
     
     if (homeworkExcellent.length > 0) {

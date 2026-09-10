@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore, QuestionType } from '@/types';
 
-import { attendanceRateOf } from '@/lib/attendance';
+import { attendanceRateOf, isAbsentRecord } from '@/lib/attendance';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 
 interface StudentAnalysisProps {
   isOpen: boolean;
@@ -87,8 +88,7 @@ function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; lab
 }
 
 // 单条课次时间线卡片
-function LessonTimelineCard({ record, questionTypes }: { record: StudentRecord; questionTypes: QuestionType[] }) {
-  const fullScore = questionTypes.reduce((s, q) => s + q.fullScore, 0);
+function LessonTimelineCard({ record, questionTypes, fullScore }: { record: StudentRecord; questionTypes: QuestionType[]; fullScore: number }) {
   const rateTrend = record.correctRate >= 80 ? 'text-emerald-600' : record.correctRate >= 60 ? 'text-amber-600' : 'text-rose-600';
   return (
     <div className="relative pl-6">
@@ -167,18 +167,21 @@ export function StudentAnalysis({
   // KPI 统计
   const kpis = useMemo(() => {
     if (records.length === 0) return null;
-    const scores = records.map(r => r.totalScore);
+    // 请假/缺勤课次不计入平均/最低/正确率（与班级口径一致）
+    const present = records.filter(r => !isAbsentRecord(r));
+    const scorePool = present.length > 0 ? present : records;
+    const scores = scorePool.map(r => r.totalScore);
     const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
     const max = Math.max(...scores);
     const min = Math.min(...scores);
-    const avgRate = Math.round(records.reduce((a, r) => a + r.correctRate, 0) / records.length * 10) / 10;
+    const avgRate = Math.round(scorePool.reduce((a, r) => a + r.correctRate, 0) / scorePool.length * 10) / 10;
     const latest = records[records.length - 1];
     const prev = records[records.length - 2];
     const trend = prev ? latest.totalScore - prev.totalScore : 0;
-    const fullScore = questionTypes.reduce((s, q) => s + q.fullScore, 0);
+    const fullScore = getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber));
     const attendanceRate = attendanceRateOf(records.map(r => r.attendance));
     return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
-  }, [records, questionTypes]);
+  }, [records, questionTypes, currentClassData, getLessonConfig]);
 
   // 总分 + 正确率组合图
   const trendChartData = useMemo(() =>
@@ -382,7 +385,7 @@ export function StudentAnalysis({
           <TabsContent value="detail" className="mt-4">
             <div className="max-h-[52vh] overflow-y-auto pr-1">
               {[...records].reverse().map(record => (
-                <LessonTimelineCard key={record.id} record={record} questionTypes={questionTypes} />
+                <LessonTimelineCard key={record.id} record={record} questionTypes={questionTypes} fullScore={getLessonFullScore(getLessonConfig(currentClassData.classId, record.lessonNumber))} />
               ))}
             </div>
           </TabsContent>

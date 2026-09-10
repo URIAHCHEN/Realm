@@ -26,6 +26,9 @@ interface ClassInfoCardProps {
 }
 
 export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, transferredOut = [], onRestoreStudent, onViewStudent }: ClassInfoCardProps) {
+  // hook 必须在早返回之前，避免 classData 由 null↔非 null 切换时 hook 数量变化
+  const savedLessons = useMemo(() => new Set((classData?.records || []).map(r => r.lessonNumber)).size, [classData?.records]);
+
   if (!classData) {
     return (
       <Card className="rounded-2xl bg-white/60 backdrop-blur border-black/5">
@@ -37,7 +40,6 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
   }
 
   const configuredLessons = Object.keys(classData.lessonConfigs).length;
-  const savedLessons = useMemo(() => new Set(classData.records.map(r => r.lessonNumber)).size, [classData.records]);
 
   const stats = [
     { icon: <Users className="w-4 h-4" />, label: '学员', value: `${classData.students.length}人`, tone: 'bg-sky-50 text-sky-600' },

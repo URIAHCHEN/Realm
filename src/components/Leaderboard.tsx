@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/select';
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard } from '@/lib/feedbackTemplates';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
@@ -229,7 +230,7 @@ export function Leaderboard({
   const listeningRankings: RankingItem[] = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0)
+      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0 && !isAbsentRecord(r))
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -256,7 +257,7 @@ export function Leaderboard({
   const homeworkExcellent = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => r.homeworkStatus === '超赞完成')
+      .filter(r => r.homeworkStatus === '超赞完成' && !isAbsentRecord(r))
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -271,23 +272,21 @@ export function Leaderboard({
     }));
   }, [rangeRecords, getNickname]);
 
-  // 全勤学生
+  // 全勤学生：区间内该生所有记录考勤均为「按时」（关键词归类），而非仅最近一条
   const allPresent = useMemo(() => {
-    const latestByStudent = new Map<string, StudentRecord>();
-    rangeRecords
-      .filter(r => r.attendance === '按时出勤')
-      .forEach(r => {
-        const existing = latestByStudent.get(r.studentName);
-        if (!existing || r.lessonNumber > existing.lessonNumber) {
-          latestByStudent.set(r.studentName, r);
-        }
-      });
-
-    return Array.from(latestByStudent.values()).map(r => ({
-      name: r.studentName,
-      nickname: getNickname(r.studentName),
-      shortNickname: generateShortNickname(getNickname(r.studentName))
-    }));
+    const byStudent = new Map<string, StudentRecord[]>();
+    rangeRecords.forEach(r => {
+      const arr = byStudent.get(r.studentName) || [];
+      arr.push(r);
+      byStudent.set(r.studentName, arr);
+    });
+    const list: { name: string; nickname: string; shortNickname: string }[] = [];
+    byStudent.forEach((recs, name) => {
+      if (recs.length === 0) return;
+      if (!recs.every(r => attendanceKind(r.attendance) === 'onTime')) return;
+      list.push({ name, nickname: getNickname(name), shortNickname: generateShortNickname(getNickname(name)) });
+    });
+    return list;
   }, [rangeRecords, getNickname]);
 
   // 范围显示文本
@@ -464,7 +463,7 @@ export function Leaderboard({
     }
   };
 
-  const fullScore = lessonConfig.questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+  const fullScore = getLessonFullScore(lessonConfig);
 
   // 渲染主内容
   const renderContent = () => {

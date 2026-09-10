@@ -258,6 +258,24 @@ function App() {
     toast.success('已登出');
   };
 
+  // —— 学生转班（hook 必须在早返回之前声明，避免登录态切换时 hook 数量变化）——
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+  // 已转出学员：有历史记录但不在本班名单
+  const transferredOutStudents = useMemo(() => {
+    if (!currentClass) return [];
+    const roster = new Set(currentClass.students);
+    const map = new Map<string, { name: string; recordCount: number; lastLesson: number }>();
+    currentClass.records.forEach(r => {
+      if (roster.has(r.studentName)) return;
+      const cur = map.get(r.studentName) || { name: r.studentName, recordCount: 0, lastLesson: 0 };
+      cur.recordCount += 1;
+      cur.lastLesson = Math.max(cur.lastLesson, r.lessonNumber);
+      map.set(r.studentName, cur);
+    });
+    return Array.from(map.values()).sort((a, b) => b.lastLesson - a.lastLesson);
+  }, [currentClass]);
+
   // 未登录显示登录页面
   if (!isAuthenticated) {
     return (
@@ -421,24 +439,6 @@ function App() {
       }
     });
   };
-
-  // —— 学生转班 ——
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-
-  // 已转出学员：有历史记录但不在本班名单
-  const transferredOutStudents = useMemo(() => {
-    if (!currentClass) return [];
-    const roster = new Set(currentClass.students);
-    const map = new Map<string, { name: string; recordCount: number; lastLesson: number }>();
-    currentClass.records.forEach(r => {
-      if (roster.has(r.studentName)) return;
-      const cur = map.get(r.studentName) || { name: r.studentName, recordCount: 0, lastLesson: 0 };
-      cur.recordCount += 1;
-      cur.lastLesson = Math.max(cur.lastLesson, r.lessonNumber);
-      map.set(r.studentName, cur);
-    });
-    return Array.from(map.values()).sort((a, b) => b.lastLesson - a.lastLesson);
-  }, [currentClass]);
 
   const handleTransferStudent = (studentName: string, toClassId: string | null) => {
     if (!currentClassId) return;
@@ -646,11 +646,14 @@ function App() {
         <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-11 h-11 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 via-blue-500 to-sky-500 rounded-xl flex items-center justify-center shadow-lg liquid-glass text-2xl sm:text-3xl">
+              <div
+                className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shadow-lg text-2xl sm:text-3xl"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb) / 0.72))' }}
+              >
                 🏫
               </div>
               <div>
-                <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-blue-700 via-blue-600 to-sky-600 bg-clip-text text-transparent">Lynn's Realm</h1>
+                <h1 className="text-xl sm:text-3xl font-bold" style={{ color: 'var(--brand)' }}>Lynn's Realm</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">

@@ -342,7 +342,7 @@ export function StudentReport({
       date: score.date,
       score: score.score,
       totalScore: score.totalScore,
-      rate: Math.round((score.score / score.totalScore) * 100),
+      rate: score.totalScore > 0 ? Math.round((score.score / score.totalScore) * 100) : 0,
       classRank: score.classRank,
       gradeRank: score.gradeRank,
       classSize: score.classSize
@@ -1037,6 +1037,20 @@ interface ClassReportProps {
 }
 
 function ClassReport({ currentClassName, selectedLesson, classStats, classReportRecords, getNickname, customFields }: ClassReportProps) {
+  // 低分学生（用于关注名单）；hook 需在早返回之前声明
+  const lowScoreStudents = useMemo(() => {
+    const latestByStudent = new Map<string, StudentRecord>();
+    classReportRecords.filter(r => r.totalScore > 0).forEach(r => {
+      const existing = latestByStudent.get(r.studentName);
+      if (!existing || r.lessonNumber > existing.lessonNumber) {
+        latestByStudent.set(r.studentName, r);
+      }
+    });
+    return Array.from(latestByStudent.values())
+      .sort((a, b) => a.totalScore - b.totalScore)
+      .slice(0, 5);
+  }, [classReportRecords]);
+
   if (!classStats || classReportRecords.length === 0) {
     return (
       <div className="text-center py-16">
@@ -1056,20 +1070,6 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
   const homeworkExcellentRate = classStats.homeworkSummary.total > 0
     ? Math.round(((classStats.homeworkSummary.excellent + classStats.homeworkSummary.good) / classStats.homeworkSummary.total) * 100)
     : 0;
-
-  // 低分学生（用于关注名单）
-  const lowScoreStudents = useMemo(() => {
-    const latestByStudent = new Map<string, StudentRecord>();
-    classReportRecords.filter(r => r.totalScore > 0).forEach(r => {
-      const existing = latestByStudent.get(r.studentName);
-      if (!existing || r.lessonNumber > existing.lessonNumber) {
-        latestByStudent.set(r.studentName, r);
-      }
-    });
-    return Array.from(latestByStudent.values())
-      .sort((a, b) => a.totalScore - b.totalScore)
-      .slice(0, 5);
-  }, [classReportRecords]);
 
   return (
     <div className="space-y-8">
@@ -1337,13 +1337,13 @@ function StudentFeedback({
   avgQuestionTypeScores 
 }: StudentFeedbackProps) {
   
-  const attendanceRate = studentStats ?
+  const attendanceRate = studentStats && studentStats.attendanceStats.total > 0 ?
     ((studentStats.attendanceStats.onTime + studentStats.attendanceStats.late) / studentStats.attendanceStats.total) : 0;
-  
-  const totalHomework = studentStats ? 
-    (studentStats.homeworkStats.excellent + studentStats.homeworkStats.good + 
-     studentStats.homeworkStats.average + studentStats.homeworkStats.poor) : 1;
-  const excellentRate = studentStats ? 
+
+  const totalHomework = studentStats ?
+    ((studentStats.homeworkStats.excellent + studentStats.homeworkStats.good +
+     studentStats.homeworkStats.average + studentStats.homeworkStats.poor) || 1) : 1;
+  const excellentRate = studentStats ?
     (studentStats.homeworkStats.excellent / totalHomework) : 0;
   
   const listeningScores = studentRecords

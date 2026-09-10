@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,6 +14,7 @@ import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
 import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
+import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
@@ -395,7 +396,7 @@ export function StudentTable({
     const record = getStudentRecord(studentName);
     if (!record) return;
     const weakPoints = getWeakPoints(record);
-    const fullScore = lessonConfig.questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+    const fullScore = getLessonFullScore(lessonConfig);
     const nickname = getNickname(studentName);
     const scoreDetails = lessonConfig.questionTypes.map(qt => {
       const score = record.scores[qt.id] || 0;
@@ -443,9 +444,12 @@ export function StudentTable({
     }
   };
 
-  const fullScore = lessonConfig.questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0);
+  const fullScore = getLessonFullScore(lessonConfig);
   // 统计口径：请假/缺勤学员一律不计入班级整体正确率（与平均分口径一致）
   const statsRateRecords = lessonRecords.filter(r => !isAbsentRecord(r) && r.totalScore > 0);
+  const classRate = statsRateRecords.length > 0
+    ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
+    : 0;
   const canApplyBulk = someSelected && (
     bulkField === 'score'
       ? bulkQtId !== '' && bulkValue !== ''
@@ -599,8 +603,10 @@ export function StudentTable({
             </div>
             <div className="bg-white rounded-xl p-4">
               <div className="h-[600px] border rounded-lg overflow-auto">
-                <Table className="border-separate" style={{ borderSpacing: 0 }}>
-                  <TableHeader className="bg-slate-50/80 [&_tr]:border-b [&_tr]:border-slate-200">
+                {/* 直接用原生 table（不套 ui/Table 的 overflow-x 容器），让外层 h-[600px] 成为唯一滚动口，
+                    使 thead 吸顶与 .class-stats-row 吸底同时生效且横向滚动列对齐 */}
+                <table className="w-full caption-bottom text-sm border-separate" style={{ borderSpacing: 0 }}>
+                  <TableHeader className="sticky top-0 z-20 bg-[#f5f6f8] [&_tr]:border-b [&_tr]:border-slate-200">
                     <TableRow>
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
@@ -840,8 +846,8 @@ export function StudentTable({
                         </TableRow>
                       );
                     })}
-                    {/* 底部统计行：吸底固定，纵向滚动时始终可见；横向滚动与列对齐 */}
-                    <TableRow className="sticky bottom-0 z-20 bg-white border-t-2 border-[rgb(var(--brand-rgb)/0.3)] font-semibold hover:bg-white">
+                    {/* 底部统计行：.class-stats-row 让每个 td 吸底（sticky 作用于单元格才可靠），纵向滚动始终可见 */}
+                    <TableRow className="class-stats-row font-semibold">
                       <TableCell className="bg-white"></TableCell>
                       <TableCell className="text-sm font-bold text-slate-700 bg-white" colSpan={2}>
                         <div className="flex items-center gap-2">
@@ -868,11 +874,8 @@ export function StudentTable({
                       </TableCell>
                       {col('correctRate') && (
                         <TableCell className="text-center text-sm">
-                          <span className={`inline-flex items-center justify-center px-2 py-1 rounded-md font-bold ${stats.avgScore >= (lessonConfig.passThreshold ?? 80) ? 'text-emerald-700 bg-emerald-50/80 border border-emerald-200' : 'text-rose-700 bg-rose-50/80 border border-rose-200'}`}>
-                            {(statsRateRecords.length > 0
-                              ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
-                              : 0
-                            ).toFixed(1)}%
+                          <span className={`inline-flex items-center justify-center px-2 py-1 rounded-md font-bold ${classRate >= (lessonConfig.passThreshold ?? 80) ? 'text-emerald-700 bg-emerald-50/80 border border-emerald-200' : 'text-rose-700 bg-rose-50/80 border border-rose-200'}`}>
+                            {classRate.toFixed(1)}%
                           </span>
                         </TableCell>
                       )}
@@ -882,7 +885,7 @@ export function StudentTable({
                       {col('actions') && <TableCell className="bg-white"></TableCell>}
                     </TableRow>
                   </TableBody>
-                </Table>
+                </table>
               </div>
             </div>
             {/* 底部操作条：常规文档流（不再固定），随页面正常滚动 */}

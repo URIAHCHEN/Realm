@@ -4,6 +4,19 @@ module.exports = {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      // 全站唯一字体来源：苹果设计语言（SF Pro / 苹方），中文优先苹方
+      fontFamily: {
+        sans: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"SF Pro Text"',
+          '"PingFang SC"',
+          '"Helvetica Neue"',
+          'Arial',
+          'system-ui',
+          'sans-serif',
+        ],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

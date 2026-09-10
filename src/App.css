@@ -80,6 +80,7 @@ body {
   position: relative;
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
 }
@@ -368,23 +369,26 @@ body {
   color: #ff3b30;
 }
 
-/* 响应式调整 */
+/* 响应式调整：中等宽度不再压缩 max-width（避免标签被硬裁切），改为横向滚动 + 省略号 */
 @media (max-width: 1280px) {
   .ios-tabs-list {
-    grid-template-columns: repeat(3, 1fr);
-    max-width: 600px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .ios-tab-trigger {
+    flex: 0 0 auto;
+    padding: 10px 14px;
   }
 }
 
 @media (max-width: 768px) {
-  .ios-tabs-list {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 400px;
-  }
-  
   .ios-tab-trigger {
-    font-size: 14px;
-    padding: 10px 12px;
+    font-size: 13px;
+    padding: 9px 10px;
+  }
+  .ios-tab-trigger svg {
+    display: none;
   }
 }
 

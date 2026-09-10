@@ -14,6 +14,7 @@ import { SyncStatusBanner } from '@/components/SyncStatusBanner';
 import { FeedbackLibrary } from '@/components/FeedbackLibrary';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
+import { TransferStudentDialog } from '@/components/TransferStudentDialog';
 import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
 import { FeedbackGenerator } from '@/components/FeedbackGenerator';
@@ -83,6 +84,9 @@ function App() {
     addStudentToClass,
     addStudents,
     removeStudentFromClass,
+    transferStudent,
+    restoreStudentToClass,
+    removeStudentFromRoster,
     saveLessonConfig,
     saveRecord,
     syncQuestionFullScores,
@@ -418,6 +422,51 @@ function App() {
     });
   };
 
+  // —— 学生转班 ——
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+  // 已转出学员：有历史记录但不在本班名单
+  const transferredOutStudents = useMemo(() => {
+    if (!currentClass) return [];
+    const roster = new Set(currentClass.students);
+    const map = new Map<string, { name: string; recordCount: number; lastLesson: number }>();
+    currentClass.records.forEach(r => {
+      if (roster.has(r.studentName)) return;
+      const cur = map.get(r.studentName) || { name: r.studentName, recordCount: 0, lastLesson: 0 };
+      cur.recordCount += 1;
+      cur.lastLesson = Math.max(cur.lastLesson, r.lessonNumber);
+      map.set(r.studentName, cur);
+    });
+    return Array.from(map.values()).sort((a, b) => b.lastLesson - a.lastLesson);
+  }, [currentClass]);
+
+  const handleTransferStudent = (studentName: string, toClassId: string | null) => {
+    if (!currentClassId) return;
+    const fromClassId = currentClassId;
+    const fromName = currentClass?.name || '';
+    const toName = toClassId ? (classes[toClassId]?.name || '') : '';
+    transferStudent(studentName, fromClassId, toClassId);
+    setIsTransferModalOpen(false);
+    toast.success(toClassId ? `${studentName} 已从「${fromName}」转入「${toName}」` : `${studentName} 已从「${fromName}」转出`, {
+      description: '本班历史记录已保留（以往课次统计不变）；新班级学情从下一课次起重新统计',
+      action: {
+        label: '撤销',
+        onClick: () => {
+          restoreStudentToClass(studentName, fromClassId);
+          if (toClassId) removeStudentFromRoster(toClassId, studentName);
+          toast.success(`${studentName} 已恢复回「${fromName}」`);
+        }
+      },
+      duration: 8000,
+    });
+  };
+
+  const handleRestoreTransferred = (studentName: string) => {
+    if (!currentClassId) return;
+    restoreStudentToClass(studentName, currentClassId);
+    toast.success(`${studentName} 已恢复到本班名单，历史记录自动接续`);
+  };
+
   // 处理删除校内成绩（提供撤销，恢复原成绩记录）
   const handleDeleteScore = (studentName: string, scoreId: string) => {
     const removed = (schoolScores[studentName] || []).find(s => s.id === scoreId);
@@ -730,6 +779,10 @@ function App() {
                 <ClassInfoCard
                   classData={currentClass}
                   onManageStudents={() => setIsImportModalOpen(true)}
+                  onTransferStudent={() => setIsTransferModalOpen(true)}
+                  transferredOut={transferredOutStudents}
+                  onRestoreStudent={handleRestoreTransferred}
+                  onViewStudent={handleViewStudentAnalysis}
                 />
                 <LessonManager
                   currentLessonNumber={currentLessonNumber}
@@ -924,6 +977,22 @@ function App() {
         onSave={handleImportStudents}
       />
 
+      {/* 学生转班对话框 */}
+      {currentClass && (
+        <TransferStudentDialog
+          open={isTransferModalOpen}
+          onClose={() => setIsTransferModalOpen(false)}
+          fromClassId={currentClass.id}
+          fromClassName={currentClass.name}
+          students={currentClass.students}
+          classes={Object.values(classes).map(c => ({
+            id: c.id, name: c.name, students: c.students, recordCount: c.records.length
+          }))}
+          getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+          onConfirm={handleTransferStudent}
+        />
+      )}
+
       {/* 学生分析模态框（懒加载：仅点开分析时才加载图表依赖） */}
       {analysisStudent && currentClass && (
         <Suspense fallback={<ModuleLoading label="学生分析" />}>
@@ -932,9 +1001,13 @@ function App() {
             onClose={() => setAnalysisStudent(null)}
             studentName={analysisStudent}
             nickname={getStudentNickname(analysisStudent, currentClassId || undefined)}
-            allRecords={currentClass.students.includes(analysisStudent) 
-              ? [{ classId: currentClass.id, className: currentClass.name, records: currentClass.records.filter(r => r.studentName === analysisStudent) }]
-              : []}
+            allRecords={(() => {
+              const recs = currentClass.records.filter(r => r.studentName === analysisStudent);
+              // 名单内学员或已转出但有历史记录者，都可查看分析
+              return (currentClass.students.includes(analysisStudent) || recs.length > 0)
+                ? [{ classId: currentClass.id, className: currentClass.name, records: recs }]
+                : [];
+            })()}
             schoolScores={getStudentSchoolScores(analysisStudent)}
             getLessonConfig={getLessonConfig}
           />

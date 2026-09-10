@@ -473,6 +473,39 @@ export function useClassData() {
     }));
   }, []);
 
+  // 转班：只移动名单，不动任何学情记录。
+  // 转出班：移出名单、保留历史记录（历史课次统计不受影响）；转入班：仅加入名单，学情从零开始。
+  const transferStudent = useCallback((studentName: string, fromClassId: string, toClassId: string | null) => {
+    setClasses(prev => {
+      const from = prev[fromClassId];
+      if (!from) return prev;
+      const next = { ...prev };
+      next[fromClassId] = { ...from, students: from.students.filter(s => s !== studentName) };
+      if (toClassId && next[toClassId] && !next[toClassId].students.includes(studentName)) {
+        next[toClassId] = { ...next[toClassId], students: [...next[toClassId].students, studentName] };
+      }
+      return next;
+    });
+  }, []);
+
+  // 将学员恢复到某班级名单（转班撤销 / 已转出学员归队）；不涉及记录
+  const restoreStudentToClass = useCallback((studentName: string, classId: string) => {
+    setClasses(prev => {
+      const cls = prev[classId];
+      if (!cls || cls.students.includes(studentName)) return prev;
+      return { ...prev, [classId]: { ...cls, students: [...cls.students, studentName] } };
+    });
+  }, []);
+
+  // 仅从名单移除学员（保留记录）——用于转班撤销时回退目标班名单
+  const removeStudentFromRoster = useCallback((classId: string, studentName: string) => {
+    setClasses(prev => {
+      const cls = prev[classId];
+      if (!cls) return prev;
+      return { ...prev, [classId]: { ...cls, students: cls.students.filter(s => s !== studentName) } };
+    });
+  }, []);
+
   // 保存课次配置
   const saveLessonConfig = useCallback((classId: string, lessonNumber: number, config: Partial<LessonConfig>) => {
     setClasses(prev => {
@@ -713,7 +746,9 @@ export function useClassData() {
       .filter(n => n < newLessonNumber)
       .sort((a, b) => b - a)[0];
     if (prevLesson == null) return null;
-    const sources = classData.records.filter(r => r.lessonNumber === prevLesson && (r.seasons?.length ?? 0) > 0);
+    // 仅给当前名单内的学员继承；已转出的学员不生成新课次记录（避免重新进入统计）
+    const roster = new Set(classData.students);
+    const sources = classData.records.filter(r => r.lessonNumber === prevLesson && (r.seasons?.length ?? 0) > 0 && roster.has(r.studentName));
     if (sources.length === 0) return null;
 
     setClasses(prev => {
@@ -1064,6 +1099,9 @@ export function useClassData() {
     addStudentToClass,
     addStudents,
     removeStudentFromClass,
+    transferStudent,
+    restoreStudentToClass,
+    removeStudentFromRoster,
     saveLessonConfig,
     saveRecord,
     syncQuestionFullScores,

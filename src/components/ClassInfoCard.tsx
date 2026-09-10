@@ -3,15 +3,29 @@ import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, UserPlus, Layers, FileText, CalendarDays, BookOpen } from 'lucide-react';
+import { Users, UserPlus, Layers, FileText, CalendarDays, BookOpen, ArrowRightLeft, UserRoundSearch, Undo2 } from 'lucide-react';
 import type { Class } from '@/types';
+
+export interface TransferredOutStudent {
+  name: string;
+  recordCount: number;
+  lastLesson: number;
+}
 
 interface ClassInfoCardProps {
   classData: Class | null;
   onManageStudents: () => void;
+  /** 打开转班对话框 */
+  onTransferStudent?: () => void;
+  /** 已转出学员（有历史记录但不在名单） */
+  transferredOut?: TransferredOutStudent[];
+  /** 恢复学员到名单 */
+  onRestoreStudent?: (name: string) => void;
+  /** 查看学员历史分析 */
+  onViewStudent?: (name: string) => void;
 }
 
-export function ClassInfoCard({ classData, onManageStudents }: ClassInfoCardProps) {
+export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, transferredOut = [], onRestoreStudent, onViewStudent }: ClassInfoCardProps) {
   if (!classData) {
     return (
       <Card className="rounded-2xl bg-white/60 backdrop-blur border-black/5">
@@ -55,10 +69,18 @@ export function ClassInfoCard({ classData, onManageStudents }: ClassInfoCardProp
               </div>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={onManageStudents} className="gap-1.5 rounded-xl h-8 bg-white/70 border-white">
-            <UserPlus className="w-3.5 h-3.5" />
-            管理
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {onTransferStudent && (
+              <Button variant="outline" size="sm" onClick={onTransferStudent} className="gap-1.5 rounded-xl h-8 bg-white/70 border-white" title="学生转班（保留本班历史记录）">
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                转班
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={onManageStudents} className="gap-1.5 rounded-xl h-8 bg-white/70 border-white">
+              <UserPlus className="w-3.5 h-3.5" />
+              管理
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -88,6 +110,37 @@ export function ClassInfoCard({ classData, onManageStudents }: ClassInfoCardProp
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 已转出学员：历史记录保留在本班，可恢复回名单 */}
+        {transferredOut.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-slate-400 mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1"><ArrowRightLeft className="w-3 h-3" />已转出学员</span>
+              <Badge variant="secondary" className="text-[10px] h-5">{transferredOut.length} 人</Badge>
+            </p>
+            <div className="space-y-1.5">
+              {transferredOut.map(t => (
+                <div key={t.name} className="flex items-center gap-2 text-xs rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2.5 py-1.5">
+                  <span className="text-slate-500 line-through">{t.name}</span>
+                  <span className="text-slate-400">{t.recordCount} 条记录 · 至第{t.lastLesson}课</span>
+                  <span className="ml-auto flex items-center gap-1">
+                    {onViewStudent && (
+                      <button onClick={() => onViewStudent(t.name)} title="查看历史学情分析" className="p-1 rounded-md text-slate-400 hover:text-[color:var(--brand)] hover:bg-white">
+                        <UserRoundSearch className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {onRestoreStudent && (
+                      <button onClick={() => onRestoreStudent(t.name)} title="恢复到本班名单（历史记录自动接续）" className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-white">
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">转出仅移出名单，历史记录仍计入以往课次的班级统计</p>
           </div>
         )}
       </CardContent>

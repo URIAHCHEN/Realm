@@ -586,9 +586,9 @@ export function SchoolScorePanel({
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                aria-label="删除成绩"
                                 onClick={() => {
                                   onDeleteScore(score.studentName, score.id);
-                                  toast.success('已删除该条成绩');
                                 }}
                                 className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
                               >

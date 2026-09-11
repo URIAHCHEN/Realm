@@ -28,17 +28,6 @@ body {
 }
 
 /* iOS 18 毛玻璃卡片效果 */
-.ios-glass-card {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 0.5px solid rgba(255, 255, 255, 0.8);
-  border-radius: 20px;
-  box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 8px 32px rgba(0, 0, 0, 0.06),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
-}
 
 /* iOS 18 毛玻璃头部 */
 .ios-glass-header {
@@ -110,39 +99,8 @@ body {
 }
 
 /* iOS 18 按钮样式 */
-.ios-button {
-  background: var(--brand);
-  color: white;
-  font-weight: 600;
-  font-size: 15px;
-  padding: 10px 20px;
-  border-radius: 12px;
-  border: none;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgb(var(--brand-rgb) / 0.25);
-}
 
-.ios-button:hover {
-  background: var(--brand-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgb(var(--brand-rgb) / 0.35);
-}
 
-.ios-button:active {
-  transform: scale(0.98);
-  box-shadow: 0 1px 4px rgb(var(--brand-rgb) / 0.25);
-}
-
-.ios-button-secondary {
-  background: rgba(255, 255, 255, 0.7);
-  color: var(--brand);
-  border: 0.5px solid rgb(var(--brand-rgb) / 0.3);
-  font-weight: 500;
-}
-
-.ios-button-secondary:hover {
-  background: rgb(var(--brand-rgb) / 0.08);
-}
 
 /* iOS 18 输入框样式 */
 .ios-input {
@@ -227,29 +185,9 @@ body {
 }
 
 /* iOS 18 表格样式 */
-.ios-table {
-  border-collapse: separate;
-  border-spacing: 0;
-}
 
-.ios-table th {
-  background: rgba(248, 249, 250, 0.8);
-  font-weight: 600;
-  font-size: 14px;
-  color: #3c3c43;
-  padding: 14px 16px;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
-}
 
-.ios-table td {
-  padding: 14px 16px;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.04);
-  font-size: 15px;
-}
 
-.ios-table tr:hover td {
-  background: rgb(var(--brand-rgb) / 0.03);
-}
 
 /* iOS 18 滚动条 */
 ::-webkit-scrollbar {
@@ -357,17 +295,8 @@ body {
 }
 
 /* 成绩颜色 */
-.score-high {
-  color: #34c759;
-}
 
-.score-medium {
-  color: #ff9500;
-}
 
-.score-low {
-  color: #ff3b30;
-}
 
 /* 响应式调整：中等宽度不再压缩 max-width（避免标签被硬裁切），改为横向滚动 + 省略号 */
 @media (max-width: 1280px) {
@@ -534,9 +463,6 @@ body {
   background: linear-gradient(180deg, #312e81 0%, #4338ca 30%, #6366f1 70%, #312e81 100%);
 }
 
-.blue-stage {
-  background: linear-gradient(180deg, #1e3a5f 0%, #2563eb 30%, #3b82f6 70%, #1e3a5f 100%);
-}
 
 .green-stage {
   background: linear-gradient(180deg, #064e3b 0%, #059669 30%, #10b981 70%, #064e3b 100%);
@@ -1128,18 +1054,8 @@ body {
 }
 
 /* 学情记录表格字体放大 */
-.student-table {
-  font-size: 15px;
-}
 
-.student-table th {
-  font-size: 15px;
-  font-weight: 600;
-}
 
-.student-table td {
-  font-size: 15px;
-}
 
 /* 学情报告页面样式 */
 .report-container {
@@ -1246,10 +1162,6 @@ body {
 }
 
 /* Tabs居中 */
-.tabs-centered {
-  display: flex;
-  justify-content: center;
-}
 
 /* 题型配置可编辑满分 */
 .question-type-item {
@@ -1273,11 +1185,6 @@ body {
 }
 
 /* iOS 18 风格导航 */
-.nav-ios {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
-}
 
 /* iOS 18 风格主背景 */
 .liquid-glass-bg {
@@ -1350,20 +1257,6 @@ body {
     linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
 }
 
-/* 更细腻的毛玻璃：更深的模糊 + 饱和度提升 */
-.ios-glass-card {
-  border-radius: 22px;
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ios-glass-card:hover {
-  box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.05),
-    0 14px 44px rgba(0, 0, 0, 0.08),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.65);
-}
 
 /* 卡片入场动效（页面/标签切换时柔和浮现） */
 [data-slot="tabs-content"],
@@ -1371,27 +1264,6 @@ body {
   animation: ios-fade-in 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 主按钮渐变质感 */
-.ios-button {
-  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%);
-  border-radius: 14px;
-  box-shadow:
-    0 2px 8px rgb(var(--brand-rgb) / 0.28),
-    inset 0 0.5px 0 rgb(255 255 255 / 0.35);
-}
-
-.ios-button:hover {
-  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%);
-  filter: brightness(1.06);
-  transform: translateY(-1px) scale(1.01);
-  box-shadow:
-    0 6px 16px rgb(var(--brand-rgb) / 0.36),
-    inset 0 0.5px 0 rgb(255 255 255 / 0.35);
-}
-
-.ios-button:active {
-  transform: scale(0.97);
-}
 
 /* Tabs 激活态渐变胶囊 */
 .ios-tab-trigger[data-state="active"] {
@@ -1557,9 +1429,6 @@ body{
 
 /* 骨架屏 + 统一空状态 */
 @keyframes sh-shimmer{ 100%{ transform:translateX(100%);} }
-.skeleton{ position:relative; overflow:hidden; background:rgba(120,120,128,.10); border-radius:var(--r-md); }
-.skeleton::after{ content:""; position:absolute; inset:0; transform:translateX(-100%);
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent); animation:sh-shimmer 1.4s var(--ease) infinite; }
 .empty-general{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-3);
   padding:var(--sp-16) var(--sp-6); text-align:center; color:var(--ink-4); }
 .empty-general .empty-ico{ width:56px; height:56px; border-radius:var(--r-full); display:grid; place-items:center;
@@ -1568,8 +1437,6 @@ body{
 .empty-general .empty-d{ font-size:var(--text-base); color:var(--ink-4); max-width:42ch; }
 
 /* 页面容器：统一留白节奏 + 响应式 */
-.app-shell{ max-width:1600px; margin:0 auto; padding:var(--sp-6); }
-@media (max-width:768px){ .app-shell{ padding:var(--sp-4) var(--sp-3); } }
 
 /* 小屏 Tab 可横向滚动，避免挤压换行 */
 @media (max-width:768px){

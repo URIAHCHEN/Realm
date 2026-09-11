@@ -110,7 +110,7 @@ export function StudentImportModal({
                 placeholder="输入学生姓名"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSingle()}
               />
-              <Button onClick={handleAddSingle} variant="outline">
+              <Button onClick={handleAddSingle} variant="outline" aria-label="添加学生">
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -148,7 +148,7 @@ export function StudentImportModal({
                     >
                       <span className="text-sm">{student}</span>
                       <button
-                        onClick={() => handleRemove(index)}
+                        onClick={() => handleRemove(index)} aria-label="移除该学生"
                         className="text-slate-400 hover:text-red-500 ml-1"
                       >
                         <X className="w-3 h-3" />

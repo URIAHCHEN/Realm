@@ -76,7 +76,7 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
           <div className="text-xs text-[#8e8e93] mb-1">我的用户ID（发送给管理员以加入可写名单）</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs break-all text-[#1c1c1e] font-mono">{me || '未登录'}</code>
-            <Button variant="ghost" size="sm" className="h-8" onClick={copyMe} disabled={!me}>
+            <Button aria-label="复制我的用户ID" variant="ghost" size="sm" className="h-8" onClick={copyMe} disabled={!me}>
               <Copy className="w-3.5 h-3.5" />
             </Button>
           </div>
@@ -126,7 +126,7 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
                     <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onToggle(r)} disabled={r.user_id === me}>
                       {r.is_admin ? '降为成员' : '设为管理'}
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-[#ff3b30]" onClick={() => onRemove(r)} disabled={r.user_id === me}>
+                    <Button variant="ghost" size="sm" className="h-7 text-[#ff3b30]" onClick={() => onRemove(r)} aria-label="移除成员" disabled={r.user_id === me}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>

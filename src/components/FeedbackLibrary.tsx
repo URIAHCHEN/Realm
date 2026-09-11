@@ -132,7 +132,7 @@ export function FeedbackLibrary({ items, onChange, currentLesson }: FeedbackLibr
                         <div className="flex gap-1 shrink-0">
                           <button onClick={() => doCopy(it)} title="复制" className="p-1.5 rounded-lg text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.1)]"><Copy className="w-4 h-4" /></button>
                           <button onClick={() => openEdit(it)} title="编辑" className="p-1.5 rounded-lg text-[color:var(--ink-4)] hover:bg-black/[0.05]"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => remove(it.id)} title="删除" className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => remove(it.id)} aria-label="删除素材" title="删除" className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                       <div className="text-sm text-[color:var(--ink-2)] whitespace-pre-wrap line-clamp-4">{it.content || <span className="text-[color:var(--ink-4)]">（仅链接）</span>}</div>

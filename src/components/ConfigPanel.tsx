@@ -32,7 +32,7 @@ function DefaultOptionList({ title, desc, options, onChange }: {
         {options.map((o, i) => (
           <span key={o} className="inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-[rgb(var(--brand-rgb)/0.15)] text-sm">
             {o}
-            <button onClick={() => onChange(options.filter((_, idx) => idx !== i))} className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
+            <button onClick={() => onChange(options.filter((_, idx) => idx !== i))} aria-label="删除默认选项" className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
           </span>
         ))}
         {options.length === 0 && <span className="text-xs text-slate-400">暂无选项</span>}
@@ -97,7 +97,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
       <span className="text-sm">{label}</span>
       <button
         type="button"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(v => !v)} aria-label="设置选项颜色"
         title="设置颜色标记（学情表中该选项单元格自动标色）"
         className="w-4 h-4 rounded-full border shrink-0"
         style={{ background: color || 'transparent', borderColor: color || '#cbd5e1' }}
@@ -117,7 +117,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
           </span>
         </>
       )}
-      <button onClick={onRemove} className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500">
+      <button aria-label="删除选项" onClick={onRemove} className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500">
         <Trash2 className="w-3 h-3" />
       </button>
     </span>
@@ -494,21 +494,21 @@ export function ConfigPanel({
                     </datalist>
                     <div className="flex gap-1">
                       <button
-                        onClick={() => handleMoveQuestionType(i, 'up')}
+                        onClick={() => handleMoveQuestionType(i, 'up')} aria-label="上移题型"
                         disabled={i === 0}
                         className="p-1 text-[color:var(--brand)] hover:text-[color:var(--brand)] disabled:opacity-30"
                       >
                         <ChevronUp className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleMoveQuestionType(i, 'down')}
+                        onClick={() => handleMoveQuestionType(i, 'down')} aria-label="下移题型"
                         disabled={i === localLessonConfig.questionTypes.length - 1}
                         className="p-1 text-[color:var(--brand)] hover:text-[color:var(--brand)] disabled:opacity-30"
                       >
                         <ChevronDown className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleRemoveQuestionType(i)}
+                        onClick={() => handleRemoveQuestionType(i)} aria-label="删除题型"
                         className="p-1 text-[color:var(--brand)] hover:text-rose-500"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -604,9 +604,9 @@ export function ConfigPanel({
                       </label>
                     )}
                     <div className="flex gap-1">
-                      <button onClick={() => moveCustomField(i, 'up')} disabled={i === 0} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-                      <button onClick={() => moveCustomField(i, 'down')} disabled={i === (localLessonConfig.customFields || []).length - 1} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
-                      <button onClick={() => removeCustomField(i)} className="p-1 text-[color:var(--ink-4)] hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => moveCustomField(i, 'up')} aria-label="上移自定义列" disabled={i === 0} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
+                      <button onClick={() => moveCustomField(i, 'down')} aria-label="下移自定义列" disabled={i === (localLessonConfig.customFields || []).length - 1} className="p-1 text-[color:var(--brand)] disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
+                      <button onClick={() => removeCustomField(i)} aria-label="删除自定义列" className="p-1 text-[color:var(--ink-4)] hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                 ))}
@@ -796,12 +796,12 @@ export function ConfigPanel({
                       <>
                         <button onClick={() => setActiveTemplateId(t.id)}>{t.name}</button>
                         <button
-                          onClick={() => { setRenamingTemplateId(t.id); setRenameValue(t.name); }}
+                          onClick={() => { setRenamingTemplateId(t.id); setRenameValue(t.name); }} aria-label="重命名模板"
                           className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-[color:var(--brand)]"
                           title="重命名"
                         ><Pencil className="w-3 h-3" /></button>
                         <button
-                          onClick={() => handleDeletePraiseTemplate(t.id)}
+                          onClick={() => handleDeletePraiseTemplate(t.id)} aria-label="删除模板"
                           className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"
                           title="删除"
                         ><Trash2 className="w-3 h-3" /></button>

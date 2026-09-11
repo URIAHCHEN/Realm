@@ -60,7 +60,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 <p className="text-sm font-medium">题型得分数据条</p>
                 <p className="text-xs text-[color:var(--ink-4)]">得分单元格内渲染比例数据条</p>
               </div>
-              <Switch checked={settings.showDataBars} onCheckedChange={v => update({ showDataBars: v })} />
+              <Switch aria-label="题型得分数据条" checked={settings.showDataBars} onCheckedChange={v => update({ showDataBars: v })} />
             </div>
             <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
@@ -80,7 +80,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 <p className="text-sm font-medium">排名色阶</p>
                 <p className="text-xs text-[color:var(--ink-4)]">排名与正确率徽章自动变色</p>
               </div>
-              <Switch checked={settings.showRankHeatmap} onCheckedChange={v => update({ showRankHeatmap: v })} />
+              <Switch aria-label="排名色阶" checked={settings.showRankHeatmap} onCheckedChange={v => update({ showRankHeatmap: v })} />
             </div>
             <div className="rounded-2xl bg-black/[0.05] px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.08]">
               <div>
@@ -100,7 +100,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 <p className="text-sm font-medium">学习轨迹显示未选季度</p>
                 <p className="text-xs text-[color:var(--ink-4)]">开启则四季都显示、未选标灰；关闭则只显示已选</p>
               </div>
-              <Switch checked={settings.showAllSeasons} onCheckedChange={v => update({ showAllSeasons: v })} />
+              <Switch aria-label="学习轨迹显示未选季度" checked={settings.showAllSeasons} onCheckedChange={v => update({ showAllSeasons: v })} />
             </div>
           </div>
         </section>

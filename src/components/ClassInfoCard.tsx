@@ -43,7 +43,7 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
 
   const stats = [
     { icon: <Users className="w-4 h-4" />, label: '学员', value: `${classData.students.length}人`, tone: 'bg-sky-50 text-sky-600' },
-    { icon: <FileText className="w-4 h-4" />, label: '学情记录', value: `${classData.records.length}条`, tone: 'bg-violet-50 text-violet-600' },
+    { icon: <FileText className="w-4 h-4" />, label: '学情记录', value: `${classData.records.length}条`, tone: 'bg-[rgb(var(--brand-rgb)/0.08)] text-[color:var(--brand)]' },
     { icon: <Layers className="w-4 h-4" />, label: '已配置课次', value: `${configuredLessons}个`, tone: 'bg-amber-50 text-amber-600' },
     { icon: <BookOpen className="w-4 h-4" />, label: '已保存课次', value: `${savedLessons}个`, tone: 'bg-emerald-50 text-emerald-600' },
   ];
@@ -66,7 +66,7 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
                   </span>
                 )}
                 {classData.batchCode && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-100/80 text-purple-700 font-mono">{classData.batchCode}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[rgb(var(--brand-rgb)/0.12)] text-[color:var(--brand)] font-mono">{classData.batchCode}</span>
                 )}
               </div>
             </div>

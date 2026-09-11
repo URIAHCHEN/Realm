@@ -861,15 +861,12 @@ function App() {
                 <span className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</span>
               </div>
               <Tabs defaultValue="visualization" className="space-y-4">
-                <TabsList className="grid w-full max-w-2xl grid-cols-3">
+                <TabsList className="grid w-full max-w-2xl grid-cols-2">
                   <TabsTrigger value="visualization" className="gap-1.5">
                     <BarChart3 className="w-4 h-4" />数据可视化
                   </TabsTrigger>
                   <TabsTrigger value="fields" className="gap-1.5">
                     <Columns3 className="w-4 h-4" />表格字段
-                  </TabsTrigger>
-                  <TabsTrigger value="publicity" className="gap-1.5">
-                    <FileText className="w-4 h-4" />公示样式
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="visualization">
@@ -886,11 +883,6 @@ function App() {
                       onSaveAppConfig={handleSaveAppConfig}
                       onSaveLessonConfig={handleSaveLessonConfig}
                     />
-                  </div>
-                </TabsContent>
-                <TabsContent value="publicity">
-                  <div className="max-w-4xl">
-                    <PublicityStylePanel display={displaySettings} />
                   </div>
                 </TabsContent>
               </Tabs>
@@ -1022,36 +1014,3 @@ function App() {
 
 export default App;
 
-// 公示样式设置面板
-function PublicityStylePanel({ display }: { display: ReturnType<typeof useDisplaySettings> }) {
-  const { settings, update } = display;
-  const options: { id: 'gradient' | 'minimal' | 'dark'; name: string; desc: string; preview: React.ReactNode }[] = [
-    { id: 'gradient', name: '渐变蓝', desc: '经典蓝色渐变模板', preview: <div className="w-full h-12 rounded-md" style={{ background: 'linear-gradient(135deg, #3b8beb 0%, #1e5fd6 100%)' }} /> },
-    { id: 'minimal', name: '简约白', desc: '浅色简洁风格', preview: <div className="w-full h-12 rounded-md bg-slate-100 border" /> },
-    { id: 'dark', name: '暗夜模式', desc: '深色护眼风格', preview: <div className="w-full h-12 rounded-md" style={{ background: 'linear-gradient(160deg, #1e293b 0%, #0f172a 100%)' }} /> },
-  ];
-  return (
-    <div className="ios-glass-card rounded-2xl border-0 p-6 space-y-5">
-      <div className="flex items-center gap-2">
-        <FileText className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-        <h2 className="font-semibold text-[#1c1c1e]">公示导出样式</h2>
-        <span className="text-xs text-[#8e8e93]">影响学情公示 HTML / 图片的视觉风格</span>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {options.map(o => (
-          <button
-            key={o.id}
-            onClick={() => update({ exportStyle: o.id })}
-            className={`text-left rounded-xl border-2 p-3 transition-all ${
-              settings.exportStyle === o.id ? 'border-[rgb(var(--brand-rgb)/0.6)] shadow-md' : 'border-slate-100 hover:border-slate-200'
-            }`}
-          >
-            <div className="mb-2">{o.preview}</div>
-            <p className="font-medium text-sm text-slate-800">{o.name}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{o.desc}</p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}

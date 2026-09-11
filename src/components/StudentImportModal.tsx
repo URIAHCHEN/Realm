@@ -72,7 +72,7 @@ export function StudentImportModal({
       <DialogContent className="sm:max-w-lg max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-600" />
+            <Users className="w-5 h-5 text-[color:var(--brand)]" />
             管理学生名单
           </DialogTitle>
         </DialogHeader>
@@ -162,7 +162,7 @@ export function StudentImportModal({
 
           {/* 操作按钮 */}
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} className="flex-1 bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={handleSave} className="flex-1 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)]">
               保存名单
             </Button>
             <Button onClick={onClose} variant="outline">

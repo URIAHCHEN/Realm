@@ -26,13 +26,13 @@ function DefaultOptionList({ title, desc, options, onChange }: {
   };
   return (
     <div>
-      <Label className="text-base font-medium text-violet-700">{title}</Label>
+      <Label className="text-base font-medium text-[color:var(--brand)]">{title}</Label>
       {desc && <p className="text-xs text-slate-400 mt-1">{desc}</p>}
       <div className="flex flex-wrap gap-2 mt-2">
         {options.map((o, i) => (
-          <span key={o} className="inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100 text-sm">
+          <span key={o} className="inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-[rgb(var(--brand-rgb)/0.15)] text-sm">
             {o}
-            <button onClick={() => onChange(options.filter((_, idx) => idx !== i))} className="text-violet-400 hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
+            <button onClick={() => onChange(options.filter((_, idx) => idx !== i))} className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"><Trash2 className="w-3 h-3" /></button>
           </span>
         ))}
         {options.length === 0 && <span className="text-xs text-slate-400">暂无选项</span>}
@@ -93,7 +93,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <span className="relative inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-violet-100">
+    <span className="relative inline-flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-xl border border-[rgb(var(--brand-rgb)/0.15)]">
       <span className="text-sm">{label}</span>
       <button
         type="button"
@@ -105,7 +105,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
       {open && (
         <>
           <span className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <span className="absolute left-0 top-8 z-40 flex gap-1 p-1.5 rounded-xl border border-violet-100 bg-white shadow-lg">
+          <span className="absolute left-0 top-8 z-40 flex gap-1 p-1.5 rounded-xl border border-[rgb(var(--brand-rgb)/0.15)] bg-white shadow-lg">
             {COLOR_PRESETS.map(c => (
               <button key={c} type="button" title={c}
                 onClick={() => { onColor(c); setOpen(false); }}
@@ -117,7 +117,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
           </span>
         </>
       )}
-      <button onClick={onRemove} className="text-violet-400 hover:text-rose-500">
+      <button onClick={onRemove} className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500">
         <Trash2 className="w-3 h-3" />
       </button>
     </span>
@@ -375,8 +375,8 @@ export function ConfigPanel({
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     isLessonConfig: boolean;
   }) => (
-    <div className="flex flex-wrap gap-2 mt-3 p-3 bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-xl border border-violet-100">
-      <div className="w-full flex items-center gap-2 mb-2 text-sm text-violet-700 font-medium">
+    <div className="flex flex-wrap gap-2 mt-3 p-3 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] rounded-xl border border-[rgb(var(--brand-rgb)/0.15)]">
+      <div className="w-full flex items-center gap-2 mb-2 text-sm text-[color:var(--brand)] font-medium">
         <Variable className="w-4 h-4" />
         点击插入变量：
       </div>
@@ -396,14 +396,14 @@ export function ConfigPanel({
   return (
     <Tabs defaultValue="fields" className="space-y-6">
       <TabsList className="grid w-full grid-cols-2 lg:w-[400px] liquid-glass">
-        <TabsTrigger value="fields">表格字段</TabsTrigger>
-        <TabsTrigger value="default">默认配置</TabsTrigger>
+        <TabsTrigger value="fields">本课字段</TabsTrigger>
+        <TabsTrigger value="default">全局默认</TabsTrigger>
       </TabsList>
 
       <TabsContent value="fields" className="space-y-6">
         <Card className="liquid-glass-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-violet-700">
+            <CardTitle className="flex items-center gap-2 text-[color:var(--brand)]">
               <Settings className="w-5 h-5" />
               第{lessonNumber}课字段配置
             </CardTitle>
@@ -427,7 +427,7 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 列标题自定义（自动同步当前记录表所有固定列） */}
             <div>
@@ -538,7 +538,7 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 自定义列 */}
             <div>
@@ -629,12 +629,12 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 列标题自定义（支持新增 / 编辑 / 清除） */}
             <div>
               <div className="flex items-center justify-between">
-                <Label className="text-base font-medium text-violet-700">列标题自定义</Label>
+                <Label className="text-base font-medium text-[color:var(--brand)]">列标题自定义</Label>
                 <span className="text-xs text-slate-400">已配置 {Object.entries(localLessonConfig.columnLabels || {}).filter(([, v]) => v && v.trim()).length} 项</span>
               </div>
               <p className="text-xs text-slate-400 mt-1 mb-2">修改已有列的显示名称，或为尚未命名的列新增自定义标题；清空输入即恢复默认名称，保存后学情记录表表头实时同步。</p>
@@ -644,7 +644,7 @@ export function ConfigPanel({
                 {COLUMN_DEFS.map(({ key, label }) => {
                   const val = localLessonConfig.columnLabels?.[key] || '';
                   return (
-                    <div key={key} className={`p-2.5 rounded-xl border ${val && val.trim() ? 'bg-violet-50/70 border-violet-200' : 'bg-white/70 border-violet-100'}`}>
+                    <div key={key} className={`p-2.5 rounded-xl border ${val && val.trim() ? 'bg-[rgb(var(--brand-rgb)/0.08)] border-[rgb(var(--brand-rgb)/0.25)]' : 'bg-white/70 border-[rgb(var(--brand-rgb)/0.15)]'}`}>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs text-slate-500">{label}</label>
                         {val && val.trim() && (
@@ -654,7 +654,7 @@ export function ConfigPanel({
                               delete next[key as keyof typeof next];
                               return { ...prev, columnLabels: next };
                             })}
-                            className="text-violet-400 hover:text-rose-500 text-xs"
+                            className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500 text-xs"
                             title="清除自定义，恢复默认"
                           >✕</button>
                         )}
@@ -677,7 +677,7 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 选项组（考勤/课堂表现/作业/课后任务）：支持颜色标记 */}
             {([
@@ -687,7 +687,7 @@ export function ConfigPanel({
               { type: 'listening' as OptGroup, label: '课后任务选项', hint: '' },
             ]).map(({ type, label, hint }) => (
               <div key={type}>
-                <Label className="text-base font-medium text-violet-700">{label}</Label>
+                <Label className="text-base font-medium text-[color:var(--brand)]">{label}</Label>
                 {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
                 <div className="flex flex-wrap gap-2 mt-2">
                   {(localLessonConfig[OPTIONS_KEY[type]] || []).map((opt, i) => (
@@ -730,16 +730,16 @@ export function ConfigPanel({
               </Button>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 反馈模板 */}
             <div>
-              <Label className="text-base font-medium text-violet-700">私发反馈模板</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">私发反馈模板</Label>
               <Textarea
                 ref={feedbackTextareaRef}
                 value={localLessonConfig.feedbackTemplate}
                 onChange={(e) => setLocalLessonConfig(prev => ({ ...prev, feedbackTemplate: e.target.value }))}
-                className="min-h-[200px] font-mono text-sm mt-2 liquid-glass-input"
+                className="min-h-[200px] text-sm mt-2 liquid-glass-input"
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 
@@ -764,8 +764,8 @@ export function ConfigPanel({
             {/* 表彰模板（多模板管理） */}
             <div>
               <div className="flex items-center justify-between">
-                <Label className="text-base font-medium text-violet-700">班群表彰模板</Label>
-                <Button variant="outline" size="sm" className="h-7 gap-1 text-violet-600 border-violet-200" onClick={handleAddPraiseTemplate}>
+                <Label className="text-base font-medium text-[color:var(--brand)]">班群表彰模板</Label>
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-[color:var(--brand)] border-[rgb(var(--brand-rgb)/0.25)]" onClick={handleAddPraiseTemplate}>
                   <Plus className="w-3.5 h-3.5" />新增模板
                 </Button>
               </div>
@@ -776,12 +776,12 @@ export function ConfigPanel({
                 <button
                   onClick={() => setActiveTemplateId('default')}
                   className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${
-                    activeTemplateId === 'default' ? 'bg-violet-100 border-violet-300 text-violet-700 font-medium' : 'bg-white/70 border-violet-100 text-slate-600 hover:border-violet-200'
+                    activeTemplateId === 'default' ? 'bg-[rgb(var(--brand-rgb)/0.15)] border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] font-medium' : 'bg-white/70 border-[rgb(var(--brand-rgb)/0.15)] text-slate-600 hover:border-[rgb(var(--brand-rgb)/0.25)]'
                   }`}
                 >默认模板</button>
                 {praiseTemplates.map(t => (
                   <div key={t.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm border transition-all ${
-                    activeTemplateId === t.id ? 'bg-violet-100 border-violet-300 text-violet-700 font-medium' : 'bg-white/70 border-violet-100 text-slate-600'
+                    activeTemplateId === t.id ? 'bg-[rgb(var(--brand-rgb)/0.15)] border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] font-medium' : 'bg-white/70 border-[rgb(var(--brand-rgb)/0.15)] text-slate-600'
                   }`}>
                     {renamingTemplateId === t.id ? (
                       <Input
@@ -797,12 +797,12 @@ export function ConfigPanel({
                         <button onClick={() => setActiveTemplateId(t.id)}>{t.name}</button>
                         <button
                           onClick={() => { setRenamingTemplateId(t.id); setRenameValue(t.name); }}
-                          className="text-violet-400 hover:text-violet-600"
+                          className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-[color:var(--brand)]"
                           title="重命名"
                         ><Pencil className="w-3 h-3" /></button>
                         <button
                           onClick={() => handleDeletePraiseTemplate(t.id)}
-                          className="text-violet-400 hover:text-rose-500"
+                          className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"
                           title="删除"
                         ><Trash2 className="w-3 h-3" /></button>
                       </>
@@ -818,7 +818,7 @@ export function ConfigPanel({
                     ref={praiseTextareaRef}
                     value={activeTemplateText}
                     onChange={(e) => updateTemplateText(e.target.value)}
-                    className="min-h-[200px] font-mono text-sm liquid-glass-input"
+                    className="min-h-[200px] text-sm liquid-glass-input"
                     placeholder="点击下方变量插入到模板中..."
                   />
                   <VariableSelector
@@ -832,9 +832,9 @@ export function ConfigPanel({
                 </div>
 
                 {/* 实时预览 */}
-                <div className="rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50/60 to-fuchsia-50/40 p-4 flex flex-col">
+                <div className="rounded-xl border border-[rgb(var(--brand-rgb)/0.15)] bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.10)] p-4 flex flex-col">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-violet-700 flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-[color:var(--brand)] flex items-center gap-1.5">
                       <Eye className="w-4 h-4" />实时预览（示例数据）
                     </span>
                     <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowPraisePreview(!showPraisePreview)}>
@@ -850,7 +850,7 @@ export function ConfigPanel({
 
             {/* 作业内容 */}
             <div>
-              <Label className="text-base font-medium text-violet-700">作业内容</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">作业内容</Label>
               <Textarea
                 value={localLessonConfig.homeworkText}
                 onChange={(e) => setLocalLessonConfig(prev => ({ ...prev, homeworkText: e.target.value }))}
@@ -869,14 +869,14 @@ export function ConfigPanel({
       <TabsContent value="default" className="space-y-6">
         <Card className="liquid-glass-card">
           <CardHeader>
-            <CardTitle className="text-violet-700">默认配置（用于新课次）</CardTitle>
+            <CardTitle className="text-[color:var(--brand)]">默认配置（用于新课次）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* 默认选项（用于新课次） */}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Settings className="w-4 h-4 text-violet-700" />
-                <Label className="text-base font-semibold text-violet-700">默认选项（用于新课次）</Label>
+                <Settings className="w-4 h-4 text-[color:var(--brand)]" />
+                <Label className="text-base font-semibold text-[color:var(--brand)]">默认选项（用于新课次）</Label>
               </div>
               <p className="text-xs text-slate-400 mb-3">修改后保存，新建课次的考勤 / 课堂表现 / 作业 / 课后任务选项将采用这里的默认值；已存在的课次配置不受影响，可在「表格字段」单独调整。</p>
               <div className="grid gap-5 md:grid-cols-2">
@@ -903,16 +903,16 @@ export function ConfigPanel({
               </div>
             </div>
 
-            <Separator className="bg-violet-100" />
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
 
             {/* 默认反馈模板 */}
             <div>
-              <Label className="text-base font-medium text-violet-700">默认私发反馈模板</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">默认私发反馈模板</Label>
               <Textarea
                 ref={defaultFeedbackTextareaRef}
                 value={localAppConfig.defaultFeedbackTemplate}
                 onChange={(e) => setLocalAppConfig(prev => ({ ...prev, defaultFeedbackTemplate: e.target.value }))}
-                className="min-h-[200px] font-mono text-sm mt-2 liquid-glass-input"
+                className="min-h-[200px] text-sm mt-2 liquid-glass-input"
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 
@@ -923,12 +923,12 @@ export function ConfigPanel({
 
             {/* 默认表彰模板 */}
             <div>
-              <Label className="text-base font-medium text-violet-700">默认班群表彰模板</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)]">默认班群表彰模板</Label>
               <Textarea
                 ref={defaultPraiseTextareaRef}
                 value={localAppConfig.defaultPraiseTemplate}
                 onChange={(e) => setLocalAppConfig(prev => ({ ...prev, defaultPraiseTemplate: e.target.value }))}
-                className="min-h-[150px] font-mono text-sm mt-2 liquid-glass-input"
+                className="min-h-[150px] text-sm mt-2 liquid-glass-input"
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 

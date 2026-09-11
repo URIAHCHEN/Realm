@@ -1125,8 +1125,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
         <Card className="ios-glass-card border-0">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-purple-600" />
+              <div className="w-10 h-10 rounded-xl bg-[rgb(var(--brand-rgb)/0.12)] flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-[color:var(--brand)]" />
               </div>
               <div>
                 <p className="text-xs text-[color:var(--ink-4)]">作业优良率</p>
@@ -1233,7 +1233,7 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <BookOpen className="w-5 h-5 text-purple-600" />
+              <BookOpen className="w-5 h-5 text-[color:var(--brand)]" />
               作业概况
             </CardTitle>
           </CardHeader>
@@ -1455,10 +1455,10 @@ function StudentFeedback({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+        <Card className="bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.1)] border-[rgb(var(--brand-rgb)/0.25)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-purple-600" />
+              <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />
               作业情况
             </CardTitle>
           </CardHeader>

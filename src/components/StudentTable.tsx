@@ -611,17 +611,31 @@ export function StudentTable({
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
                       </TableHead>
-                      <TableHead className="w-14 text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('rank')}>排名{sortCaret('rank')}</TableHead>
-                      <TableHead className="w-20 text-base font-bold cursor-pointer select-none" title="按姓氏拼音排序（升→降→取消）" onClick={() => toggleSort('name')}>姓名{sortCaret('name')}</TableHead>
+                      <TableHead aria-sort={sortKey === 'rank' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-14 text-base font-bold" title="点击排序（升→降→取消）">
+                        <button type="button" onClick={() => toggleSort('rank')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('rank'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">排名{sortCaret('rank')}</button>
+                      </TableHead>
+                      <TableHead aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-20 text-base font-bold" title="按姓氏拼音排序（升→降→取消）">
+                        <button type="button" onClick={() => toggleSort('name')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">姓名{sortCaret('name')}</button>
+                      </TableHead>
                       {col('seasons') && <TableHead className="w-28 text-base font-bold">{columnLabel('seasons')}</TableHead>}
                       {col('attendance') && <TableHead className="w-24 text-base font-bold">{columnLabel('attendance')}</TableHead>}
                       {col('classPerformance') && <TableHead className="w-24 text-base font-bold">{columnLabel('classPerformance')}</TableHead>}
                       {col('homework') && <TableHead className="w-24 text-base font-bold">{columnLabel('homework')}</TableHead>}
                       {col('listening') && <TableHead className="w-28 text-base font-bold">{columnLabel('listening')}</TableHead>}
-                      {col('scores') && lessonConfig.questionTypes.map(qt => <TableHead key={qt.id} className="w-16 text-center text-xs font-bold whitespace-normal break-all leading-tight cursor-pointer select-none" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`} onClick={() => toggleSort(`qt:${qt.id}`)}>{qt.name}{sortCaret(`qt:${qt.id}`)}</TableHead>)}
+                      {col('scores') && lessonConfig.questionTypes.map(qt => (
+                        <TableHead key={qt.id} aria-sort={sortKey === `qt:${qt.id}` ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-xs font-bold whitespace-normal break-all leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`}>
+                          <button type="button" onClick={() => toggleSort(`qt:${qt.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(`qt:${qt.id}`); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">{qt.name}{sortCaret(`qt:${qt.id}`)}</button>
+                        </TableHead>
+                      ))}
                       {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold break-all leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
-                      <TableHead className="w-16 text-center text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('total')}>总分{sortCaret('total')}</TableHead>
-                      {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold cursor-pointer select-none" title="点击排序（升→降→取消）" onClick={() => toggleSort('rate')}>正确率{sortCaret('rate')}</TableHead>}
+                      <TableHead aria-sort={sortKey === 'total' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-base font-bold" title="点击排序（升→降→取消）">
+                        <button type="button" onClick={() => toggleSort('total')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('total'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">总分{sortCaret('total')}</button>
+                      </TableHead>
+                      {col('correctRate') && (
+                        <TableHead aria-sort={sortKey === 'rate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-base font-bold" title="点击排序（升→降→取消）">
+                          <button type="button" onClick={() => toggleSort('rate')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('rate'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">正确率{sortCaret('rate')}</button>
+                        </TableHead>
+                      )}
                       {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">{columnLabel('pass')}</TableHead>}
                       {col('weakPoints') && <TableHead className="text-base font-bold">薄弱项</TableHead>}
                       {col('note') && <TableHead className="w-24 text-base font-bold">{columnLabel('note')}</TableHead>}
@@ -648,7 +662,17 @@ export function StudentTable({
                               )
                             ) : <span className="text-slate-300 text-base">-</span>}
                           </TableCell>
-                          <TableCell className="font-medium cursor-pointer hover:underline text-base" style={{ color: 'var(--brand)' }} onClick={() => onViewStudentAnalysis(studentName)}>{getNickname(studentName)}</TableCell>
+                          <TableCell className="text-base">
+                            <button
+                              type="button"
+                              onClick={() => onViewStudentAnalysis(studentName)}
+                              aria-label={`查看 ${getNickname(studentName)} 的学情分析`}
+                              className="font-medium hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]"
+                              style={{ color: 'var(--brand)' }}
+                            >
+                              {getNickname(studentName)}
+                            </button>
+                          </TableCell>
                           {col('seasons') && (
                           <TableCell className="text-base">
                             <div className="flex gap-1 items-center flex-wrap">
@@ -834,12 +858,12 @@ export function StudentTable({
                           {col('actions') && (
                           <TableCell className="text-base">
                             <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} aria-label="复制反馈" title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
                               {onClearRecord && (
-                                <Button variant="ghost" size="sm" onClick={() => record && onClearRecord(record.id)} disabled={!record} className="h-9 w-9 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50" title="清空记录内容（保留考勤/学习轨迹，可撤销）"><Eraser className="w-5 h-5" /></Button>
+                                <Button variant="ghost" size="sm" onClick={() => record && onClearRecord(record.id)} disabled={!record} className="h-9 w-9 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50" aria-label="清空记录内容" title="清空记录内容（保留考勤/学习轨迹，可撤销）"><Eraser className="w-5 h-5" /></Button>
                               )}
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-9 w-9 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50" title="删除记录"><Trash2 className="w-5 h-5" /></Button>
-                              <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-9 w-9 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="移除学生"><UserMinus className="w-5 h-5" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-9 w-9 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50" aria-label="删除记录" title="删除记录"><Trash2 className="w-5 h-5" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-9 w-9 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" aria-label="移除学生" title="移除学生"><UserMinus className="w-5 h-5" /></Button>
                             </div>
                           </TableCell>
                           )}

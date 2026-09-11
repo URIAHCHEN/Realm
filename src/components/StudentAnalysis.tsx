@@ -300,7 +300,7 @@ export function StudentAnalysis({
         {kpis && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <KpiCard icon={<BarChart3 className="w-5 h-5 text-white" />} label="累计课次" value={kpis.total} sub="课" tone="bg-gradient-to-br from-sky-400 to-blue-500" />
-            <KpiCard icon={<Target className="w-5 h-5 text-white" />} label="平均分" value={kpis.avg} sub={`/${kpis.fullScore}`} tone="bg-gradient-to-br from-violet-400 to-purple-500" />
+            <KpiCard icon={<Target className="w-5 h-5 text-white" />} label="平均分" value={kpis.avg} sub={`/${kpis.fullScore}`} tone="bg-gradient-to-br from-[rgb(var(--brand-rgb))] to-[rgb(var(--brand-rgb)/0.7)]" />
             <KpiCard icon={<Trophy className="w-5 h-5 text-white" />} label="最高分" value={kpis.max} sub="分" tone="bg-gradient-to-br from-amber-400 to-orange-500" />
             <KpiCard icon={<CalendarCheck className="w-5 h-5 text-white" />} label="出勤率" value={kpis.attendanceRate} sub="%" tone="bg-gradient-to-br from-emerald-400 to-teal-500" />
           </div>

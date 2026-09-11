@@ -1,9 +1,12 @@
 // 班级信息卡 —— 仪表盘风格：渐变头部 + 统计瓷贴 + 出勤概览
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, UserPlus, Layers, FileText, CalendarDays, BookOpen, ArrowRightLeft, UserRoundSearch, Undo2 } from 'lucide-react';
+import { Users, UserPlus, Layers, FileText, CalendarDays, BookOpen, ArrowRightLeft, UserRoundSearch, Undo2, Copy, UsersRound } from 'lucide-react';
+import { copyToClipboard } from '@/lib/feedbackTemplates';
+import { toast } from 'sonner';
+import { GroupDialog } from '@/components/GroupDialog';
 import type { Class } from '@/types';
 
 export interface TransferredOutStudent {
@@ -23,11 +26,16 @@ interface ClassInfoCardProps {
   onRestoreStudent?: (name: string) => void;
   /** 查看学员历史分析 */
   onViewStudent?: (name: string) => void;
+  /** 昵称解析（分组/复制名单展示用） */
+  getNickname?: (name: string) => string;
+  /** 当前课次（分组对话框标题用） */
+  lessonNumber?: number;
 }
 
-export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, transferredOut = [], onRestoreStudent, onViewStudent }: ClassInfoCardProps) {
+export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, transferredOut = [], onRestoreStudent, onViewStudent, getNickname, lessonNumber = 1 }: ClassInfoCardProps) {
   // hook 必须在早返回之前，避免 classData 由 null↔非 null 切换时 hook 数量变化
   const savedLessons = useMemo(() => new Set((classData?.records || []).map(r => r.lessonNumber)).size, [classData?.records]);
+  const [groupOpen, setGroupOpen] = useState(false);
 
   if (!classData) {
     return (
@@ -39,6 +47,20 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
     );
   }
 
+  const nick = getNickname || ((s: string) => s);
+
+  // 一键复制本课学生名单（逐行一列）
+  const copyRoster = async () => {
+    if (classData.students.length === 0) {
+      toast.error('本班暂无学生');
+      return;
+    }
+    const text = classData.students.map(nick).join('\n');
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(`已复制 ${classData.students.length} 人名单（逐行）`);
+    else toast.error('复制失败，请手动选择复制');
+  };
+
   const configuredLessons = Object.keys(classData.lessonConfigs).length;
 
   const stats = [
@@ -49,6 +71,7 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
   ];
 
   return (
+    <>
     <Card className="rounded-2xl bg-white/60 backdrop-blur border border-black/5 shadow-sm overflow-hidden">
       {/* 渐变头部 */}
       <div className="bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.12)] to-[rgb(var(--brand-rgb)/0.25)] px-5 pt-4 pb-4">
@@ -82,6 +105,10 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
               <UserPlus className="w-3.5 h-3.5" />
               管理
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setGroupOpen(true)} className="gap-1 rounded-xl h-8 px-2.5 bg-white/70 border-white" title="基于当课次名单随机分组">
+              <UsersRound className="w-3.5 h-3.5" />
+              分组
+            </Button>
           </div>
         </div>
       </div>
@@ -102,7 +129,17 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
         {classData.students.length > 0 && (
           <div className="mt-4">
             <p className="text-xs text-slate-400 mb-2 flex items-center justify-between">
-              <span>学员名单</span>
+              <span className="flex items-center gap-1.5">
+                学员名单
+                <button
+                  onClick={copyRoster}
+                  aria-label="一键复制该课次学生名单（逐行）"
+                  title="一键复制该课次学生名单（逐行）"
+                  className="p-1 rounded-md text-slate-400 hover:text-[color:var(--brand)] hover:bg-white"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </span>
               <Badge variant="secondary" className="text-[10px] h-5">{classData.students.length} 人</Badge>
             </p>
             <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
@@ -147,5 +184,13 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
         )}
       </CardContent>
     </Card>
+    <GroupDialog
+      open={groupOpen}
+      onClose={() => setGroupOpen(false)}
+      students={classData.students}
+      lessonNumber={lessonNumber}
+      getNickname={nick}
+    />
+    </>
   );
 }

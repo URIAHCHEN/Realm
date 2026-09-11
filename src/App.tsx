@@ -786,6 +786,8 @@ function App() {
                   transferredOut={transferredOutStudents}
                   onRestoreStudent={handleRestoreTransferred}
                   onViewStudent={handleViewStudentAnalysis}
+                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                  lessonNumber={currentLessonNumber}
                 />
                 <LessonManager
                   currentLessonNumber={currentLessonNumber}

@@ -212,6 +212,45 @@ export function FeedbackGenerator({
     toast.success('已重置复制状态');
   };
 
+  // 群发预览：仅含有记录且非请假/缺勤的学员；内容按当前模板（课次配置/默认/界面修改后的草稿）实时生成
+  const batchRows = useMemo(() => {
+    return students
+      .map(name => ({ name, record: recordOf(name) }))
+      .filter(x => x.record && !isAbsentRecord(x.record))
+      .map(x => ({ name: x.name, text: generateFor(x.name) ?? '' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, lessonConfig]);
+
+  const excludedAbsentCount = useMemo(
+    () => lessonRecords.filter(r => isAbsentRecord(r)).length,
+    [lessonRecords]
+  );
+
+  const handleCopyBatch = async () => {
+    if (batchRows.length === 0) {
+      toast.error('没有可群发的反馈（本课暂无到课学员记录）');
+      return;
+    }
+    const text = batchRows.map(r => `【${getNickname(r.name)}】\n${r.text}`).join('\n\n──────────────\n\n');
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
+      toast.success(`已复制 ${batchRows.length} 份群发反馈（用分隔线隔开）`);
+    } else {
+      toast.error('复制失败，请手动选择复制');
+    }
+  };
+
+  const handleCopyBatchRow = async (name: string, text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedSet(prev => new Set(prev).add(name));
+      toast.success(`已复制 ${getNickname(name)} 的反馈`);
+    } else {
+      toast.error('复制失败，请手动选择复制');
+    }
+  };
+
   const statusTone = (name: string): StatusTone => {
     if (copiedSet.has(name)) return 'copied';
     if (generated[name]) return 'generated';
@@ -477,7 +516,7 @@ export function FeedbackGenerator({
             )}
           </div>
           {showTemplate && (
-            <div className="space-y-3 rounded-2xl border border-black/8 bg-black/[0.02] p-4">
+            <div className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[color:var(--ink)] flex items-center gap-1.5">
                   <Wand2 className="w-4 h-4" style={{ color: 'var(--brand)' }} />
@@ -496,7 +535,7 @@ export function FeedbackGenerator({
                 ref={templateRef}
                 value={activeTemplate}
                 onChange={(e) => setActiveTemplate(e.target.value)}
-                className="min-h-[220px] text-sm leading-relaxed font-mono ios-input"
+                className="min-h-[220px] text-sm leading-relaxed ios-input"
                 placeholder="编辑模板，点击变量可插入…"
               />
               <div className="flex flex-wrap gap-1.5">
@@ -535,6 +574,66 @@ export function FeedbackGenerator({
           </CardContent>
         </Card>
       </div>
+
+      {/* 群发预览：左列姓名 / 右列对应私发反馈，排除请假与缺勤 */}
+      <Card className="ios-glass-card border-0">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex flex-wrap items-center justify-between gap-2 text-[color:var(--ink-2)]">
+            <span className="flex items-center gap-2">
+              <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+              群发预览 · 第{lessonNumber}课
+              <Badge variant="secondary" className="rounded-full">{batchRows.length} 人</Badge>
+              {excludedAbsentCount > 0 && (
+                <Badge className="rounded-full bg-blue-50 text-blue-600 border-0">已排除请假/缺勤 {excludedAbsentCount} 人</Badge>
+              )}
+            </span>
+            <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={handleCopyBatch}>
+              <Copy className="w-3.5 h-3.5" />复制全部（群发）
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {batchRows.length === 0 ? (
+            <p className="text-sm text-[color:var(--ink-4)] text-center py-10">
+              本课暂无到课学员的学情记录，无法生成群发内容
+            </p>
+          ) : (
+            <ScrollArea className="h-[420px] pr-2">
+              <div className="grid grid-cols-[120px_1fr] gap-x-3 text-xs font-semibold text-[color:var(--ink-4)] pb-2 border-b border-black/10">
+                <span>同学</span>
+                <span>私发反馈内容</span>
+              </div>
+              <div className="divide-y divide-black/5">
+                {batchRows.map(row => (
+                  <div key={row.name} className="grid grid-cols-[120px_1fr] gap-x-3 py-3 items-start">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 text-white"
+                        style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}
+                      >
+                        {getNickname(row.name).slice(0, 1) || row.name.slice(0, 1)}
+                      </span>
+                      <span className="text-sm font-medium text-[color:var(--ink)] truncate" title={row.name}>
+                        {getNickname(row.name)}
+                      </span>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[color:var(--ink-2)] bg-black/[0.02] rounded-xl border border-black/10 p-3 font-sans">
+                        {row.text}
+                      </pre>
+                      <div className="flex justify-end">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg gap-1 text-[color:var(--ink-4)]" onClick={() => handleCopyBatchRow(row.name, row.text)}>
+                          <Copy className="w-3.5 h-3.5" />复制
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

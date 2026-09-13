@@ -19,7 +19,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
   return (
     <Card className="ios-glass-card border-0">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-[color:var(--ink)]">
+        <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
           <Sparkles className="w-5 h-5" style={{ color: 'var(--brand)' }} />
           个性化设置
         </CardTitle>

@@ -2,7 +2,7 @@
 // 数据表结构见 CloudSyncPanel 中的建表 SQL，单表按「作用域」存多行快照
 
 import { BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend } from '@/lib/config';
-import { ensureFreshToken, getAccessToken } from '@/lib/auth';
+import { ensureFreshToken, getAccessToken, getCachedSession } from '@/lib/auth';
 import type { AppConfig, Class, SchoolScore } from '@/types';
 
 // 同步快照：与导出备份格式一致，方便离线/云端互换
@@ -71,7 +71,11 @@ export function getStateId(config: CloudSyncConfig | null): string {
 }
 
 export function saveSyncConfig(config: CloudSyncConfig) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.warn('[sync] 同步配置写入失败', e);
+  }
 }
 
 export function clearSyncConfig() {
@@ -88,7 +92,11 @@ export function loadSyncMeta(): CloudSyncMeta {
 }
 
 export function saveSyncMeta(meta: CloudSyncMeta) {
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
+  try {
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
+  } catch (e) {
+    console.warn('[sync] 同步元信息写入失败', e);
+  }
 }
 
 export function normalizeUrl(url: string): string {
@@ -204,23 +212,33 @@ export async function pushSnapshot(config: CloudSyncConfig, snapshot: SyncSnapsh
   };
 }
 
-// 测试连接：检查网络、密钥和建表情况
+// 测试连接：检查网络、密钥、登录态与建表情况
 export async function testConnection(config: CloudSyncConfig): Promise<{ ok: boolean; message: string }> {
   try {
     new URL(normalizeUrl(config.supabaseUrl));
   } catch {
     return { ok: false, message: 'Project URL 格式不正确，应为 https://xxxx.supabase.co' };
   }
+  // 先确保 access token 新鲜：RLS 已收紧为「仅登录可读写」，
+  // 用过期 token 探测会被拒，从而误报为密钥错误
+  await ensureFreshToken().catch(() => null);
+  const signedIn = !!getCachedSession()?.access_token;
   try {
     const res = await fetch(restUrl(config, '?select=id&limit=1'), {
       headers: apiHeaders(config),
     });
     if (res.ok) {
-      return { ok: true, message: '连接成功，数据表就绪 ✅' };
+      return { ok: true, message: signedIn ? '连接成功，数据表就绪 ✅' : '连接成功（当前未登录，仅能读取公开数据）' };
     }
     const text = await res.text();
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, message: '密钥校验失败，请检查 anon key 是否复制完整' };
+      if (!signedIn) {
+        return { ok: false, message: '需要登录后才能读写云端：当前权限策略为「仅登录用户可读写」，请先登录再测试' };
+      }
+      if (text.includes('row-level security') || text.includes('permission')) {
+        return { ok: false, message: '已登录但无权访问该云端：请确认 RLS 策略已执行到最新版（to authenticated），且你的账号已在成员名单中' };
+      }
+      return { ok: false, message: '登录态已失效，请重新登录后再测试连接' };
     }
     if (text.includes('does not exist')) {
       return { ok: false, message: '连接成功，但数据表还未创建，请先在 Supabase SQL Editor 执行建表 SQL' };
@@ -232,7 +250,11 @@ export async function testConnection(config: CloudSyncConfig): Promise<{ ok: boo
 }
 
 // 建表 SQL（供用户复制到 Supabase SQL Editor 执行一次）
-export const SETUP_SQL = `-- 学情管理云同步：只需执行一次
+// 安全模型：登录（Supabase Auth）后才可读写，匿名请求一律拒绝。
+// 幂等：可重复执行；已用过旧「Allow read/insert/update using(true)」版本的库，
+// 重跑一次即可自动收紧（会先 drop 旧策略），无需手工删表。
+export const SETUP_SQL = `-- 学情管理云同步 · 安全版（幂等，可重复执行）
+-- 1) 数据表
 create table if not exists app_state (
   id text primary key,
   data jsonb not null,
@@ -242,9 +264,61 @@ create table if not exists app_state (
 
 alter table app_state enable row level security;
 
-create policy "Allow read" on app_state
-  for select using (true);
-create policy "Allow insert" on app_state
-  for insert with check (true);
-create policy "Allow update" on app_state
-  for update using (true) with check (true);`;
+-- 收紧：删除历史开放策略，仅登录用户可读写
+drop policy if exists "Allow read" on app_state;
+drop policy if exists "Allow insert" on app_state;
+drop policy if exists "Allow update" on app_state;
+drop policy if exists "auth read" on app_state;
+drop policy if exists "auth insert" on app_state;
+drop policy if exists "auth update" on app_state;
+
+create policy "auth read" on app_state
+  for select to authenticated using (true);
+create policy "auth insert" on app_state
+  for insert to authenticated with check (true);
+create policy "auth update" on app_state
+  for update to authenticated using (true) with check (true);
+
+-- 2) 成员名册（管理员/成员白名单）
+create table if not exists app_members (
+  scope text not null,
+  user_id uuid not null,
+  email text,
+  is_admin boolean not null default false,
+  created_at timestamptz not null default now(),
+  primary key (scope, user_id)
+);
+
+alter table app_members enable row level security;
+
+-- 判权辅助函数（SECURITY DEFINER 规避自引用策略递归）
+create or replace function public.is_admin_member(p_scope text)
+returns boolean language sql security definer set search_path = public as $$
+  select exists (select 1 from app_members
+                 where scope = p_scope and user_id = auth.uid() and is_admin);
+$$;
+
+create or replace function public.has_members(p_scope text)
+returns boolean language sql security definer set search_path = public as $$
+  select exists (select 1 from app_members where scope = p_scope);
+$$;
+
+drop policy if exists "members read" on app_members;
+drop policy if exists "members insert" on app_members;
+drop policy if exists "members update" on app_members;
+drop policy if exists "members delete" on app_members;
+
+create policy "members read" on app_members
+  for select to authenticated using (true);
+-- 名册为空时首个账号自举为管理员；此后仅管理员可增删改
+create policy "members insert" on app_members
+  for insert to authenticated
+  with check (not public.has_members(scope) or public.is_admin_member(scope));
+create policy "members update" on app_members
+  for update to authenticated
+  using (public.is_admin_member(scope)) with check (public.is_admin_member(scope));
+create policy "members delete" on app_members
+  for delete to authenticated using (public.is_admin_member(scope));
+
+-- 3) 建议：账号由团队内部开通，关闭匿名注册
+--    项目设置 → Authentication → 关闭 "Allow new users to sign up"（或加邮箱白名单）`;

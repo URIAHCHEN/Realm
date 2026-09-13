@@ -143,6 +143,7 @@ function App() {
   const displaySettings = useDisplaySettings();
 
   // 登录后：自举首个管理员 / 刷新成员身份
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- 未登录时需同步落回只读身份；已登录走异步请求后置 setState
   useEffect(() => { refreshMembership(); }, [refreshMembership, sessionKey]);
 
   // 成员身份自动刷新：被管理员加入名单后，无需刷新页面即可恢复可写
@@ -610,7 +611,7 @@ function App() {
 
           importData(data);
           toast.success(`已从备份恢复 ${incomingClassCount} 个班级的数据`);
-        } catch (error) {
+        } catch {
           toast.error('数据导入失败，请检查文件是否为有效的 JSON 备份');
         }
       };
@@ -882,17 +883,23 @@ function App() {
             />
 
             {/* 生成设置：数据可视化 / 表格字段 / 公示样式（原「系统配置」并入此处） */}
-            <div className="pt-2">
-              <div className="flex items-baseline gap-2 mb-1">
+            <div className="pt-1 space-y-3">
+              <div className="space-y-0.5">
                 <h2 className="text-lg font-semibold text-[color:var(--ink)]">生成设置</h2>
-                <span className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</span>
+                <p className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</p>
               </div>
-              <Tabs defaultValue="visualization" className="space-y-4">
-                <TabsList className="grid w-full max-w-2xl grid-cols-2">
-                  <TabsTrigger value="visualization" className="gap-1.5">
+              <Tabs defaultValue="visualization" className="gap-4">
+                <TabsList className="grid w-full max-w-4xl grid-cols-2 h-10 p-1 rounded-[var(--r-md)]">
+                  <TabsTrigger
+                    value="visualization"
+                    className="gap-1.5 text-sm rounded-[var(--r-md)] data-[state=active]:bg-[color:var(--brand)] data-[state=active]:text-white data-[state=active]:shadow-sm"
+                  >
                     <BarChart3 className="w-4 h-4" />数据可视化
                   </TabsTrigger>
-                  <TabsTrigger value="fields" className="gap-1.5">
+                  <TabsTrigger
+                    value="fields"
+                    className="gap-1.5 text-sm rounded-[var(--r-md)] data-[state=active]:bg-[color:var(--brand)] data-[state=active]:text-white data-[state=active]:shadow-sm"
+                  >
                     <Columns3 className="w-4 h-4" />表格字段
                   </TabsTrigger>
                 </TabsList>

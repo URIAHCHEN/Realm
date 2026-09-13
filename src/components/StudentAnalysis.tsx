@@ -181,7 +181,7 @@ export function StudentAnalysis({
     const fullScore = getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber));
     const attendanceRate = attendanceRateOf(records.map(r => r.attendance));
     return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
-  }, [records, questionTypes, currentClassData, getLessonConfig]);
+  }, [records, currentClassData, getLessonConfig]);
 
   // 总分 + 正确率组合图
   const trendChartData = useMemo(() =>

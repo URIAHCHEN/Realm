@@ -12,9 +12,26 @@ import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
+import { toast } from 'sonner';
 
 // 生成唯一ID
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+// localStorage 安全写入：配额超限（QuotaExceededError）/隐私模式等场景下
+// 旧实现会抛出未捕获异常并静默丢失本次数据；这里统一捕获并仅提示一次，
+// 提示用户导出备份，避免长时间录入后才发现数据没存上。
+let storageWarned = false;
+function safeSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`[save] ${key} 写入失败`, e);
+    if (!storageWarned) {
+      storageWarned = true;
+      toast.error('本地存储写入失败：数据可能无法保存，请尽快用「导出备份」留存数据', { duration: 10000 });
+    }
+  }
+}
 
 // localStorage JSON 安全解析：数据损坏（写入中断/手动改坏）时回退默认值，
 // 避免初始化阶段抛异常导致整页白屏且无法自愈（坏数据一直留在 localStorage）
@@ -309,7 +326,7 @@ export function useClassData() {
   // 所有班级数据（可达数 MB），造成主线程卡顿。改为 400ms 防抖合并写入，
   // 并在页面隐藏/关闭前立即落盘一次，确保持久性不降级。
   useEffect(() => {
-    const flush = () => localStorage.setItem('appConfig', JSON.stringify(appConfig));
+    const flush = () => safeSet('appConfig', JSON.stringify(appConfig));
     const t = setTimeout(flush, 400);
     const onHide = () => { clearTimeout(t); flush(); };
     window.addEventListener('pagehide', onHide);
@@ -317,7 +334,7 @@ export function useClassData() {
   }, [appConfig]);
 
   useEffect(() => {
-    const flush = () => localStorage.setItem('classData', JSON.stringify(classes));
+    const flush = () => safeSet('classData', JSON.stringify(classes));
     const t = setTimeout(flush, 400);
     const onHide = () => { clearTimeout(t); flush(); };
     window.addEventListener('pagehide', onHide);
@@ -325,19 +342,19 @@ export function useClassData() {
   }, [classes]);
 
   useEffect(() => {
-    localStorage.setItem('currentClassId', currentClassId || '');
+    safeSet('currentClassId', currentClassId || '');
   }, [currentClassId]);
 
   useEffect(() => {
-    localStorage.setItem('currentLessonNumber', currentLessonNumber.toString());
+    safeSet('currentLessonNumber', currentLessonNumber.toString());
   }, [currentLessonNumber]);
 
   useEffect(() => {
-    localStorage.setItem('studentNicknames', JSON.stringify(nicknames));
+    safeSet('studentNicknames', JSON.stringify(nicknames));
   }, [nicknames]);
 
   useEffect(() => {
-    const flush = () => localStorage.setItem('schoolScores', JSON.stringify(schoolScores));
+    const flush = () => safeSet('schoolScores', JSON.stringify(schoolScores));
     const t = setTimeout(flush, 400);
     const onHide = () => { clearTimeout(t); flush(); };
     window.addEventListener('pagehide', onHide);
@@ -695,7 +712,7 @@ export function useClassData() {
     classId: string,
     recordId: string,
     field: keyof StudentRecord,
-    value: any
+    value: StudentRecord[keyof StudentRecord]
   ) => {
     setClasses(prev => {
       const classData = prev[classId];

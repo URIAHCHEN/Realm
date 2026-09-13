@@ -77,6 +77,7 @@ function Confetti() {
       delay: Math.random() * 3,
       color: colors[Math.floor(Math.random() * colors.length)]
     }));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 彩带仅在挂载时随机生成一次
     setConfetti(newConfetti);
   }, []);
 

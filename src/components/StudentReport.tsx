@@ -617,11 +617,6 @@ function PersonalReport({
     }
   };
 
-  // 课次配置驱动指标项：监听课次配置变化以驱动派生指标
-  useMemo(() => {
-    const _hasListening = studentRecords.some(r => r.listeningStatus === '具体分数' && r.listeningScore > 0);
-    void _hasListening;
-  }, [studentRecords, lessonConfigs]);
   if (studentRecords.length === 0) {
     return (
       <div className="text-center py-16">

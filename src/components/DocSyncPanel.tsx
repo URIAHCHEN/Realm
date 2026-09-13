@@ -35,6 +35,9 @@ interface DocSyncPanelProps {
   onExportExcel: () => void;
 }
 
+const BTN = 'h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-1.5';
+const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90 shadow-sm`;
+
 export function DocSyncPanel({
   records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onSyncFullScores, onExportExcel,
 }: DocSyncPanelProps) {
@@ -97,31 +100,31 @@ export function DocSyncPanel({
   };
 
   return (
-    <div className={`space-y-6 ${className || ''}`}>
+    <div className={`space-y-5 ${className || ''}`}>
       {/* 推送到在线文档 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
+          <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             推送到腾讯文档 / 金山文档
             <Badge variant="secondary" className="rounded-full">第{lessonNumber}课</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] p-4 text-sm text-[#3a3a3c] space-y-1.5">
+          <div className="rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] p-4 text-sm text-[color:var(--ink-2)] space-y-1.5">
             <p className="font-medium">使用方式（约 30 秒成表）：</p>
             <p>1️⃣ 点下方按钮复制学情表 → 2️⃣ 打开腾讯文档/金山文档新建在线表格 → 3️⃣ Ctrl+V 粘贴，行列自动对齐 → 4️⃣ 分享公示链接</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button className="ios-button gap-2" onClick={handleCopyTSV}>
+            <Button className={BTN_PRIMARY + " gap-2"} onClick={handleCopyTSV}>
               <ClipboardCopy className="w-4 h-4" />
               复制表格（粘贴到在线表格）
             </Button>
-            <Button variant="outline" className="rounded-xl gap-2" onClick={handleCopyMarkdown}>
+            <Button variant="outline" className={BTN + " gap-2"} onClick={handleCopyMarkdown}>
               <FileText className="w-4 h-4" />
               复制 Markdown（智能文档）
             </Button>
-            <Button variant="outline" className="rounded-xl gap-2" onClick={onExportExcel}>
+            <Button variant="outline" className={BTN + " gap-2"} onClick={onExportExcel}>
               <Table2 className="w-4 h-4" />
               下载 Excel 文件
             </Button>
@@ -132,13 +135,13 @@ export function DocSyncPanel({
       {/* 从在线表格回导 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
+          <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <ClipboardPaste className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             从在线表格导入（双向回环）
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-[#8e8e93]">
+          <p className="text-sm text-[color:var(--ink-4)]">
             在腾讯文档/金山文档中选中含表头的数据区复制，粘贴到下面，系统按列名自动匹配（姓名/成长轨迹/课次/考勤/作业/课后任务/{lessonConfig.questionTypes.map(qt => qt.name).join('/')}）；不在名单的学生会自动补录到目标班级。
           </p>
           <div className="flex flex-wrap gap-3">
@@ -181,7 +184,7 @@ export function DocSyncPanel({
               <div className="flex items-center gap-2 mt-2">
                 <Button
                   size="sm"
-                  className="h-8 gap-1.5"
+                  className={`${BTN_PRIMARY} h-8`}
                   onClick={() => {
                     onCreateQuestionTypes({ classId: targetClass, lessonNumber: targetLesson }, unmatched);
                     toast.success(`已补建 ${unmatched.length} 个题型，请再点一次“解析并导入”写入这些列`);
@@ -200,37 +203,37 @@ export function DocSyncPanel({
       {/* 同步机制说明 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
+          <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <CloudCog className="w-5 h-5" style={{ color: 'var(--brand)' }} />
             同步机制与冲突策略
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-[#3a3a3c]">
+        <CardContent className="space-y-4 text-sm text-[color:var(--ink-2)]">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-xl bg-[#f2f2f7] p-4">
               <p className="font-semibold flex items-center gap-1.5 mb-1.5"><CloudCog className="w-4 h-4" />实时双向（主通道）</p>
-              <p className="text-[#8e8e93] text-xs leading-relaxed">Supabase 云端实时同步：多设备数据自动对账，冲突时明确提示二选一，绝不静默覆盖。</p>
+              <p className="text-[color:var(--ink-4)] text-xs leading-relaxed">Supabase 云端实时同步：多设备数据自动对账，冲突时明确提示二选一，绝不静默覆盖。</p>
             </div>
             <div className="rounded-xl bg-[#f2f2f7] p-4">
               <p className="font-semibold flex items-center gap-1.5 mb-1.5"><FileSpreadsheet className="w-4 h-4" />在线文档（快照通道）</p>
-              <p className="text-[#8e8e93] text-xs leading-relaxed">腾讯/金山文档按上表方式推送快照、回贴导入更新，适合公示与协作场景。</p>
+              <p className="text-[color:var(--ink-4)] text-xs leading-relaxed">腾讯/金山文档按上表方式推送快照、回贴导入更新，适合公示与协作场景。</p>
             </div>
             <div className="rounded-xl bg-[#f2f2f7] p-4">
               <p className="font-semibold flex items-center gap-1.5 mb-1.5"><HardDriveDownload className="w-4 h-4" />离线缓存</p>
-              <p className="text-[#8e8e93] text-xs leading-relaxed">所有数据本地常驻（localStorage），断网可正常录入，恢复联网后自动补传云端。</p>
+              <p className="text-[color:var(--ink-4)] text-xs leading-relaxed">所有数据本地常驻（localStorage），断网可正常录入，恢复联网后自动补传云端。</p>
             </div>
           </div>
           <div className="flex items-center justify-between rounded-xl bg-[rgb(var(--brand-rgb)/0.06)] px-4 py-3">
             <div>
               <p className="font-medium flex items-center gap-1.5"><Timer className="w-4 h-4" />自动同步频率</p>
-              <p className="text-xs text-[#8e8e93]">数据变化后延迟该时长自动上传云端</p>
+              <p className="text-xs text-[color:var(--ink-4)]">数据变化后延迟该时长自动上传云端</p>
             </div>
             <div className="flex items-center gap-3">
               <Select
                 value={String(display.settings.syncIntervalSec)}
                 onValueChange={(v) => display.update({ syncIntervalSec: parseInt(v) })}
               >
-                <SelectTrigger className="w-28 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-28 h-9 rounded-[var(--r-md)] text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="2">2 秒（即时）</SelectItem>
                   <SelectItem value="3">3 秒（默认）</SelectItem>
@@ -245,11 +248,11 @@ export function DocSyncPanel({
                   checked={!!display.settings.syncIntervalSec}
                   onCheckedChange={(v) => display.update({ syncIntervalSec: v ? 3 : 0 })}
                 />
-                <Label htmlFor="autosync" className="text-xs text-[#8e8e93]">启用</Label>
+                <Label htmlFor="autosync" className="text-xs text-[color:var(--ink-4)]">启用</Label>
               </div>
             </div>
           </div>
-          <p className="text-xs text-[#8e8e93] flex items-start gap-1.5">
+          <p className="text-xs text-[color:var(--ink-4)] flex items-start gap-1.5">
             <GitCompareArrows className="w-4 h-4 mt-0.5 flex-shrink-0" />
             冲突处理优先级：本地未推送改动 + 云端有更新 → 提示手动选择；仅一端有改动 → 自动同步该端。
           </p>

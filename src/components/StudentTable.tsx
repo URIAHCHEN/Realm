@@ -26,7 +26,7 @@ interface StudentTableProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
-  onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: any) => void;
+  onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: StudentRecord[keyof StudentRecord]) => void;
   onCreateRecord: (studentName: string, record: Partial<StudentRecord>) => void;
   onDeleteRecord: (recordId: string) => void;
   /** 一键删除所选学员本课次记录（含撤销） */
@@ -109,6 +109,7 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
   const [focused, setFocused] = useState(false);
 
   // 外部值变化（批量/他端拉取）且未聚焦时，回填显示
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- 受控输入本地缓冲（聚焦时不覆盖用户输入），有意同步
   useEffect(() => { if (!focused) setText(value > 0 ? String(value) : ''); }, [value, focused]);
 
   const clamp = (n: number) => {
@@ -691,7 +692,7 @@ export function StudentTable({
                                     {shown.length === 0 && <span className="text-slate-300 text-sm">无</span>}
                                     {!settings.showAllSeasons && (
                                       <button
-                                        onClick={() => setExpandedSeasons(prev => { const n = new Set(prev); n.has(studentName) ? n.delete(studentName) : n.add(studentName); return n; })}
+                                        onClick={() => setExpandedSeasons(prev => { const n = new Set(prev); if (n.has(studentName)) { n.delete(studentName); } else { n.add(studentName); } return n; })}
                                         className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-dashed border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.08)]"
                                         title={expanded ? '收起' : '添加季度'}
                                       >

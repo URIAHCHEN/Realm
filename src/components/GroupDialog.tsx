@@ -40,13 +40,14 @@ export function GroupDialog({ open, onClose, students, lessonNumber, getNickname
   // 打开 / 名单变化时重新洗牌（多出人员的去向由 [g, rem] 效应重置）
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 打开弹窗时按最新名单重新洗牌，属一次性初始化
       setOrder(shuffle(students));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, students]);
+    }, [open, students]);
 
   // 组数变化时重置多出人员去向（默认前 rem 组各 +1）
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 组数变化时的派生重置，收敛于有限次
     setExtraTarget(Array.from({ length: rem }, (_, i) => i % g));
   }, [g, rem]);
 

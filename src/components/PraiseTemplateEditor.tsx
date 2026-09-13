@@ -37,6 +37,7 @@ export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonC
 
   const handleAdd = () => {
     const newT: PraiseTemplate = {
+      // eslint-disable-next-line react-hooks/purity -- 仅在点击「新增模板」的事件处理中执行，不在渲染期
       id: 'pt_' + Date.now(),
       name: `模板${praiseTemplates.length + 1}`,
       template: lessonConfig.praiseTemplate || '🏆 第【课次】课【表彰类型】表扬榜\n\n【表彰内容】\n\n恭喜以上同学！继续加油！💪',

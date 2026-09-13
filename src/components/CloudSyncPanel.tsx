@@ -28,6 +28,10 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleString('zh-CN', { hour12: false });
 }
 
+const BTN = 'h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-1.5';
+const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90 shadow-sm`;
+const FIELD = 'h-9 text-sm rounded-[var(--r-md)]';
+
 export function CloudSyncPanel({ sync }: { sync: Sync }) {
   const [url, setUrl] = useState(sync.config?.supabaseUrl || '');
   const [key, setKey] = useState(sync.config?.supabaseKey || '');
@@ -64,11 +68,11 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-5">
       {/* 状态卡片 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-[#1c1c1e]">
+          <CardTitle className="flex items-center justify-between text-base text-[color:var(--ink)]">
             <span className="flex items-center gap-2">
               <Cloud className="w-5 h-5 text-[color:var(--brand)]" />
               云同步状态
@@ -100,11 +104,11 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
                 本地和云端都有新的改动，请选择保留哪一边（另一边将被覆盖）
               </p>
               <div className="flex gap-2">
-                <Button size="sm" className="ios-button gap-2" onClick={sync.resolveConflictKeepLocal}>
+                <Button size="sm" className={BTN_PRIMARY} onClick={sync.resolveConflictKeepLocal}>
                   <CloudUpload className="w-4 h-4" />
                   保留本地，覆盖云端
                 </Button>
-                <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={sync.resolveConflictKeepCloud}>
+                <Button size="sm" variant="outline" className={BTN} onClick={sync.resolveConflictKeepCloud}>
                   <CloudDownload className="w-4 h-4" />
                   保留云端，覆盖本地
                 </Button>
@@ -115,15 +119,15 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
           {/* 手动操作 */}
           {sync.config && sync.status !== 'conflict' && (
             <div className="flex flex-wrap gap-2 pt-1">
-              <Button size="sm" className="ios-button gap-2" disabled={sync.action !== 'idle'} onClick={sync.push}>
+              <Button size="sm" className={BTN_PRIMARY} disabled={sync.action !== 'idle'} onClick={sync.push}>
                 <CloudUpload className="w-4 h-4" />
                 手动上传
               </Button>
-              <Button size="sm" variant="outline" className="rounded-xl gap-2" disabled={sync.action !== 'idle'} onClick={sync.pull}>
+              <Button size="sm" variant="outline" className={BTN} disabled={sync.action !== 'idle'} onClick={sync.pull}>
                 <CloudDownload className="w-4 h-4" />
                 从云端拉取
               </Button>
-              <Button size="sm" variant="ghost" className="rounded-xl gap-2 text-[#ff3b30] hover:bg-[#ff3b30]/10" onClick={sync.clearConfig}>
+              <Button size="sm" variant="ghost" className={`${BTN} text-[#ff3b30] hover:bg-[#ff3b30]/10`} onClick={sync.clearConfig}>
                 <Unlink className="w-4 h-4" />
                 断开云同步
               </Button>
@@ -135,7 +139,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
       {/* 配置表单 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-[#1c1c1e]">
+          <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <Link2 className="w-5 h-5 text-[color:var(--brand)]" />
             Supabase 连接配置
           </CardTitle>
@@ -147,7 +151,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
               placeholder="https://xxxxxxxx.supabase.co"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="ios-input"
+              className={FIELD}
             />
           </div>
           <div className="space-y-1.5">
@@ -156,7 +160,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
               placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              className="ios-input font-mono text-xs"
+              className={`${FIELD} font-mono text-xs`}
             />
           </div>
           <div className="flex items-center justify-between rounded-xl bg-[#f2f2f7] px-4 py-3">
@@ -167,11 +171,11 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
             <Switch checked={autoSync} onCheckedChange={setAutoSync} />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button className="ios-button gap-2" onClick={handleSave}>
+            <Button size="sm" className={BTN_PRIMARY + " gap-2"} onClick={handleSave}>
               <PlugZap className="w-4 h-4" />
               保存并连接
             </Button>
-            <Button variant="outline" className="rounded-xl gap-2" disabled={testing} onClick={handleTest}>
+            <Button size="sm" variant="outline" className={BTN + " gap-2"} disabled={testing} onClick={handleTest}>
               {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
               测试连接
             </Button>
@@ -188,26 +192,32 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
       {/* 首次配置指引 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="text-[#1c1c1e]">首次配置三步走（约 3 分钟）</CardTitle>
+          <CardTitle className="text-base text-[color:var(--ink)]">首次配置三步走（约 3 分钟）</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-[#3a3a3c]">
+        <CardContent className="space-y-4 text-sm text-[color:var(--ink-2)]">
           <div className="space-y-2">
             <p><span className="font-semibold text-[color:var(--brand)]">第 1 步</span>：打开 <span className="font-mono text-xs bg-[#f2f2f7] px-1.5 py-0.5 rounded">supabase.com</span> 免费注册并新建一个项目（免费额度完全够用）。</p>
-            <p><span className="font-semibold text-[color:var(--brand)]">第 2 步</span>：项目左侧菜单进 <span className="font-semibold">SQL Editor</span>，粘贴下面的建表 SQL 并执行（只需一次）。</p>
-            <p><span className="font-semibold text-[color:var(--brand)]">第 3 步</span>：项目设置 → API，把 <span className="font-semibold">Project URL</span> 和 <span className="font-semibold">anon public key</span> 填到上方，点"保存并连接"。</p>
+            <p><span className="font-semibold text-[color:var(--brand)]">第 2 步</span>：项目左侧菜单进 <span className="font-semibold">SQL Editor</span>，粘贴下面的 SQL 执行。<span className="text-[color:var(--ink-4)]">只需执行一次；若此前建过表，再执行一次即可自动收紧权限（安全版）。</span></p>
+            <p><span className="font-semibold text-[color:var(--brand)]">第 3 步</span>：项目设置 → API，把 <span className="font-semibold">Project URL</span> 和 <span className="font-semibold">anon public key</span> 填到上方，点“保存并连接”。</p>
           </div>
-          <div className="relative">
-            <pre className="bg-[#1c1c1e] text-[#e5e5ea] rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap">{SETUP_SQL}</pre>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="absolute top-2 right-2 rounded-lg gap-1.5"
-              onClick={handleCopySql}
-            >
-              <Copy className="w-3.5 h-3.5" />
-              复制 SQL
-            </Button>
+          <div className="rounded-[var(--r-md)] overflow-hidden border border-black/10">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-[#2c2c2e]">
+              <span className="text-xs font-medium text-[#e5e5ea]">建表与权限 SQL（安全版 · 幂等）</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8 px-2.5 rounded-md gap-1.5 text-xs"
+                onClick={handleCopySql}
+              >
+                <Copy className="w-3.5 h-3.5" />
+                复制 SQL
+              </Button>
+            </div>
+            <pre className="bg-[#1c1c1e] text-[#e5e5ea] p-3 text-xs leading-relaxed font-mono overflow-auto max-h-[320px] whitespace-pre">{SETUP_SQL}</pre>
           </div>
+          <p className="text-xs text-[color:var(--ink-4)]">
+            安全模型：仅登录账号可读写云端数据（匿名请求一律拒绝）；成员名册由首个账号自举为管理员，后续由管理员添加成员。
+          </p>
         </CardContent>
       </Card>
     </div>

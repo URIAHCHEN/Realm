@@ -292,7 +292,7 @@ export function FeedbackGenerator({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 顶部：标题 + 批量操作 */}
       <Card className="ios-glass-card border-0">
         <CardContent className="pt-5 pb-4">
@@ -308,7 +308,7 @@ export function FeedbackGenerator({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" onClick={handleGenerateAll}>
+              <Button size="sm" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90" onClick={handleGenerateAll}>
                 <Wand2 className="w-4 h-4" />
                 一键生成全班
               </Button>
@@ -387,7 +387,7 @@ export function FeedbackGenerator({
         {/* 学生列表 */}
         <Card className="ios-glass-card border-0">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-[color:var(--ink-2)]">
+            <CardTitle className="text-base flex items-center gap-2 text-[color:var(--ink)]">
               <ClipboardList className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               学生列表
               <Badge variant="secondary" className="rounded-full ml-auto">{students.length} 人</Badge>
@@ -397,7 +397,7 @@ export function FeedbackGenerator({
             {students.length === 0 ? (
               <p className="text-sm text-[color:var(--ink-4)] text-center py-8">班级暂无学生</p>
             ) : (
-              <ScrollArea className="h-[460px] pr-2">
+              <ScrollArea className="h-[420px] pr-2">
                 <div className="space-y-1">
                   {students.map(s => {
                     const hasRecord = !!recordOf(s);
@@ -448,7 +448,7 @@ export function FeedbackGenerator({
         {/* 编辑区 */}
         <Card className="ios-glass-card border-0">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center justify-between gap-2 text-[color:var(--ink-2)]">
+            <CardTitle className="text-base flex items-center justify-between gap-2 text-[color:var(--ink)]">
               <span className="flex items-center gap-2">
                 <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
                 {selected ? `${getNickname(selected)} 的反馈内容` : '反馈内容'}
@@ -484,7 +484,7 @@ export function FeedbackGenerator({
                 <Textarea
                   value={generated[selected] ?? ''}
                   onChange={(e) => setGenerated(prev => ({ ...prev, [selected]: e.target.value }))}
-                  className="min-h-[320px] text-sm leading-relaxed rounded-xl"
+                  className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
                   placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
                 />
                 {(lessonConfig.customFields || []).length > 0 && selectedRecord && (
@@ -537,7 +537,7 @@ export function FeedbackGenerator({
                 ref={templateRef}
                 value={activeTemplate}
                 onChange={(e) => setActiveTemplate(e.target.value)}
-                className="min-h-[320px] text-sm leading-relaxed rounded-xl"
+                className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
                 placeholder="编辑模板，点击变量可插入…"
               />
               <div className="flex flex-wrap gap-1.5">
@@ -580,7 +580,7 @@ export function FeedbackGenerator({
       {/* 群发预览：左列姓名 / 右列对应私发反馈，排除请假与缺勤 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex flex-wrap items-center justify-between gap-2 text-[color:var(--ink-2)]">
+          <CardTitle className="text-base flex flex-wrap items-center justify-between gap-2 text-[color:var(--ink)]">
             <span className="flex items-center gap-2">
               <Send className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               群发预览 · 第{lessonNumber}课
@@ -589,18 +589,18 @@ export function FeedbackGenerator({
                 <Badge className="rounded-full bg-blue-50 text-blue-600 border-0">已排除请假/缺勤 {excludedAbsentCount} 人</Badge>
               )}
             </span>
-            <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={handleCopyBatch}>
+            <Button variant="outline" size="sm" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-1.5" onClick={handleCopyBatch}>
               <Copy className="w-3.5 h-3.5" />复制全部（群发）
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {batchRows.length === 0 ? (
-            <p className="text-sm text-[color:var(--ink-4)] text-center py-10">
+            <p className="text-sm text-[color:var(--ink-4)] text-center py-8">
               本课暂无到课学员的学情记录，无法生成群发内容
             </p>
           ) : (
-            <ScrollArea className="h-[420px] pr-2">
+            <ScrollArea className="h-[380px] pr-2">
               <div className="grid grid-cols-[140px_1fr] gap-x-3 text-xs font-semibold text-[color:var(--ink-4)] pb-2 border-b border-black/10">
                 <span>同学</span>
                 <span>私发反馈内容</span>

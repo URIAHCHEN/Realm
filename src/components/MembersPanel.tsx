@@ -35,6 +35,7 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
     setLoading(false);
   }, [scope]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reload 为异步请求，setState 发生在 await 之后
   useEffect(() => { if (isAdmin) reload(); }, [isAdmin, reload]);
 
   const copyMe = async () => {

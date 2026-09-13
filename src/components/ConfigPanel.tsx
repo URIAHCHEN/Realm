@@ -353,7 +353,7 @@ export function ConfigPanel({
       <TabsContent value="fields" className="space-y-6">
         <Card className="liquid-glass-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[color:var(--brand)]">
+            <CardTitle className="flex items-center gap-2 text-base text-[color:var(--brand)]">
               <Settings className="w-5 h-5" />
               第{lessonNumber}课字段配置
             </CardTitle>
@@ -723,7 +723,7 @@ export function ConfigPanel({
       <TabsContent value="default" className="space-y-6">
         <Card className="liquid-glass-card">
           <CardHeader>
-            <CardTitle className="text-[color:var(--brand)]">默认配置（用于新课次）</CardTitle>
+            <CardTitle className="text-base text-[color:var(--brand)]">默认配置（用于新课次）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* 默认选项（用于新课次） */}

@@ -33,6 +33,7 @@ export function TransferStudentDialog({
 
   // 每次打开重置选择
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 每次打开重置选择，属一次性初始化
     if (open) { setStudent(''); setTarget(NONE); }
   }, [open]);
 

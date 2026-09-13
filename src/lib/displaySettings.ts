@@ -67,7 +67,11 @@ export function loadDisplaySettings(): DisplaySettings {
 }
 
 export function saveDisplaySettings(settings: DisplaySettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('[display] 设置写入失败，刷新后可能回退默认值', e);
+  }
 }
 
 export function getSyncIntervalSec(): number {

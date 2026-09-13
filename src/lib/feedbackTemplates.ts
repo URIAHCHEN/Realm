@@ -349,7 +349,7 @@ export function generatePraise(
   }
   
   // 替换模板变量
-  let praise = template
+  const praise = template
     .replace(/【课次】/g, lessonNumber.toString())
     .replace(/【表彰类型】/g, praiseType === 'entrance' ? '入门测' : praiseType === 'listening' ? '课后任务' : '综合')
     .replace(/【表彰内容】/g, praiseContent);

@@ -106,6 +106,18 @@ const seasonChips = (seasons: string[]): string => {
   }).join('');
 };
 
+// HTML 转义：学员昵称 / 自定义选项 / 备注等均来自导入表格或人工输入，
+// 直接拼进公示 HTML 会破坏排版（含 < & ），并在导出为 .html 打开时构成注入风险
+function esc(v: unknown): string {
+  const str = v == null ? '' : String(v);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // 统一规格的分数徽章：固定宽度保证所有列整齐
 function scoreBadge(pct: number, score: string | number, p: Palette, color?: string): string {
   const w = Math.max(0, Math.min(100, pct));
@@ -170,18 +182,18 @@ export function buildPublicityHTML(
     const totalBg = style === 'dark' ? 'rgba(34,197,94,0.18)' : '#e8f8ee';
     return `<tr style="${i % 2 === 1 ? 'background:' + p.altRowBg + ';' : ''}">
       <td style="${td}">${rankBadge(rankVal)}</td>
-      <td style="${td}font-weight:600">${getNickname(r.studentName)}</td>
+      <td style="${td}font-weight:600">${esc(getNickname(r.studentName))}</td>
       <td style="${td}white-space:nowrap">${seasonChips(r.seasons || [])}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${attendanceEmoji(r.attendance)}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${homeworkEmoji(r.homeworkStatus)}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : (r.listeningStatus || '-')}</td>
+      <td style="${td}white-space:nowrap;font-size:13px">${esc(attendanceEmoji(r.attendance))}</td>
+      <td style="${td}white-space:nowrap;font-size:13px">${esc(homeworkEmoji(r.homeworkStatus))}</td>
+      <td style="${td}white-space:nowrap;font-size:13px">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
       ${questionTypes.map(qt => {
         const score = r.scores[qt.id] || 0;
         return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score, p)}</td>`;
       }).join('')}
       ${customFields.map(cf => {
         const v = r.customValues?.[cf.id];
-        const disp = (v === '' || v == null) ? '-' : (cf.kind === 'number' ? `${v}` : String(v));
+        const disp = (v === '' || v == null) ? '-' : esc(cf.kind === 'number' ? `${v}` : String(v));
         return `<td style="${td}${cf.kind === 'number' ? 'font-weight:600' : 'font-size:13px'}">${disp}</td>`;
       }).join('')}
       <td style="${td}"><span style="display:inline-flex;align-items:center;justify-content:center;width:76px;padding:3px 0;border-radius:8px;font-weight:800;font-variant-numeric:tabular-nums;background:${totalBg};color:#16a34a">${r.totalScore}<span style="font-weight:500;font-size:11px">/${fullScore}</span></span></td>
@@ -217,7 +229,7 @@ export function buildPublicityHTML(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Day${lessonNumber}学情公示 · ${classData.name}</title>
+<title>Day${lessonNumber}学情公示 · ${esc(classData.name)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif; background: ${p.pageBg}; min-height: 100vh; padding: 28px; color: ${p.text}; }
@@ -244,7 +256,7 @@ export function buildPublicityHTML(
     <div class="accent"></div>
     <div class="banner">
       <h1>Day${lessonNumber}学情公示</h1>
-      <p>${classData.name}${classData.term ? ' · ' + classData.term : ''}${classData.batchCode ? ' · 批次 ' + classData.batchCode : ''}</p>
+      <p>${esc(classData.name)}${classData.term ? ' · ' + esc(classData.term) : ''}${classData.batchCode ? ' · 批次 ' + esc(classData.batchCode) : ''}</p>
       <div class="meta">满分 ${fullScore} 分 · ${new Date().toLocaleDateString('zh-CN')}</div>
     </div>
     <div class="content">
@@ -258,8 +270,8 @@ export function buildPublicityHTML(
             <th style="width:96px;max-width:96px">考勤</th>
             <th style="width:96px;max-width:96px">课堂练习</th>
             <th style="width:104px;max-width:104px">课后任务</th>
-            ${questionTypes.map(qt => `<th title="${qt.name}" style="width:84px;max-width:84px">${qt.name}</th>`).join('')}
-            ${customFields.map(cf => `<th title="${cf.name}" style="width:90px;max-width:90px">${cf.name}${cf.kind === 'number' && cf.includeInTotal ? '*' : ''}</th>`).join('')}
+            ${questionTypes.map(qt => `<th title="${esc(qt.name)}" style="width:84px;max-width:84px">${esc(qt.name)}</th>`).join('')}
+            ${customFields.map(cf => `<th title="${esc(cf.name)}" style="width:90px;max-width:90px">${esc(cf.name)}${cf.kind === 'number' && cf.includeInTotal ? '*' : ''}</th>`).join('')}
             <th style="width:100px;max-width:100px">总分(${fullScore})</th>
             <th style="width:76px;max-width:76px">正确率</th>
           </tr>
@@ -270,7 +282,7 @@ export function buildPublicityHTML(
     </div>
     ${hasData ? `<div class="legend">
       <span class="l">🥇🥈🥉 前三名（同分并列）</span>
-      <span class="l"><span class="dot" style="background:#16a34a"></span>正确率≥80%　<span class="dot" style="background:#dc2626"></span>&lt;80%</span>
+      <span class="l"><span class="dot" style="background:#16a34a"></span>正确率≥80%&emsp;<span class="dot" style="background:#dc2626"></span>&lt;80%</span>
     </div>` : ''}
   </div>
 </body>

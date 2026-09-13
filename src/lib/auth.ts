@@ -37,7 +37,11 @@ function persistSession(raw: Record<string, unknown>): AuthSession {
     email: String(user.email ?? ''),
     user_id: String(user.id ?? ''),
   };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.warn('[auth] 会话写入失败，刷新后需重新登录', e);
+  }
   return session;
 }
 

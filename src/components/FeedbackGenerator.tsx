@@ -597,7 +597,7 @@ export function FeedbackGenerator({
         <CardContent>
           {batchRows.length === 0 ? (
             <p className="text-sm text-[color:var(--ink-4)] text-center py-8">
-              本课暂无到课学员的学情记录，无法生成群发内容
+挺安静的——本课还没有到课学员的学情记录。去「学情记录」录入后，这里会自动生成每一份私发反馈
             </p>
           ) : (
             <ScrollArea className="h-[380px] pr-2">

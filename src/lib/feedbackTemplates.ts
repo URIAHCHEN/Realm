@@ -138,7 +138,7 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
     ],
   },
   afterclass: {
-    intro: '本讲处于行课阶段，重点在知识衔接与错题复盘。\n',
+    intro: '这一讲在行课中段，重点是前后知识的衔接和错题复盘。\n',
     openers: [
       '家长您好，课程进行到这里，跟您同步下孩子这堂课的状态：',
       '这堂课接着上次的进度，孩子的表现跟您聊聊：',
@@ -190,7 +190,7 @@ export function generateFourInOne(
   scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily'
 ): string {
   if (isAbsentRecord(record)) {
-    return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
+    return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
   }
   const pack = FOUR_IN_ONE_PACKS[scenarioKey] || FOUR_IN_ONE_PACKS.daily;
   const n = FOUR_IN_ONE_VARIANT_COUNT;
@@ -218,15 +218,15 @@ export function generateFourInOne(
   if (weak.length) issueParts.push(`${weak[0].category}板块还有提升空间（得分率${Math.round(weak[0].studentRate * 100)}%，低于班级${Math.round(Math.abs(weak[0].diffRate) * 100)}个百分点）`);
   if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
   if (attendBad) issueParts.push(`本课${attendBad}`);
-  const issue = issueParts.length ? issueParts.join('；') : '暂未发现明显薄弱点，继续保持';
+  const issue = issueParts.length ? issueParts.join('；') : '这次没发现明显的薄弱环节，整体状态是稳的';
 
   const nextAction = weak.length
-    ? `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做同类练习巩固，把错题整理进错题本并试着讲一遍`
+    ? `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；如果有余力，让孩子把思路讲给您听一遍，比再做十道都管用`
     : homeworkBad
-      ? '今晚把本次作业补齐并订正，下次课前提交'
+      ? '今晚把这次的作业补齐并订正，下次课带来我看一下'
       : attendBad
-        ? '课后回看本讲回放和笔记，补齐落下的内容'
-        : '保持当前节奏，按课后任务继续巩固即可';
+        ? '课后回看一下本讲的笔记和回放，把落下的内容补上，有不清楚的地方随时问我'
+        : '照现在的节奏走就好，课后任务按计划完成、错题及时过一遍';
   const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下：' : scenarioKey === 'comm' ? '最想请您配合的是：' : '课后建议：';
   const plan = `${planLead}${nextAction}`;
 
@@ -246,7 +246,7 @@ export function generateFourInOne(
     .replace(/【下一步】/g, plan)
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
     .replace(/【结尾】/g, closing)
-    .replace(/【新学员补充】/g, isNewStudent ? '\n也欢迎跟我说说孩子这堂课的感受，方便我们更快适配节奏～' : '');
+    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '');
 }
 
 // 生成班群表彰

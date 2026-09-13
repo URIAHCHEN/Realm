@@ -406,7 +406,7 @@ export function StudentReport({
           <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
         <h3 className="text-xl font-semibold text-[color:var(--ink)] mb-2">暂无学生数据</h3>
-        <p className="text-[color:var(--ink-4)]">请先添加学生后再查看学情报告</p>
+        <p className="text-[color:var(--ink-4)]">还没添加学生——先在「学情记录」里把班级学员建好，这里就能看到每个人的学情报告了</p>
       </div>
     );
   }
@@ -1053,7 +1053,7 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
           <FileText className="w-12 h-12 text-[color:var(--brand)]" />
         </div>
         <h3 className="text-xl font-semibold text-[color:var(--ink)] mb-2">暂无班级学习记录</h3>
-        <p className="text-[color:var(--ink-4)]">请先录入学情数据后再查看班级报告</p>
+        <p className="text-[color:var(--ink-4)]">班级报告还没有数据——在「学情记录」录入本课成绩后，这里会自动汇总班级整体情况</p>
       </div>
     );
   }

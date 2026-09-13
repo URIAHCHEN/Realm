@@ -87,7 +87,7 @@ const defaultAppConfig: AppConfig = {
   defaultOptionsVersion: DEFAULT_OPTIONS_VERSION,
   defaultFeedbackTemplate: `【学生昵称】家长您好！
 
-📚 第【课次】课学习反馈：
+跟您同步一下孩子第【课次】课的情况：
 
 🏫 考勤：【考勤】
 📝 作业：【作业】
@@ -104,12 +104,12 @@ const defaultAppConfig: AppConfig = {
 📝 今日作业：
 【作业内容】
 
-💪 加油，继续努力！`,
+孩子这边有任何情况，我都会第一时间跟您说；您在家观察到什么，也随时告诉我，咱们一起帮孩子往前走 💪`,
   defaultPraiseTemplate: `🏆 第【课次】课【表彰类型】表扬榜
 
 【表彰内容】
 
-恭喜以上同学！继续加油！💪`,
+恭喜以上同学，这份认真值得被看见！下节课继续加油～💪`,
   defaultQuestionTypes: [...defaultQuestionTypes]
 };
 

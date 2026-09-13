@@ -110,11 +110,12 @@ const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
     : [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
 });
 
-// 旧版本存储的全局默认选项 → 迁移到 v2 正式选项集（带表情符号）
-function migrateDefaultOptions(cfg: AppConfig): AppConfig {
-  if ((cfg.defaultOptionsVersion ?? 1) >= DEFAULT_OPTIONS_VERSION) return cfg;
+// 旧版本存储的全局默认选项 → 迁移到 v2 正式选项集（带表情符号）。
+// 注意：必须用「存储里的版本」判断，而非合并后的对象（合并会把代码里的新版本号带进来导致跳过迁移）
+function migrateDefaultOptions(merged: AppConfig, storedVersion: number | undefined): AppConfig {
+  if ((storedVersion ?? 1) >= DEFAULT_OPTIONS_VERSION) return merged;
   return {
-    ...cfg,
+    ...merged,
     defaultAttendanceOptions: [...DEFAULT_ATTENDANCE_OPTIONS],
     defaultHomeworkOptions: [...DEFAULT_HOMEWORK_OPTIONS],
     defaultListeningOptions: [...DEFAULT_LISTENING_OPTIONS],
@@ -236,7 +237,7 @@ export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = safeParse<Partial<AppConfig>>('appConfig', {});
-    return migrateDefaultOptions({ ...defaultAppConfig, ...saved });
+    return migrateDefaultOptions({ ...defaultAppConfig, ...saved }, saved.defaultOptionsVersion);
   });
 
   // 班级数据
@@ -1176,7 +1177,7 @@ export function useClassData() {
   }) => {
     // 防御：字段缺失/为 null 时回退空对象；appConfig 与默认值合并，
     // 避免旧备份缺新字段（如课堂表现选项）导致新课次配置残缺
-    const mergedAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) });
+    const mergedAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig?.defaultOptionsVersion);
     setAppConfig(mergedAppConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率
     setClasses(recomputeAllRates(normalizeLeaveTotals(data?.classes || {}), mergedAppConfig));

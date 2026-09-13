@@ -48,7 +48,7 @@ import { exportToCSV, downloadCSV } from '@/lib/feedbackTemplates';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
-import { DocSyncPanel } from '@/components/DocSyncPanel';
+import { DocSyncPanel, DocSyncInfo } from '@/components/DocSyncPanel';
 import { DisplaySettingsPanel } from '@/components/DisplaySettingsPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import type { ParsedRow } from '@/lib/docSync';
@@ -869,7 +869,8 @@ function App() {
           </TabsContent>
 
           {/* 反馈生成 Tab */}
-          <TabsContent value="feedback" className="space-y-6">
+          <TabsContent value="feedback">
+            <div className="max-w-6xl mx-auto space-y-5">
             <FeedbackGenerator
               students={currentClass?.students || []}
               records={currentClass?.records || []}
@@ -889,7 +890,7 @@ function App() {
                 <p className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</p>
               </div>
               <Tabs defaultValue="visualization" className="gap-4">
-                <TabsList className="grid w-full max-w-4xl grid-cols-2 h-10 p-1 rounded-[var(--r-md)]">
+                <TabsList className="grid w-full grid-cols-2 h-10 p-1 rounded-[var(--r-md)]">
                   <TabsTrigger
                     value="visualization"
                     className="gap-1.5 text-sm rounded-[var(--r-md)] data-[state=active]:bg-[color:var(--brand)] data-[state=active]:text-white data-[state=active]:shadow-sm"
@@ -904,12 +905,9 @@ function App() {
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="visualization">
-                  <div className="max-w-4xl">
                     <DisplaySettingsPanel display={displaySettings} />
-                  </div>
                 </TabsContent>
                 <TabsContent value="fields">
-                  <div className="max-w-4xl">
                     <ConfigPanel
                       appConfig={appConfig}
                       lessonConfig={currentLessonConfig}
@@ -917,9 +915,9 @@ function App() {
                       onSaveAppConfig={handleSaveAppConfig}
                       onSaveLessonConfig={handleSaveLessonConfig}
                     />
-                  </div>
                 </TabsContent>
               </Tabs>
+            </div>
             </div>
           </TabsContent>
 
@@ -965,35 +963,40 @@ function App() {
           {/* 系统配置已并入「反馈生成 → 生成设置」 */}
 
           {/* 同步中心 Tab */}
-          <TabsContent value="cloud" className="space-y-6">
-            <SyncStatusBanner
-              status={cloudSync.status}
-              message={cloudSync.message}
-              onKeepLocal={cloudSync.resolveConflictKeepLocal}
-              onKeepCloud={cloudSync.resolveConflictKeepCloud}
-              onRefresh={refreshMembership}
-            />
-            <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
-            {membership.admin && (
-              <div className="space-y-6">
+          <TabsContent value="cloud">
+            <div className="max-w-6xl mx-auto space-y-5">
+              <SyncStatusBanner
+                status={cloudSync.status}
+                message={cloudSync.message}
+                onKeepLocal={cloudSync.resolveConflictKeepLocal}
+                onKeepCloud={cloudSync.resolveConflictKeepCloud}
+                onRefresh={refreshMembership}
+              />
+              {membership.admin && (
                 <CloudSyncPanel sync={cloudSync} />
-                <DocSyncPanel
-                  records={currentClass?.records.filter(r => r.lessonNumber === currentLessonNumber) || []}
-                  lessonConfig={currentLessonConfig}
-                  lessonNumber={currentLessonNumber}
-                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-                  display={displaySettings}
-                  classes={Object.values(classes).map(c => ({ id: c.id, name: c.name }))}
-                  currentClassId={currentClassId}
-                  getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
-                  knownLessons={getAllLessons(currentClassId || undefined)}
-                  onImportRows={handleImportDocRows}
-                  onCreateQuestionTypes={handleCreateQuestionTypes}
-                  onSyncFullScores={handleSyncFullScores}
-                  onExportExcel={handleExportAllData}
-                />
-              </div>
-            )}
+              )}
+              <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
+              {membership.admin && (
+                <>
+                  {/* 顶部显眼位：推送 / 导入 并排双卡 */}
+                  <DocSyncPanel
+                    records={currentClass?.records.filter(r => r.lessonNumber === currentLessonNumber) || []}
+                    lessonConfig={currentLessonConfig}
+                    lessonNumber={currentLessonNumber}
+                    getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                    classes={Object.values(classes).map(c => ({ id: c.id, name: c.name }))}
+                    currentClassId={currentClassId}
+                    getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
+                    knownLessons={getAllLessons(currentClassId || undefined)}
+                    onImportRows={handleImportDocRows}
+                    onCreateQuestionTypes={handleCreateQuestionTypes}
+                    onSyncFullScores={handleSyncFullScores}
+                    onExportExcel={handleExportAllData}
+                  />
+                  <DocSyncInfo display={displaySettings} />
+                </>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

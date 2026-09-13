@@ -23,7 +23,6 @@ interface DocSyncPanelProps {
   lessonNumber: number;
   className?: string;
   getNickname: (name: string) => string;
-  display: Display;
   classes: { id: string; name: string }[];
   currentClassId: string | null;
   getQuestionTypes: (classId: string, lessonNumber: number) => QuestionType[];
@@ -39,7 +38,7 @@ const BTN = 'h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-1.5';
 const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90 shadow-sm`;
 
 export function DocSyncPanel({
-  records, lessonConfig, lessonNumber, className, getNickname, display, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onSyncFullScores, onExportExcel,
+  records, lessonConfig, lessonNumber, className, getNickname, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onSyncFullScores, onExportExcel,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -100,9 +99,10 @@ export function DocSyncPanel({
   };
 
   return (
-    <div className={`space-y-5 ${className || ''}`}>
+    // 顶部并排双卡：推送（左）/ 导入（右），宽屏两列、窄屏单列
+    <div className={`grid gap-5 lg:grid-cols-2 ${className || ''}`}>
       {/* 推送到在线文档 */}
-      <Card className="ios-glass-card border-0">
+      <Card className="ios-glass-card border-0 h-full">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--brand)' }} />
@@ -200,8 +200,14 @@ export function DocSyncPanel({
         </CardContent>
       </Card>
 
-      {/* 同步机制说明 */}
-      <Card className="ios-glass-card border-0">
+    </div>
+  );
+}
+
+/** 同步机制与冲突策略（独立卡片，通常置于同步中心页底部） */
+export function DocSyncInfo({ display }: { display: Display }) {
+  return (
+    <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <CloudCog className="w-5 h-5" style={{ color: 'var(--brand)' }} />
@@ -258,6 +264,5 @@ export function DocSyncPanel({
           </p>
         </CardContent>
       </Card>
-    </div>
   );
 }

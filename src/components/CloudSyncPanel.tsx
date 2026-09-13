@@ -68,7 +68,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="space-y-5">
       {/* 状态卡片 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
@@ -145,23 +145,25 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="text-[#3a3a3c]">Project URL</Label>
-            <Input
-              placeholder="https://xxxxxxxx.supabase.co"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className={FIELD}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-[#3a3a3c]">anon public key（API Key）</Label>
-            <Input
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              className={`${FIELD} font-mono text-xs`}
-            />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-sm text-[color:var(--ink-2)]">Project URL</Label>
+              <Input
+                placeholder="https://xxxxxxxx.supabase.co"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className={FIELD}
+              />
+            </div>
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-sm text-[color:var(--ink-2)]">anon public key（API Key）</Label>
+              <Input
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                className={`${FIELD} font-mono text-xs`}
+              />
+            </div>
           </div>
           <div className="flex items-center justify-between rounded-xl bg-[#f2f2f7] px-4 py-3">
             <div>

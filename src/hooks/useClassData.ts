@@ -38,14 +38,28 @@ const defaultQuestionTypes: QuestionType[] = [
 ];
 
 // 课堂表现默认选项（固定列，层级与考勤相同；旧课次配置未含该字段时兜底）
-export const DEFAULT_CLASS_PERFORMANCE_OPTIONS = ['专注高效', '积极互动', '状态一般', '需提醒'];
+export const DEFAULT_CLASS_PERFORMANCE_OPTIONS = [
+  '有些内向， 您也鼓励下💪',
+  '容易走神， 要多留意哦⚠️',
+  '笔记认真， 要更积极哇✍️',
+  '认真积极， 继续保持呀🤗',
+  '做题认真， 要更细心呢💯',
+  '认真上课， 积极参与棒👍',
+];
+
+// 全局默认选项（v2：带表情符号的正式选项集）
+export const DEFAULT_OPTIONS_VERSION = 2;
+const DEFAULT_ATTENDANCE_OPTIONS = ['迟到❗', '准时👍', '请假🏫', '调课👩‍'];
+const DEFAULT_HOMEWORK_OPTIONS = ['完成✅', '未做完❎', '未完成❌', '补发⚠️', '按要求❗', '错题本欠缺✍️', '笔记不过关📒'];
+const DEFAULT_LISTENING_OPTIONS = ['很棒哦👏', '未完成⭕'];
 
 // 默认配置
 const defaultAppConfig: AppConfig = {
-  defaultAttendanceOptions: ['按时出勤', '迟到', '缺勤', '请假', '调课'],
-  defaultHomeworkOptions: ['超赞完成', '圆满完成', '未完成', '没带'],
-  defaultListeningOptions: ['具体分数', '未加入课后任务', '未完成'],
-  defaultClassPerformanceOptions: ['专注高效', '积极互动', '状态一般', '需提醒'],
+  defaultAttendanceOptions: [...DEFAULT_ATTENDANCE_OPTIONS],
+  defaultHomeworkOptions: [...DEFAULT_HOMEWORK_OPTIONS],
+  defaultListeningOptions: [...DEFAULT_LISTENING_OPTIONS],
+  defaultClassPerformanceOptions: [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
+  defaultOptionsVersion: DEFAULT_OPTIONS_VERSION,
   defaultFeedbackTemplate: `【学生昵称】家长您好！
 
 📚 第【课次】课学习反馈：
@@ -95,6 +109,19 @@ const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
     ? cfg.classPerformanceOptions
     : [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
 });
+
+// 旧版本存储的全局默认选项 → 迁移到 v2 正式选项集（带表情符号）
+function migrateDefaultOptions(cfg: AppConfig): AppConfig {
+  if ((cfg.defaultOptionsVersion ?? 1) >= DEFAULT_OPTIONS_VERSION) return cfg;
+  return {
+    ...cfg,
+    defaultAttendanceOptions: [...DEFAULT_ATTENDANCE_OPTIONS],
+    defaultHomeworkOptions: [...DEFAULT_HOMEWORK_OPTIONS],
+    defaultListeningOptions: [...DEFAULT_LISTENING_OPTIONS],
+    defaultClassPerformanceOptions: [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
+    defaultOptionsVersion: DEFAULT_OPTIONS_VERSION,
+  };
+}
 
 // 总分/正确率统一口径：题型分数 + 计入总分的分数型自定义列
 // 考勤含「请假」的记录：分数一律不计入总分与正确率（原始分数仍保留，改回出勤会自动重新计入）
@@ -209,7 +236,7 @@ export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = safeParse<Partial<AppConfig>>('appConfig', {});
-    return { ...defaultAppConfig, ...saved };
+    return migrateDefaultOptions({ ...defaultAppConfig, ...saved });
   });
 
   // 班级数据
@@ -1149,7 +1176,7 @@ export function useClassData() {
   }) => {
     // 防御：字段缺失/为 null 时回退空对象；appConfig 与默认值合并，
     // 避免旧备份缺新字段（如课堂表现选项）导致新课次配置残缺
-    const mergedAppConfig = { ...defaultAppConfig, ...(data?.appConfig || {}) };
+    const mergedAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) });
     setAppConfig(mergedAppConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率
     setClasses(recomputeAllRates(normalizeLeaveTotals(data?.classes || {}), mergedAppConfig));

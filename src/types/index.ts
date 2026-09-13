@@ -141,6 +141,8 @@ export interface AppConfig {
   defaultListeningOptions: string[];
   /** 课堂表现默认选项（用于新课次） */
   defaultClassPerformanceOptions?: string[];
+  /** 全局默认选项版本号；低于当前版本时加载时自动迁移到最新默认选项集 */
+  defaultOptionsVersion?: number;
   defaultFeedbackTemplate: string;
   defaultPraiseTemplate: string;
   defaultQuestionTypes: QuestionType[];

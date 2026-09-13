@@ -869,6 +869,48 @@ export function useClassData() {
     return removed;
   }, [classes]);
 
+  // 删除整课（记录 + 课次配置），使该课次可被重新新增并锁定全局默认；返回快照供撤销
+  const deleteLesson = useCallback((classId: string, lessonNumber: number): { records: StudentRecord[]; config: LessonConfig | undefined } => {
+    const classData = classes[classId];
+    if (!classData) return { records: [], config: undefined };
+    const records = classData.records.filter(r => r.lessonNumber === lessonNumber);
+    const config = classData.lessonConfigs[lessonNumber.toString()];
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      const lessonConfigs = { ...cd.lessonConfigs };
+      delete lessonConfigs[lessonNumber.toString()];
+      return {
+        ...prev,
+        [classId]: {
+          ...cd,
+          records: cd.records.filter(r => r.lessonNumber !== lessonNumber),
+          lessonConfigs
+        }
+      };
+    });
+    return { records, config };
+  }, [classes]);
+
+  // 恢复整课（撤销删除本课）：写回记录与课次配置
+  const restoreLesson = useCallback((classId: string, lessonNumber: number, records: StudentRecord[], config: LessonConfig | undefined) => {
+    setClasses(prev => {
+      const cd = prev[classId];
+      if (!cd) return prev;
+      const existingIds = new Set(cd.records.map(r => r.id));
+      const toAdd = records.filter(r => !existingIds.has(r.id));
+      const lessonConfigs = config
+        ? { ...cd.lessonConfigs, [lessonNumber.toString()]: config }
+        : cd.lessonConfigs;
+      let nextRecords = cd.records;
+      if (toAdd.length > 0) {
+        nextRecords = [...cd.records, ...toAdd];
+        nextRecords = rerankLesson(nextRecords, lessonNumber);
+      }
+      return { ...prev, [classId]: { ...cd, records: nextRecords, lessonConfigs } };
+    });
+  }, []);
+
   // 批量恢复记录（撤销用），并重算受影响课次排名
   const restoreRecords = useCallback((classId: string, records: StudentRecord[]) => {
     if (records.length === 0) return;
@@ -1166,6 +1208,8 @@ export function useClassData() {
     inheritPreviousSeasons,
     restoreRecord,
     deleteLessonRecords,
+    deleteLesson,
+    restoreLesson,
     restoreRecords,
     restoreStudent,
     updateAppConfig,

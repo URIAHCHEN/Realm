@@ -98,20 +98,18 @@ export function generatePersonalFeedback(
 
 // 「四个一」默认模板与可用占位符（可在反馈工作台旁边直接改写；留空即用此默认结构）
 export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
-`【第【课次】课 · 【昵称】【场景】】
+`【第【课次】课 · 【昵称】】
 【开场】
 【场景引导】🌟 优秀表现：【优秀表现】
 🔍 待提升：【待提升】
-🛠 下一步：【下一步】
-🎬 课堂照片/视频：【素材】【新学员补充】
+🛠 下一步：【下一步】【新学员补充】
 【结尾】`;
 
 export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
   { key: '【课次】', desc: '当前课次' },
   { key: '【昵称】', desc: '学生昵称' },
-  { key: '【场景】', desc: '场景标签（有则自动带「·」前缀，无则留空）' },
-  { key: '【开场】', desc: '开场语，随「换一版措辞」在同场景下轮换' },
-  { key: '【场景引导】', desc: '按首课/行课中/沟通场景自动带的一句引导语（日常场景留空）' },
+  { key: '【开场】', desc: '开场语，随「换一版措辞」轮换' },
+  { key: '【场景引导】', desc: '按课次阶段自动带的一句引导语' },
   { key: '【优秀表现】', desc: '自动：本讲亮点' },
   { key: '【待提升】', desc: '自动：薄弱板块 / 作业 / 考勤' },
   { key: '【下一步】', desc: '自动：巩固动作' },
@@ -185,7 +183,6 @@ export function generateFourInOne(
   lessonConfig: LessonConfig,
   stats: ClassStats,
   nickname: string,
-  scenarioLabel: string,
   isNewStudent = false,
   candidateLinks: string[] = [],
   variant = 0,
@@ -193,7 +190,7 @@ export function generateFourInOne(
   scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily'
 ): string {
   if (isAbsentRecord(record)) {
-    return `【第${record.lessonNumber}课 · ${nickname}${scenarioLabel ? ' · ' + scenarioLabel : ''}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
+    return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，未参与测评。补课与作业我会另行同步，也欢迎跟我说说孩子的情况～`;
   }
   const pack = FOUR_IN_ONE_PACKS[scenarioKey] || FOUR_IN_ONE_PACKS.daily;
   const n = FOUR_IN_ONE_VARIANT_COUNT;
@@ -234,12 +231,14 @@ export function generateFourInOne(
   const plan = `${planLead}${nextAction}`;
 
   const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
-  const tpl = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
+  const base = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
+  // 兼容历史模板：剔除「🎬 课堂照片/视频」整行
+  const tpl = base.split('\n').filter(l => !l.includes('课堂照片/视频')).join('\n');
 
   return tpl
     .replace(/【课次】/g, String(record.lessonNumber))
     .replace(/【昵称】/g, nickname)
-    .replace(/【场景】/g, scenarioLabel ? ' · ' + scenarioLabel : '')
+    .replace(/【场景】/g, '')
     .replace(/【开场】/g, opener)
     .replace(/【场景引导】/g, pack.intro)
     .replace(/【优秀表现】/g, praise)

@@ -482,14 +482,14 @@ export function StudentTable({
                 <span className="inline-flex items-center gap-1">
                   <Button size="sm" className="h-8 gap-1 rounded-[var(--r-md)] bg-rose-500 hover:bg-rose-600 text-white"
                     onClick={() => { onDeleteLessonRecords(); setConfirmClear(false); }}>
-                    <Check className="w-4 h-4" />确认清空
+                    <Check className="w-4 h-4" />确认删除
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8 rounded-[var(--r-md)]" onClick={() => setConfirmClear(false)}>取消</Button>
                 </span>
               ) : (
                 <Button variant="outline" size="sm" className="gap-2 h-8 rounded-[var(--r-md)] border-[#ff3b30]/30 text-[#ff3b30] hover:bg-[#ff3b30]/10"
-                  onClick={() => setConfirmClear(true)} title="清空本课全部记录（可撤销）">
-                  <Trash2 className="w-4 h-4" /><span className="hidden sm:inline">清空本课</span>
+                  onClick={() => setConfirmClear(true)} title="删除本课全部记录与课次配置（可撤销；删除后该课次可重新新增）">
+                  <Trash2 className="w-4 h-4" /><span className="hidden sm:inline">删除本课</span>
                 </Button>
               )
             )}

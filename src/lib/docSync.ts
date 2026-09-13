@@ -104,29 +104,39 @@ export function parseClipboardTable(
     return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [] };
   }
 
-  // 题型列映射（按名称模糊匹配）
+  // 列映射：先题型精确匹配 → 再固定列（精确/别名）→ 再题型模糊匹配；全程排除已占用列，避免互相抢占
+  const usedIdx = new Set<number>([nameIdx]);
   const qtIdx: { qt: QuestionType; idx: number }[] = [];
   questionTypes.forEach(qt => {
-    const idx = headers.findIndex(h => h === norm(qt.name) || h.includes(norm(qt.name)));
-    if (idx >= 0) qtIdx.push({ qt, idx });
+    const idx = headers.findIndex((h, i) => !usedIdx.has(i) && h === norm(qt.name));
+    if (idx >= 0) { qtIdx.push({ qt, idx }); usedIdx.add(idx); }
   });
 
-  const findIdx = (names: string[]): number =>
-    headers.findIndex(h => names.some(n => h === n || h.includes(n)));
+  const findIdx = (names: string[]): number => {
+    const idx = headers.findIndex((h, i) => !usedIdx.has(i) && names.some(n => h === n || h.includes(n)));
+    if (idx >= 0) usedIdx.add(idx);
+    return idx;
+  };
 
   const attIdx = findIdx(['考勤']);
   const cpIdx = findIdx(['课堂表现']);
-  const hwIdx = findIdx(['作业']);
+  const hwIdx = findIdx(['书面作业', '作业']);
   const listenIdx = findIdx(['课后任务', '乐听说']);
   const listenScoreIdx = findIdx(['课后任务分数', '乐听说分数']);
   const totalIdx = findIdx(['总分']);
   const seasonIdx = findIdx(['成长轨迹', '学习轨迹', '轨迹']);
   const lessonIdx = findIdx(['课次']);
+  // 题型模糊匹配（精确未命中者），排除已占用列
+  questionTypes.forEach(qt => {
+    if (qtIdx.some(q => q.qt.id === qt.id)) return;
+    const idx = headers.findIndex((h, i) => !usedIdx.has(i) && h.includes(norm(qt.name)));
+    if (idx >= 0) { qtIdx.push({ qt, idx }); usedIdx.add(idx); }
+  });
   const onlyCn = (s: string) => (s.match(/[一-龥]/g) || []).join('');
 
   const matched = [
-    nameIdx >= 0 ? '姓名' : '', attIdx >= 0 ? '考勤' : '', hwIdx >= 0 ? '作业' : '',
-    listenIdx >= 0 ? '课后任务' : '', ...qtIdx.map(q => q.qt.name)
+    nameIdx >= 0 ? '姓名' : '', attIdx >= 0 ? '考勤' : '', cpIdx >= 0 ? '课堂表现' : '', hwIdx >= 0 ? '作业' : '',
+    listenIdx >= 0 ? '课后任务' : '', seasonIdx >= 0 ? '学习轨迹' : '', ...qtIdx.map(q => q.qt.name)
   ].filter(Boolean);
 
   const rows: ParsedRow[] = [];
@@ -180,8 +190,7 @@ export function parseClipboardTable(
     rows.push(row);
   });
 
-  // 未匹配、但数据多为数值的列 → 候选新题型
-  const usedIdx = new Set<number>([nameIdx, attIdx, cpIdx, hwIdx, listenIdx, listenScoreIdx, totalIdx, seasonIdx, lessonIdx, ...qtIdx.map(q => q.idx)]);
+  // 未匹配、但数据多为数值的列 → 候选新题型（usedIdx 已含姓名/固定列/已匹配题型）
   const rawHeaders = splitLine(lines[0]);
   const dataLines = lines.slice(1);
   const unmatchedColumns: { name: string; suggestedFullScore: number }[] = [];

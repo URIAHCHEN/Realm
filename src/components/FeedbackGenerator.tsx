@@ -23,6 +23,8 @@ interface FeedbackGeneratorProps {
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
   libraryLinks?: string[];
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
+  /** 点击群发列表中的姓名弹出该生学情报告 */
+  onViewStudent?: (name: string) => void;
 }
 
 type StatusTone = 'none' | 'generated' | 'copied';
@@ -35,7 +37,8 @@ export function FeedbackGenerator({
   getNickname,
   calculateClassStats,
   libraryLinks = [],
-  onSaveLessonConfig
+  onSaveLessonConfig,
+  onViewStudent
 }: FeedbackGeneratorProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
@@ -54,7 +57,6 @@ export function FeedbackGenerator({
   const [variant, setVariant] = useState(0);
   const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] =
     FOUR_IN_ONE_SCENARIOS.map(s => ({ value: s.key, label: s.label }));
-  const scenarioLabel = SCENARIOS.find(s => s.value === scenario)?.label || scenario;
 
   const lessonRecords = useMemo(() =>
     records.filter(r => r.lessonNumber === lessonNumber),
@@ -86,7 +88,7 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), scenarioLabel, isNewStudent, libraryLinks, variant, draftFourInOne, scenario);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario);
     }
     return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback);
   };
@@ -613,9 +615,15 @@ export function FeedbackGenerator({
                       >
                         {getNickname(row.name).slice(0, 1) || row.name.slice(0, 1)}
                       </span>
-                      <span className="text-sm font-medium text-[color:var(--ink)] truncate" title={row.name}>
+                      <button
+                        type="button"
+                        onClick={() => onViewStudent?.(row.name)}
+                        aria-label={`查看 ${getNickname(row.name)} 的学情报告`}
+                        title="点击查看该生学情报告"
+                        className="text-sm font-medium text-[color:var(--ink)] truncate hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]"
+                      >
                         {getNickname(row.name)}
-                      </span>
+                      </button>
                     </div>
                     <div className="space-y-2 min-w-0">
                       <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[color:var(--ink-2)] bg-black/[0.02] rounded-xl border border-black/10 p-3 font-sans">

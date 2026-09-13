@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Pencil, Eye } from 'lucide-react';
-import type { QuestionType, LessonConfig, AppConfig, PraiseTemplate } from '@/types';
+import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable } from 'lucide-react';
+import type { QuestionType, LessonConfig, AppConfig } from '@/types';
 import { inferCategory } from '@/lib/weakPoints';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 
@@ -153,14 +153,8 @@ export function ConfigPanel({
   const [newOption, setNewOption] = useState('');
   const [newOptionType, setNewOptionType] = useState<OptGroup>('attendance');
   const [newQuestionType, setNewQuestionType] = useState({ name: '', fullScore: 100 });
-  // 表彰模板多模板管理：'default' 表示默认模板，其余为 praiseTemplates 中的 id
-  const [activeTemplateId, setActiveTemplateId] = useState<string>('default');
-  const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [showPraisePreview, setShowPraisePreview] = useState(false);
   
   const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const praiseTextareaRef = useRef<HTMLTextAreaElement>(null);
   const defaultFeedbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   const defaultPraiseTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -252,50 +246,6 @@ export function ConfigPanel({
     setNewQuestionType({ name: '', fullScore: 100 });
   };
 
-  // —— 表彰模板多模板管理 ——
-  const praiseTemplates = localLessonConfig.praiseTemplates || [];
-  const activeCustom = praiseTemplates.find(t => t.id === activeTemplateId);
-  const activeTemplateText = activeCustom ? activeCustom.template : localLessonConfig.praiseTemplate;
-
-  const updateTemplateText = (text: string) => {
-    if (activeCustom) {
-      setLocalLessonConfig(prev => ({
-        ...prev,
-        praiseTemplates: (prev.praiseTemplates || []).map(t => t.id === activeCustom.id ? { ...t, template: text } : t)
-      }));
-    } else {
-      setLocalLessonConfig(prev => ({ ...prev, praiseTemplate: text }));
-    }
-  };
-
-  const handleAddPraiseTemplate = () => {
-    const newT: PraiseTemplate = {
-      id: 'pt_' + Date.now(),
-      name: `模板${praiseTemplates.length + 1}`,
-      template: localLessonConfig.praiseTemplate || '🏆 第【课次】课【表彰类型】表扬榜\n\n【表彰内容】\n\n恭喜以上同学！继续加油！💪'
-    };
-    setLocalLessonConfig(prev => ({ ...prev, praiseTemplates: [...(prev.praiseTemplates || []), newT] }));
-    setActiveTemplateId(newT.id);
-  };
-
-  const handleDeletePraiseTemplate = (id: string) => {
-    setLocalLessonConfig(prev => ({ ...prev, praiseTemplates: (prev.praiseTemplates || []).filter(t => t.id !== id) }));
-    if (activeTemplateId === id) setActiveTemplateId('default');
-  };
-
-  const handleRenameTemplate = (id: string) => {
-    setLocalLessonConfig(prev => ({
-      ...prev,
-      praiseTemplates: (prev.praiseTemplates || []).map(t => t.id === id ? { ...t, name: renameValue.trim() || t.name } : t)
-    }));
-    setRenamingTemplateId(null);
-  };
-
-  // 表彰模板实时预览（示例数据渲染）
-  const praisePreview = activeTemplateText
-    .replace(/【课次】/g, String(lessonNumber))
-    .replace(/【表彰类型】/g, '综合')
-    .replace(/【表彰内容】/g, '🏆【入门测风云榜】\n🥇 小明：95分（正确率95%）\n🥈 小红：92分（正确率92%）\n\n📚【作业超赞】\n小刚、小丽');
 
   // 移除题型
   const handleRemoveQuestionType = (index: number) => {
@@ -761,102 +711,6 @@ export function ConfigPanel({
               )}
             </div>
 
-            {/* 表彰模板（多模板管理） */}
-            <div>
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-medium text-[color:var(--brand)]">班群表彰模板</Label>
-                <Button variant="outline" size="sm" className="h-7 gap-1 text-[color:var(--brand)] border-[rgb(var(--brand-rgb)/0.25)]" onClick={handleAddPraiseTemplate}>
-                  <Plus className="w-3.5 h-3.5" />新增模板
-                </Button>
-              </div>
-              <p className="text-xs text-slate-400 mt-1 mb-2">支持多套模板切换：日常表彰、阶段测表彰可分别配置；在「反馈生成 → 班群公示表彰」中生成时可选择使用哪套模板。</p>
-
-              {/* 模板列表 */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <button
-                  onClick={() => setActiveTemplateId('default')}
-                  className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${
-                    activeTemplateId === 'default' ? 'bg-[rgb(var(--brand-rgb)/0.15)] border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] font-medium' : 'bg-white/70 border-[rgb(var(--brand-rgb)/0.15)] text-slate-600 hover:border-[rgb(var(--brand-rgb)/0.25)]'
-                  }`}
-                >默认模板</button>
-                {praiseTemplates.map(t => (
-                  <div key={t.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm border transition-all ${
-                    activeTemplateId === t.id ? 'bg-[rgb(var(--brand-rgb)/0.15)] border-[rgb(var(--brand-rgb)/0.4)] text-[color:var(--brand)] font-medium' : 'bg-white/70 border-[rgb(var(--brand-rgb)/0.15)] text-slate-600'
-                  }`}>
-                    {renamingTemplateId === t.id ? (
-                      <Input
-                        autoFocus
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => handleRenameTemplate(t.id)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleRenameTemplate(t.id)}
-                        className="h-6 w-24 text-sm px-1"
-                      />
-                    ) : (
-                      <>
-                        <button onClick={() => setActiveTemplateId(t.id)}>{t.name}</button>
-                        <button
-                          onClick={() => { setRenamingTemplateId(t.id); setRenameValue(t.name); }} aria-label="重命名模板"
-                          className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-[color:var(--brand)]"
-                          title="重命名"
-                        ><Pencil className="w-3 h-3" /></button>
-                        <button
-                          onClick={() => handleDeletePraiseTemplate(t.id)} aria-label="删除模板"
-                          className="text-[rgb(var(--brand-rgb)/0.55)] hover:text-rose-500"
-                          title="删除"
-                        ><Trash2 className="w-3 h-3" /></button>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* 模板编辑区 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
-                <div>
-                  <Textarea
-                    ref={praiseTextareaRef}
-                    value={activeTemplateText}
-                    onChange={(e) => updateTemplateText(e.target.value)}
-                    className="min-h-[200px] text-sm liquid-glass-input"
-                    placeholder="点击下方变量插入到模板中..."
-                  />
-                  <VariableSelector
-                    textareaRef={praiseTextareaRef}
-                    isLessonConfig={true}
-                  />
-                  <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
-                    <Variable className="w-3.5 h-3.5" />
-                    表彰模板专用变量：【课次】【表彰类型】【表彰内容】在生成时自动填充
-                  </div>
-                </div>
-
-                {/* 实时预览 */}
-                <div className="rounded-xl border border-[rgb(var(--brand-rgb)/0.15)] bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.10)] p-4 flex flex-col">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-[color:var(--brand)] flex items-center gap-1.5">
-                      <Eye className="w-4 h-4" />实时预览（示例数据）
-                    </span>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowPraisePreview(!showPraisePreview)}>
-                      {showPraisePreview ? '收起' : '展开'}
-                    </Button>
-                  </div>
-                  {showPraisePreview && (
-                    <pre className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap font-sans flex-1 overflow-auto max-h-[260px]">{praisePreview || '（模板内容为空）'}</pre>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* 作业内容 */}
-            <div>
-              <Label className="text-base font-medium text-[color:var(--brand)]">作业内容</Label>
-              <Textarea
-                value={localLessonConfig.homeworkText}
-                onChange={(e) => setLocalLessonConfig(prev => ({ ...prev, homeworkText: e.target.value }))}
-                className="min-h-[100px] text-sm mt-2 liquid-glass-input"
-              />
-            </div>
 
             <Button onClick={handleSaveLessonConfig} className="w-full gap-2 liquid-glass-button">
               <Save className="w-4 h-4" />

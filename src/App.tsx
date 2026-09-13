@@ -3,7 +3,7 @@ import { Toaster, toast } from 'sonner';
 import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useClassData } from '@/hooks/useClassData';
+import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut } from '@/lib/auth';
 import { BUILD_SCOPE } from '@/lib/config';
@@ -19,6 +19,7 @@ import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
 import { FeedbackGenerator } from '@/components/FeedbackGenerator';
 import { PraiseGenerator } from '@/components/PraiseGenerator';
+import { PraiseTemplateEditor } from '@/components/PraiseTemplateEditor';
 import { StudentImportModal } from '@/components/StudentImportModal';
 import { ConfigPanel } from '@/components/ConfigPanel';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -95,7 +96,8 @@ function App() {
     clearRecordContent,
     inheritPreviousSeasons,
     restoreRecord,
-    deleteLessonRecords,
+    deleteLesson,
+    restoreLesson,
     restoreRecords,
     restoreStudent,
     updateAppConfig,
@@ -233,13 +235,14 @@ function App() {
     }
   };
 
-  const handleDeleteLessonRecords = () => {
+  const handleDeleteLesson = () => {
     if (!currentClassId) { toast.error('请先选择班级'); return; }
-    const removed = deleteLessonRecords(currentClassId, currentLessonNumber);
-    if (removed.length === 0) { toast.info('本课还没有可删除的记录'); return; }
     const classId = currentClassId;
-    toast.success(`已删除第${currentLessonNumber}课的 ${removed.length} 条记录`, {
-      action: { label: '撤销', onClick: () => restoreRecords(classId, removed) },
+    const lesson = currentLessonNumber;
+    const snap = deleteLesson(classId, lesson);
+    if (snap.records.length === 0 && !snap.config) { toast.info('本课还没有可删除的记录或配置'); return; }
+    toast.success(`已删除第${lesson}课（${snap.records.length} 条记录及课次配置），该课次可重新新增`, {
+      action: { label: '撤销', onClick: () => restoreLesson(classId, lesson, snap.records, snap.config) },
       duration: 8000,
     });
   };
@@ -321,20 +324,36 @@ function App() {
     toast.success(`第${currentLessonNumber}课已保存！`);
   };
 
-  // 处理增加新课次：自动带入上一课的学习轨迹
+  // 处理增加新课次：自动带入上一课的学习轨迹；列选项与反馈模板锁定「全局默认」，
+  // 题型/自定义列沿用上一课（支持新题型动态延续），避免新课次还原旧的已修改全局默认
   const handleAddLesson = (lesson: number) => {
     if (allLessons.includes(lesson)) {
       toast.error(`第${lesson}课已存在`);
       return;
     }
     setCurrentLessonNumber(lesson);
+    if (currentClassId) {
+      const prevCfg = getLessonConfig(currentClassId, lesson - 1);
+      saveLessonConfig(currentClassId, lesson, {
+        attendanceOptions: [...appConfig.defaultAttendanceOptions],
+        homeworkOptions: [...appConfig.defaultHomeworkOptions],
+        listeningOptions: [...appConfig.defaultListeningOptions],
+        classPerformanceOptions: [...(appConfig.defaultClassPerformanceOptions || DEFAULT_CLASS_PERFORMANCE_OPTIONS)],
+        feedbackTemplate: appConfig.defaultFeedbackTemplate,
+        praiseTemplate: appConfig.defaultPraiseTemplate,
+        questionTypes: prevCfg ? prevCfg.questionTypes.map(q => ({ ...q })) : [...appConfig.defaultQuestionTypes],
+        customFields: prevCfg ? (prevCfg.customFields || []).map(cf => ({ ...cf })) : [],
+        homeworkText: prevCfg ? prevCfg.homeworkText : '',
+        passThreshold: prevCfg?.passThreshold ?? 80,
+      });
+    }
     const inherited = currentClassId ? inheritPreviousSeasons(currentClassId, lesson) : null;
     if (inherited) {
       toast.success(`已切换到第${lesson}课`, {
-        description: `已自动带入第${inherited.fromLesson}课的学习轨迹（${inherited.count} 名学员）`
+        description: `列选项/反馈模板已锁定全局默认；带入第${inherited.fromLesson}课学习轨迹（${inherited.count} 名学员）`
       });
     } else {
-      toast.success(`已切换到第${lesson}课`);
+      toast.success(`已切换到第${lesson}课（列选项/反馈模板锁定全局默认）`);
     }
   };
 
@@ -807,7 +826,7 @@ function App() {
                   lessonNumber={currentLessonNumber}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                   calculateClassStats={calculateClassStats}
-                  onDeleteLessonRecords={handleDeleteLessonRecords}
+                  onDeleteLessonRecords={handleDeleteLesson}
                   onUpdateRecord={(recordId, field, value) => currentClass && updateRecordField(currentClass.id, recordId, field, value)}
                   onCreateRecord={(studentName, record) => currentClass && saveRecord(currentClass.id, { ...record, studentName })}
                   onDeleteRecord={handleDeleteRecord}
@@ -825,14 +844,26 @@ function App() {
             </div>
           </TabsContent>
 
-          {/* 表扬榜 Tab */}
-          <TabsContent value="leaderboard">
+          {/* 表扬榜 Tab：榜单 + 班群表彰生成 + 表彰模板编辑/预览 */}
+          <TabsContent value="leaderboard" className="space-y-6">
             <Leaderboard
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+            />
+            <PraiseGenerator
+              records={currentClass?.records || []}
+              lessonConfig={currentLessonConfig}
+              lessonNumber={currentLessonNumber}
+              getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+              calculateClassStats={calculateClassStats}
+            />
+            <PraiseTemplateEditor
+              lessonConfig={currentLessonConfig}
+              lessonNumber={currentLessonNumber}
+              onSaveLessonConfig={handleSaveLessonConfig}
             />
           </TabsContent>
 
@@ -847,13 +878,7 @@ function App() {
               calculateClassStats={calculateClassStats}
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
-            />
-            <PraiseGenerator
-              records={currentClass?.records || []}
-              lessonConfig={currentLessonConfig}
-              lessonNumber={currentLessonNumber}
-              getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-              calculateClassStats={calculateClassStats}
+              onViewStudent={handleViewStudentAnalysis}
             />
 
             {/* 生成设置：数据可视化 / 表格字段 / 公示样式（原「系统配置」并入此处） */}

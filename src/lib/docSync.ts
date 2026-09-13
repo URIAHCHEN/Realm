@@ -121,8 +121,9 @@ export function parseClipboardTable(
   const attIdx = findIdx(['考勤']);
   const cpIdx = findIdx(['课堂表现']);
   const hwIdx = findIdx(['书面作业', '作业']);
-  const listenIdx = findIdx(['课后任务', '乐听说']);
+  // 先匹配更具体的「课后任务分数」，再匹配「课后任务」，避免分数列抢占状态列
   const listenScoreIdx = findIdx(['课后任务分数', '乐听说分数']);
+  const listenIdx = findIdx(['课后任务', '乐听说']);
   const totalIdx = findIdx(['总分']);
   const seasonIdx = findIdx(['成长轨迹', '学习轨迹', '轨迹']);
   const lessonIdx = findIdx(['课次']);

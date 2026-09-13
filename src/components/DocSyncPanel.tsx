@@ -143,18 +143,18 @@ export function DocSyncPanel({
           </p>
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-[color:var(--ink-4)]">目标班级</Label>
+              <Label className="text-sm text-[color:var(--ink-2)]">目标班级</Label>
               <Select value={targetClass} onValueChange={setTargetClass}>
-                <SelectTrigger className="w-44 h-9 text-sm ios-input"><SelectValue placeholder="选择班级" /></SelectTrigger>
+                <SelectTrigger className="w-44 h-9 text-sm rounded-xl"><SelectValue placeholder="选择班级" /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-[color:var(--ink-4)]">目标课次</Label>
+              <Label className="text-sm text-[color:var(--ink-2)]">目标课次</Label>
               <Select value={String(targetLesson)} onValueChange={(v) => setTargetLesson(Number(v))}>
-                <SelectTrigger className="w-24 h-9 text-sm ios-input"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-24 h-9 text-sm rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Array.from(new Set([...(knownLessons || []), targetLesson, 1].filter(Boolean))).sort((a, b) => a - b).map(n => (
                     <SelectItem key={n} value={String(n)}>第{n}课</SelectItem>
@@ -167,9 +167,9 @@ export function DocSyncPanel({
             placeholder={'姓名\t成长轨迹\t课次\t考勤\t语法\t完形填空\t…\n陈志佳\t暑,秋\t1\t准时👍\t15\t8\t…'}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            className="min-h-[120px] font-mono text-xs ios-input"
+            className="min-h-[140px] text-sm rounded-xl"
           />
-          <Button className="ios-button gap-2" disabled={parsing} onClick={handleParse}>
+          <Button className="gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" disabled={parsing} onClick={handleParse}>
             {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
             解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>

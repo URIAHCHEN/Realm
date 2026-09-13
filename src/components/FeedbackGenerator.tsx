@@ -308,16 +308,16 @@ export function FeedbackGenerator({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="ios-button gap-2" onClick={handleGenerateAll}>
+              <Button className="gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" onClick={handleGenerateAll}>
                 <Wand2 className="w-4 h-4" />
                 一键生成全班
               </Button>
-              <Button variant="outline" className="rounded-xl gap-2" onClick={handleCopyAll}>
+              <Button variant="outline" className="rounded-xl gap-2 h-9" onClick={handleCopyAll}>
                 <Copy className="w-4 h-4" />
                 复制全部
               </Button>
-              <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
-                <RotateCcw className="w-3.5 h-3.5" />
+              <Button variant="ghost" className="rounded-xl gap-1.5 h-9 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
+                <RotateCcw className="w-4 h-4" />
                 重置状态
               </Button>
             </div>
@@ -484,7 +484,7 @@ export function FeedbackGenerator({
                 <Textarea
                   value={generated[selected] ?? ''}
                   onChange={(e) => setGenerated(prev => ({ ...prev, [selected]: e.target.value }))}
-                  className="min-h-[360px] text-sm leading-relaxed ios-input"
+                  className="min-h-[320px] text-sm leading-relaxed rounded-xl"
                   placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
                 />
                 {(lessonConfig.customFields || []).length > 0 && selectedRecord && (
@@ -537,7 +537,7 @@ export function FeedbackGenerator({
                 ref={templateRef}
                 value={activeTemplate}
                 onChange={(e) => setActiveTemplate(e.target.value)}
-                className="min-h-[220px] text-sm leading-relaxed ios-input"
+                className="min-h-[320px] text-sm leading-relaxed rounded-xl"
                 placeholder="编辑模板，点击变量可插入…"
               />
               <div className="flex flex-wrap gap-1.5">
@@ -601,13 +601,13 @@ export function FeedbackGenerator({
             </p>
           ) : (
             <ScrollArea className="h-[420px] pr-2">
-              <div className="grid grid-cols-[120px_1fr] gap-x-3 text-xs font-semibold text-[color:var(--ink-4)] pb-2 border-b border-black/10">
+              <div className="grid grid-cols-[140px_1fr] gap-x-3 text-xs font-semibold text-[color:var(--ink-4)] pb-2 border-b border-black/10">
                 <span>同学</span>
                 <span>私发反馈内容</span>
               </div>
               <div className="divide-y divide-black/5">
                 {batchRows.map(row => (
-                  <div key={row.name} className="grid grid-cols-[120px_1fr] gap-x-3 py-3 items-start">
+                  <div key={row.name} className="grid grid-cols-[140px_1fr] gap-x-3 py-3 items-start">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 text-white"

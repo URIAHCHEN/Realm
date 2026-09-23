@@ -97,12 +97,20 @@ export function generatePersonalFeedback(
 }
 
 // 「四个一」默认模板与可用占位符（可在反馈工作台旁边直接改写；留空即用此默认结构）
+// 参考教辅推荐（家长常问「该买什么资料」，这里给一份精选清单）
+// 原则：只留最值得买的、按需自选；听说练习与难度调节各并成一行，不堆砌。
+export const FOUR_IN_ONE_MATERIALS =
+`📚 参考教辅（按需自选，不必都买）：语法《哈佛英语》（买初中全一册，不分年级）｜完型《哈佛英语》（分年级）｜阅读《英语时文阅读》（期刊，主题新颖贴近时事）｜写作《新东方中考英语满分作文》
+🎧 听说练习：想多做题可买《蓝皮英语》；想多输入，可以跟读校本课文、在家当背景放英文歌/英文电影（看孩子兴趣），或用【每日英语听力】App 按自己的程度挑喜欢的材料听读跟读～
+💡 想加难度：完型与《英语时文阅读》都有年级版本，买高 1-2 个年级即可`;
+
 export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
 `【第【课次】课 · 【昵称】】
 【开场】
 【场景引导】🌟 优秀表现：【优秀表现】
 🔍 待提升：【待提升】
 🛠 下一步：【下一步】【新学员补充】
+【参考教辅】
 【结尾】`;
 
 export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
@@ -115,6 +123,7 @@ export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
   { key: '【下一步】', desc: '自动：巩固动作' },
   { key: '【素材】', desc: '课堂照片 / 视频链接' },
   { key: '【新学员补充】', desc: '勾选「新学员」时自动补一句，否则留空' },
+  { key: '【参考教辅】', desc: '教辅推荐清单（3 行），可通过「附参考教辅」开关整块隐藏' },
   { key: '【结尾】', desc: '按场景轮换的收尾语 / 行动召唤' },
 ];
 
@@ -187,7 +196,9 @@ export function generateFourInOne(
   candidateLinks: string[] = [],
   variant = 0,
   templateOverride?: string,
-  scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily'
+  scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily',
+  /** 是否附「参考教辅」清单（关闭时整行移除） */
+  withMaterials = true
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
@@ -208,20 +219,43 @@ export function generateFourInOne(
   const attendKind = attendanceKind(record.attendance);
   const attendBad = attendKind === 'absent' ? '缺勤' : attendKind === 'late' ? '迟到' : attendKind === 'leave' ? '请假' : '';
 
+  // 亮点：同一档位备两种说法，随「换一版措辞」轮换，避免每位家长收到同一句
+  const pick = <T,>(pair: [T, T]): T => pair[v % 2];
   let praise: string;
-  if (strong.length) praise = `${strong[0].name}掌握得不错（${strong[0].s}/${strong[0].full}，高出班级平均${(strong[0].s - strong[0].avg).toFixed(0)}分）`;
-  else if (record.correctRate >= 90) praise = `入门测正确率 ${record.correctRate}%，整体掌握扎实`;
-  else if (homeworkGood) praise = '书面作业完成质量很高';
-  else praise = '课堂状态稳定，能跟上节奏';
+  if (strong.length) {
+    const s0 = strong[0];
+    const gap = Math.max(0, Math.round(s0.s - s0.avg));
+    praise = pick([
+      `${s0.name}这次很亮眼——${s0.s}/${s0.full}，比班级平均高出 ${gap} 分`,
+      `${s0.name}是这次的强项，${s0.s}/${s0.full}，高出班均 ${gap} 分，看得出是真会了`,
+    ]);
+  } else if (record.correctRate >= 90) {
+    praise = pick([
+      `入门测正确率 ${record.correctRate}%，整张卷子掌握得比较扎实`,
+      `这次正确率 ${record.correctRate}%，整体很稳，没有明显短板`,
+    ]);
+  } else if (homeworkGood) {
+    praise = pick(['书面作业完成质量很高', '书面作业做得认真，完成质量很高']);
+  } else {
+    praise = pick(['课堂状态稳定，能跟上节奏', '这堂课跟得比较稳，课堂状态在线']);
+  }
 
   const issueParts: string[] = [];
-  if (weak.length) issueParts.push(`${weak[0].category}板块还有提升空间（得分率${Math.round(weak[0].studentRate * 100)}%，低于班级${Math.round(Math.abs(weak[0].diffRate) * 100)}个百分点）`);
+  if (weak.length) {
+    const w0 = weak[0];
+    const rate = Math.round(w0.studentRate * 100);
+    const gap = Math.max(0, Math.round(Math.abs(w0.diffRate) * 100));
+    issueParts.push(pick([
+      `${w0.category}是最值得再补的一块：得分率 ${rate}%，比班级平均低 ${gap} 个百分点`,
+      `${w0.category}这块可以再抓一抓——得分率 ${rate}%，低于班均 ${gap} 个百分点`,
+    ]));
+  }
   if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
   if (attendBad) issueParts.push(`本课${attendBad}`);
   const issue = issueParts.length ? issueParts.join('；') : '这次没发现明显的薄弱环节，整体状态是稳的';
 
   const nextAction = weak.length
-    ? `课后针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；如果有余力，让孩子把思路讲给您听一遍，比再做十道都管用`
+    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；有余力的话，让孩子把思路讲给您听一遍，比再做十道都管用`
     : homeworkBad
       ? '今晚把这次的作业补齐并订正，下次课带来我看一下'
       : attendBad
@@ -233,7 +267,18 @@ export function generateFourInOne(
   const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
   const base = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
   // 兼容历史模板：剔除「🎬 课堂照片/视频」整行
-  const tpl = base.split('\n').filter(l => !l.includes('课堂照片/视频')).join('\n');
+  const tpl = base
+    .split('\n')
+    .filter(l => !l.includes('课堂照片/视频'))
+    // 关闭教辅清单：先摘掉占位符本身，再丢弃「只剩标签」的空行（如「📚 参考教辅：」）；
+    // 同一行若还有「下一步」等其他内容则保留，不会误删
+    .map(l => (withMaterials ? l : l.replace(/【参考教辅】/g, '')))
+    .filter(l => {
+      if (withMaterials) return true;
+      const stripped = l.replace(/[\s:：📚🎧💡|｜·—\-*]/gu, '');
+      return stripped.length > 0;
+    })
+    .join('\n');
 
   return tpl
     .replace(/【课次】/g, String(record.lessonNumber))
@@ -246,7 +291,8 @@ export function generateFourInOne(
     .replace(/【下一步】/g, plan)
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
     .replace(/【结尾】/g, closing)
-    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '');
+    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '')
+    .replace(/【参考教辅】/g, withMaterials ? `\n${FOUR_IN_ONE_MATERIALS}` : '');
 }
 
 // 生成班群表彰

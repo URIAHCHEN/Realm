@@ -54,6 +54,8 @@ export function FeedbackGenerator({
   const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
   const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
   const [isNewStudent, setIsNewStudent] = useState(false);
+  // 是否附「参考教辅」清单（默认附上，可一键隐藏，避免消息过长）
+  const [withMaterials, setWithMaterials] = useState(true);
   const [variant, setVariant] = useState(0);
   const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] =
     FOUR_IN_ONE_SCENARIOS.map(s => ({ value: s.key, label: s.label }));
@@ -79,7 +81,7 @@ export function FeedbackGenerator({
   useEffect(() => {
     setGenerated({});
     setCopiedSet(new Set());
-  }, [feedbackMode, scenario, isNewStudent, variant]);
+  }, [feedbackMode, scenario, isNewStudent, variant, withMaterials]);
 
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
@@ -88,7 +90,7 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials);
     }
     return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback);
   };
@@ -348,6 +350,10 @@ export function FeedbackGenerator({
                 <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none">
                   <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
                   新学员（补充孩子感受）
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none" title="附上语法/完型/阅读/写作/听力的精选教辅清单">
+                  <input type="checkbox" checked={withMaterials} onChange={(e) => setWithMaterials(e.target.checked)} className="accent-[color:var(--brand)]" />
+                  附参考教辅
                 </label>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % FOUR_IN_ONE_VARIANT_COUNT)}>
                   <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/{FOUR_IN_ONE_VARIANT_COUNT}）

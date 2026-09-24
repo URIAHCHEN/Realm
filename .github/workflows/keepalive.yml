@@ -1,0 +1,53 @@
+# 云端保活：Supabase 免费版项目约 7 天无活跃会被自动暂停，
+# 暂停期间 API 与登录（Auth）全部不可达 → 站点会"打不开也登不进"。
+# 官方口径：上周每天有几次请求即可不被判定为不活跃。
+# 因此这里每天（并支持手动触发）访问一次项目端点，重置计时器。
+#
+# 说明：不需要任何密钥——只有"请求到达了项目"才计入活跃，
+# 因此 /auth/v1/health 返回 200、/rest/v1/ 返回 401 都算有效访问。
+# 若想改成带 anon key 的正式请求，在仓库 Settings → Secrets 里加：
+#   SUPABASE_URL      （可选，默认用下方内置地址）
+#   SUPABASE_ANON_KEY （可选，加上后会带 apikey 头）
+name: 云端保活
+
+on:
+  schedule:
+    # 每天 02:23 UTC = 北京 10:23（避开整点的排队高峰，定时更准时）
+    - cron: '23 2 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 访问项目端点，重置"不活跃"计时器
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -u
+          BASE="${SUPABASE_URL:-https://katproevfecefydjztca.supabase.co}"
+          BASE="${BASE%/}"
+          echo "保活目标：$BASE"
+
+          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            HDR=(-H "apikey: ${SUPABASE_ANON_KEY}")
+          else
+            HDR=()
+          fi
+
+          ok=0
+          for path in /auth/v1/health /rest/v1/; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "${HDR[@]}" "$BASE$path" || echo 000)
+            echo "  $path → HTTP $code"
+            case "$code" in
+              2*|3*|401|403) ok=$((ok+1)) ;;
+            esac
+          done
+
+          if [ "$ok" -eq 0 ]; then
+            echo "::warning::所有保活请求均未到达项目——请检查 Supabase 项目是否已被暂停，或本 workflow 的网络是否受限"
+          else
+            echo "保活完成：$ok 个端点可达（已计入项目活跃）"
+          fi

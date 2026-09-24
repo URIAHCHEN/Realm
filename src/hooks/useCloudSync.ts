@@ -13,6 +13,7 @@ import {
   saveSyncMeta,
 } from '@/lib/cloudSync';
 import { getSyncIntervalSec } from '@/lib/displaySettings';
+import { isBackendOffline } from '@/lib/connectivity';
 
 /** 把内部错误码/异常转成老师能看懂的中文提示 */
 function toSyncMessage(e: unknown): string {
@@ -20,7 +21,9 @@ function toSyncMessage(e: unknown): string {
   if (raw === 'AUTH_FAILED') return '登录已失效或无写入权限：请重新登录；若你不在可写名单，数据将保持只读';
   if (raw === 'TABLE_MISSING') return '云端数据表尚未创建：请先在 Supabase 执行建表/权限 SQL';
   if (raw.startsWith('HTTP_')) return `云端返回异常（${raw.replace('HTTP_', 'HTTP ')}），请稍后重试`;
-  if (raw.includes('Failed to fetch') || raw.includes('NetworkError') || raw.includes('network')) return '网络连接异常：请检查网络后重试';
+  if (raw.includes('Failed to fetch') || raw.includes('NetworkError') || raw.includes('network')) {
+    return '云端暂时不可达：改动已保存在本设备，联网后会自动补传';
+  }
   return raw;
 }
 
@@ -75,7 +78,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       statusRef.current = 'error';
       const m = toSyncMessage(e);
       setMessage(m);
-      if (!silent) toast.error('云端上传失败：' + m);
+      if (!silent && !isBackendOffline()) toast.error('云端上传失败：' + m);
       return false;
     } finally {
       setAction('idle');
@@ -106,7 +109,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       statusRef.current = 'error';
       const m = toSyncMessage(e);
       setMessage(m);
-      if (!silent) toast.error('云端拉取失败：' + m);
+      if (!silent && !isBackendOffline()) toast.error('云端拉取失败：' + m);
       return false;
     } finally {
       setAction('idle');

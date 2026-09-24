@@ -3,6 +3,7 @@
 
 import { BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend } from '@/lib/config';
 import { ensureFreshToken, getAccessToken, getCachedSession } from '@/lib/auth';
+import { markBackendOffline, markBackendOnline, isTransientBackendFailure } from '@/lib/connectivity';
 import type { AppConfig, Class, SchoolScore } from '@/types';
 
 // 同步快照：与导出备份格式一致，方便离线/云端互换
@@ -136,6 +137,26 @@ interface CloudRow {
   updated_at: string;
 }
 
+/**
+ * 统一的后端请求入口：网络异常 / 5xx / 429 视为「云端暂时不可达」→ 标记离线；
+ * 其余情况（含 401/403 这类"服务可达但无权限"）视为在线。
+ */
+async function backendFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    // 注意：这里必须用原生 fetch，不能调自身（否则递归）
+    const res = await fetch(url, init);
+    if (isTransientBackendFailure(res.status)) {
+      markBackendOffline(`云端返回 ${res.status}`);
+    } else {
+      markBackendOnline();
+    }
+    return res;
+  } catch (e) {
+    markBackendOffline(e instanceof Error ? e.message : String(e));
+    throw e;
+  }
+}
+
 function apiHeaders(config: CloudSyncConfig, extra: Record<string, string> = {}) {
   // 优先携带登录用户的 JWT（RLS 收紧后 anon 将无法读写），未登录回退 anon key
   const bearer = getAccessToken() ?? config.supabaseKey.trim();
@@ -160,7 +181,7 @@ export interface CloudState {
 // 读取云端状态（无数据返回 null）
 export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudState> {
   await ensureFreshToken();
-  const res = await fetch(restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&select=data,snapshot_hash,updated_at`), {
+  const res = await backendFetch(restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&select=data,snapshot_hash,updated_at`), {
     headers: apiHeaders(config),
   });
   if (!res.ok) {
@@ -188,7 +209,7 @@ export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudSta
 export async function pushSnapshot(config: CloudSyncConfig, snapshot: SyncSnapshot): Promise<CloudState> {
   await ensureFreshToken();
   const hash = hashSnapshot(snapshot);
-  const res = await fetch(restUrl(config, '?on_conflict=id'), {
+  const res = await backendFetch(restUrl(config, '?on_conflict=id'), {
     method: 'POST',
     headers: apiHeaders(config, { Prefer: 'resolution=merge-duplicates,return=representation' }),
     body: JSON.stringify({
@@ -224,7 +245,7 @@ export async function testConnection(config: CloudSyncConfig): Promise<{ ok: boo
   await ensureFreshToken().catch(() => null);
   const signedIn = !!getCachedSession()?.access_token;
   try {
-    const res = await fetch(restUrl(config, '?select=id&limit=1'), {
+    const res = await backendFetch(restUrl(config, '?select=id&limit=1'), {
       headers: apiHeaders(config),
     });
     if (res.ok) {

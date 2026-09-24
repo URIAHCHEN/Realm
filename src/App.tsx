@@ -11,6 +11,7 @@ import { ensureSelfMembership, myUserId } from '@/lib/members';
 import type { Membership } from '@/lib/members';
 import { MembersPanel } from '@/components/MembersPanel';
 import { SyncStatusBanner } from '@/components/SyncStatusBanner';
+import { BackendOfflineBanner } from '@/components/BackendOfflineBanner';
 import { FeedbackLibrary } from '@/components/FeedbackLibrary';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
@@ -769,6 +770,13 @@ function App() {
 
       {/* 主内容区 */}
       <div className="max-w-[1600px] mx-auto px-4 pb-10 sm:px-6 sm:pb-12">
+        {/* 云端不可达时的全局提示（与同步状态横幅独立，避免误以为系统坏了） */}
+        <div className="mb-5">
+          <BackendOfflineBanner
+            onRetry={() => { refreshMembership(); void cloudSync.pull(); }}
+          />
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="ios-tabs-list">
             <TabsTrigger value="records" className="ios-tab-trigger">

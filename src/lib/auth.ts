@@ -2,6 +2,7 @@
 // 会话存 localStorage，应用进入与否由真实会话驱动；同步请求携带用户 JWT 以通过收紧后的 RLS。
 
 import { BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL } from '@/lib/config';
+import { markBackendOffline, markBackendOnline, isTransientBackendFailure, offlineHint } from '@/lib/connectivity';
 
 export interface AuthSession {
   access_token: string;
@@ -87,12 +88,19 @@ export async function signIn(email: string, password: string): Promise<{ ok: boo
       const code = String((data as Record<string, unknown>).error_description ?? (data as Record<string, unknown>).msg ?? res.status);
       if (code.includes('Invalid login credentials')) return { ok: false, message: '邮箱或密码不正确' };
       if (code.includes('Email not confirmed')) return { ok: false, message: '邮箱尚未验证，请先到邮箱点确认链接（或让管理员在 Supabase 关闭邮箱验证）' };
+      // 5xx/429（含项目被暂停的情形）→ 标记离线，给可读提示而不是抛 HTTP 码
+      if (isTransientBackendFailure(res.status)) {
+        markBackendOffline(`登录请求失败（HTTP ${res.status}）`);
+        return { ok: false, message: `云端暂时不可达（HTTP ${res.status}）：${offlineHint()}。若持续如此，可能是云端项目被暂停，需在后台恢复。` };
+      }
       return { ok: false, message: `登录失败：${code}` };
     }
+    markBackendOnline();
     persistSession(data as Record<string, unknown>);
     return { ok: true, message: '登录成功' };
   } catch (e) {
-    return { ok: false, message: '网络异常：' + (e instanceof Error ? e.message : String(e)) };
+    markBackendOffline(e instanceof Error ? e.message : String(e));
+    return { ok: false, message: `云端暂时不可达：${offlineHint()}。请稍后重试或检查网络。` };
   }
 }
 
@@ -114,12 +122,14 @@ export async function signUp(email: string, password: string): Promise<{ ok: boo
     }
     const raw = data as Record<string, unknown>;
     if (raw.access_token) {
+      markBackendOnline();
       persistSession(raw);
       return { ok: true, message: '注册成功，已登录' };
     }
     return { ok: false, message: '注册成功，请先到邮箱点确认链接后再登录' };
   } catch (e) {
-    return { ok: false, message: '网络异常：' + (e instanceof Error ? e.message : String(e)) };
+    markBackendOffline(e instanceof Error ? e.message : String(e));
+    return { ok: false, message: `云端暂时不可达：${offlineHint()}。请稍后重试或检查网络。` };
   }
 }
 
@@ -136,12 +146,25 @@ export async function ensureFreshToken(): Promise<string | null> {
       body: JSON.stringify({ refresh_token: s.refresh_token }),
     });
     if (!res.ok) {
-      clearSession();
-      return null;
+      const body = await res.text().catch(() => '');
+      // 只有服务端**明确拒绝凭证**才清会话；5xx/429/网关错误属"暂时不可达"，
+      // 一律保留本地会话（离线宽限），否则 Supabase 暂停或网络抖动会把用户锁在站外
+      const credentialRejected =
+        !isTransientBackendFailure(res.status)
+        && /invalid_grant|invalid refresh token|refresh_token_not_found|token has been revoked|user_not_found|user_banned/i.test(body);
+      if (credentialRejected) {
+        clearSession();
+        return null;
+      }
+      markBackendOffline(`登录态续期失败（HTTP ${res.status}）`);
+      return s.access_token;
     }
+    markBackendOnline();
     const fresh = persistSession(await res.json());
     return fresh.access_token;
-  } catch {
+  } catch (e) {
+    // 网络层异常（DNS/断网/被拦）：同样保留会话
+    markBackendOffline(e instanceof Error ? e.message : String(e));
     return getAccessToken();
   }
 }

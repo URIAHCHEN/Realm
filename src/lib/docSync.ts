@@ -59,6 +59,17 @@ export interface ParsedRow {
   seasons?: SeasonType[];
   lessonNumber?: number;
   scores: { [questionTypeId: string]: number };
+  /** 「表格列名 → 分数」原始取值；导入端据此在重建题型配置后映射为 qtId */
+  scoreValues?: { [columnName: string]: number };
+}
+
+/** 表格中的一个分数列（按表格出现顺序） */
+export interface ScoreColumn {
+  name: string;
+  /** 按列内数据最大值推断的满分 */
+  suggestedFullScore: number;
+  /** 命中已有题型时给出其 id，用于沿用（保住已录分数） */
+  matchedQtId?: string;
 }
 
 export interface ParseResult {
@@ -68,6 +79,8 @@ export interface ParseResult {
   unmatchedColumns: { name: string; suggestedFullScore: number }[];
   /** 已匹配题型列的真实满分（按列数据最大值推断），与当前配置不一致时给出，用于导入时同步分母 */
   fullScoreUpdates: { qtId: string; name: string; suggestedFullScore: number }[];
+  /** 按表格顺序排列的全部分数列（含未匹配列），导入端用它对齐课次题型配置 */
+  scoreColumns: ScoreColumn[];
 }
 
 function splitLine(line: string): string[] {
@@ -95,13 +108,13 @@ export function parseClipboardTable(
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   const errors: string[] = [];
   if (lines.length < 2) {
-    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [] };
+    return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [], scoreColumns: [] };
   }
 
   const headers = splitLine(lines[0]).map(norm);
   const nameIdx = headers.findIndex(h => h === '姓名' || h === '学生姓名' || h === '名字' || h === '学生');
   if (nameIdx < 0) {
-    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [] };
+    return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [], scoreColumns: [] };
   }
 
   // 列映射：先题型精确匹配 → 再固定列（精确/别名）→ 再题型模糊匹配；全程排除已占用列，避免互相抢占
@@ -135,6 +148,7 @@ export function parseClipboardTable(
   });
   const onlyCn = (s: string) => (s.match(/[一-龥]/g) || []).join('');
 
+  const rawRows: { row: ParsedRow; cells: string[] }[] = [];
   const matched = [
     nameIdx >= 0 ? '姓名' : '', attIdx >= 0 ? '考勤' : '', cpIdx >= 0 ? '课堂表现' : '', hwIdx >= 0 ? '作业' : '',
     listenIdx >= 0 ? '课后任务' : '', seasonIdx >= 0 ? '学习轨迹' : '', ...qtIdx.map(q => q.qt.name)
@@ -176,9 +190,13 @@ export function parseClipboardTable(
       const num = parseFloat(cells[listenScoreIdx]);
       if (!isNaN(num)) { row.listeningStatus = '具体分数'; row.listeningScore = num; }
     }
+    row.scoreValues = {};
     qtIdx.forEach(({ qt, idx }) => {
       const num = parseFloat(cells[idx]);
-      if (!isNaN(num)) row.scores[qt.id] = num;
+      if (!isNaN(num)) {
+        row.scores[qt.id] = num;
+        row.scoreValues![qt.name] = num;
+      }
     });
     // 校验：有总分列时，若题型列齐全则校验和
     if (totalIdx >= 0 && qtIdx.length > 0) {
@@ -189,12 +207,14 @@ export function parseClipboardTable(
       }
     }
     rows.push(row);
+    rawRows.push({ row, cells });
   });
 
   // 未匹配、但数据多为数值的列 → 候选新题型（usedIdx 已含姓名/固定列/已匹配题型）
   const rawHeaders = splitLine(lines[0]);
   const dataLines = lines.slice(1);
   const unmatchedColumns: { name: string; suggestedFullScore: number }[] = [];
+  const unmatchedIdx: { name: string; idx: number; suggestedFullScore: number }[] = [];
   rawHeaders.forEach((h, idx) => {
     if (usedIdx.has(idx)) return;
     const label = (h || '').trim();
@@ -204,8 +224,22 @@ export function parseClipboardTable(
     const numericRatio = nums.length / Math.max(1, dataLines.length);
     if (numericRatio >= 0.5) {
       const maxV = Math.max(...nums);
-      unmatchedColumns.push({ name: label, suggestedFullScore: Math.max(1, Math.ceil(maxV)) });
+      const suggested = Math.max(1, Math.ceil(maxV));
+      const colMax = Math.ceil(maxV * 100) / 100;
+      unmatchedColumns.push({ name: label, suggestedFullScore: suggested });
+      unmatchedIdx.push({ name: label, idx, suggestedFullScore: colMax });
     }
+  });
+
+  // 未匹配列的分值同样写进每行 scoreValues：导入端会按列名补建题型并落分
+  unmatchedIdx.forEach(({ name, idx }) => {
+    rawRows.forEach(({ row, cells }) => {
+      const num = parseFloat(cells[idx]);
+      if (!isNaN(num)) {
+        if (!row.scoreValues) row.scoreValues = {};
+        row.scoreValues[name] = num;
+      }
+    });
   });
 
   // 已匹配题型列：按列数据最大值推断本次卷面真实满分，
@@ -223,5 +257,23 @@ export function parseClipboardTable(
     }
   });
 
-  return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates };
+  // 分数列清单（按表格列顺序），并给出每列的真实满分（命中题型时以列最大值为准）
+  const allColIdx: { idx: number; name: string; suggestedFullScore: number; matchedQtId?: string }[] = [
+    ...qtIdx.map(({ qt, idx }) => ({ idx, name: qt.name, suggestedFullScore: qt.fullScore || 0, matchedQtId: qt.id })),
+    ...unmatchedIdx.map(({ name, idx, suggestedFullScore }) => ({ idx, name, suggestedFullScore })),
+  ].sort((a, b) => a.idx - b.idx);
+
+  const scoreColumns: ScoreColumn[] = allColIdx.map(col => {
+    const nums = dataLines
+      .map(l => parseFloat((splitLine(l)[col.idx] || '').trim()))
+      .filter(n => !isNaN(n) && n >= 0);
+    const byData = nums.length ? Math.max(1, Math.ceil(Math.max(...nums) * 100) / 100) : 0;
+    return {
+      name: col.name,
+      matchedQtId: col.matchedQtId,
+      suggestedFullScore: byData || col.suggestedFullScore || 1,
+    };
+  });
+
+  return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates, scoreColumns };
 }

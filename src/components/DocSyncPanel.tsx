@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
-  CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2, Plus,
+  CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,10 +27,12 @@ interface DocSyncPanelProps {
   currentClassId: string | null;
   getQuestionTypes: (classId: string, lessonNumber: number) => QuestionType[];
   knownLessons: number[];
-  onImportRows: (rows: ParsedRow[], target: { classId: string; lessonNumber: number }) => void;
-  onCreateQuestionTypes: (target: { classId: string; lessonNumber: number }, columns: { name: string; suggestedFullScore: number }[]) => void;
-  /** 导入时同步已匹配题型的真实满分（按列最大值），并重算该课次正确率；返回实际更新数 */
-  onSyncFullScores?: (target: { classId: string; lessonNumber: number }, updates: { qtId: string; name: string; suggestedFullScore: number }[]) => number;
+  /** 导入：rows 为解析后的行，scoreColumns 为表格分数列（按顺序），导入端据此对齐该课次题型配置 */
+  onImportRows: (
+    rows: ParsedRow[],
+    target: { classId: string; lessonNumber: number },
+    scoreColumns: { name: string; suggestedFullScore: number; matchedQtId?: string }[]
+  ) => void;
   onExportExcel: () => void;
 }
 
@@ -38,7 +40,7 @@ const BTN = 'h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-1.5';
 const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90 shadow-sm`;
 
 export function DocSyncPanel({
-  records, lessonConfig, lessonNumber, className, getNickname, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onCreateQuestionTypes, onSyncFullScores, onExportExcel,
+  records, lessonConfig, lessonNumber, className, getNickname, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onExportExcel,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -80,14 +82,12 @@ export function DocSyncPanel({
         toast.error(result.errors[0] || '未解析到有效数据行');
       } else {
         const clsName = classes.find(c => c.id === targetClass)?.name || '目标班级';
-        // 先同步题型真实满分（分母），再写入学情记录，保证正确率按当次卷面总分计算
-        if (onSyncFullScores && (result.fullScoreUpdates?.length ?? 0) > 0) {
-          const applied = onSyncFullScores({ classId: targetClass, lessonNumber: targetLesson }, result.fullScoreUpdates);
-          if (applied > 0) {
-            toast.info(`已同步 ${applied} 个题型的卷面满分，正确率分母将按当次实际总分计算`);
-          }
-        }
-        onImportRows(result.rows, { classId: targetClass, lessonNumber: targetLesson });
+        // 一步导入：导入端会先按表格的分数列对齐该课次题型配置（新增/排序/满分），再写入分数
+        onImportRows(
+          result.rows,
+          { classId: targetClass, lessonNumber: targetLesson },
+          result.scoreColumns || []
+        );
         const errNote = result.errors.length > 0 ? `，${result.errors.length} 条提示` : '';
         toast.success(`已导入 ${result.rows.length} 行到「${clsName} · 第${targetLesson}课」（匹配列：${result.matchedColumns.join('、')}${errNote}）`);
         setPasteText('');
@@ -177,24 +177,13 @@ export function DocSyncPanel({
             解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>
           {unmatched.length > 0 && (
-            <div className="rounded-[var(--r-md)] bg-amber-50 border border-amber-200 p-3">
-              <p className="text-sm text-amber-800">
-                检测到 <b>{unmatched.length}</b> 个未匹配分数列：{unmatched.map(c => c.name).join('、')}
+            <div className="rounded-[var(--r-md)] bg-[rgb(var(--brand-rgb)/0.06)] border border-[rgb(var(--brand-rgb)/0.2)] p-3">
+              <p className="text-sm text-[color:var(--ink-2)]">
+                表格里有 <b>{unmatched.length}</b> 个新分数列：{unmatched.map(c => c.name).join('、')}
               </p>
-              <div className="flex items-center gap-2 mt-2">
-                <Button
-                  size="sm"
-                  className={`${BTN_PRIMARY} h-8`}
-                  onClick={() => {
-                    onCreateQuestionTypes({ classId: targetClass, lessonNumber: targetLesson }, unmatched);
-                    toast.success(`已补建 ${unmatched.length} 个题型，请再点一次“解析并导入”写入这些列`);
-                    setUnmatched([]);
-                  }}
-                >
-                  <Plus className="w-4 h-4" />一键补建为题型
-                </Button>
-                <span className="text-xs text-amber-700">补建后再点“解析并导入”即可写入这些列的分值</span>
-              </div>
+              <p className="text-xs text-[color:var(--ink-4)] mt-1">
+                点「解析并导入」时会自动把它们加入本课题型（满分按列内最高分推定），无需手工补建
+              </p>
             </div>
           )}
         </CardContent>

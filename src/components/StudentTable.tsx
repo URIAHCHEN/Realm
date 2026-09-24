@@ -15,7 +15,8 @@ import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
 import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
-import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
+import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
+import { resolveOptionForDisplay } from '@/lib/optionMatch';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
 
@@ -29,6 +30,8 @@ interface StudentTableProps {
   onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: StudentRecord[keyof StudentRecord]) => void;
   onCreateRecord: (studentName: string, record: Partial<StudentRecord>) => void;
   onDeleteRecord: (recordId: string) => void;
+  /** 打开「生成设置」对话框（字段/题型/显示配置） */
+  onOpenConfig?: () => void;
   /** 一键删除所选学员本课次记录（含撤销） */
   onDeleteStudentRecords?: (studentNames: string[]) => void;
   onAddStudent: (studentName: string) => void;
@@ -41,7 +44,6 @@ interface StudentTableProps {
   /** 返回当前课次的学情公示 HTML（用于生成图片） */
   getPublicityHTML: () => string;
   onViewStudentAnalysis: (studentName: string) => void;
-  onSaveLessonConfig: (lessonNum: number, config: Partial<LessonConfig>) => void;
 }
 
 const seasons: { value: SeasonType; label: string; className: string }[] = [
@@ -146,7 +148,8 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onSaveLessonConfig
+  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis,
+  onOpenConfig,
 }: StudentTableProps) {
   const [newStudentName, setNewStudentName] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -155,8 +158,6 @@ export function StudentTable({
   // 「仅显示已选」学习轨迹模式下，临时展开某行以添加季度
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [copiedStudent, setCopiedStudent] = useState<string | null>(null);
-  const [showAddQuestionTypeDialog, setShowAddQuestionTypeDialog] = useState(false);
-  const [newQuestionType, setNewQuestionType] = useState({ name: '', fullScore: 100 });
   // 批量操作状态
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [classAttendanceValue, setClassAttendanceValue] = useState('按时出勤');
@@ -317,6 +318,24 @@ export function StudentTable({
     else onCreateRecord(studentName, { studentName, lessonNumber, classPerformance: value });
   };
 
+  // 四组下拉选项（配置为空时回退默认集，避免空下拉）
+  const attendanceOpts = useMemo(
+    () => (lessonConfig.attendanceOptions?.length ? lessonConfig.attendanceOptions : DEFAULT_ATTENDANCE_OPTIONS),
+    [lessonConfig.attendanceOptions]
+  );
+  const classPerfOpts = useMemo(
+    () => (lessonConfig.classPerformanceOptions?.length ? lessonConfig.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS),
+    [lessonConfig.classPerformanceOptions]
+  );
+  const homeworkOpts = useMemo(
+    () => (lessonConfig.homeworkOptions?.length ? lessonConfig.homeworkOptions : DEFAULT_HOMEWORK_OPTIONS),
+    [lessonConfig.homeworkOptions]
+  );
+  const listeningOpts = useMemo(
+    () => (lessonConfig.listeningOptions?.length ? lessonConfig.listeningOptions : DEFAULT_LISTENING_OPTIONS),
+    [lessonConfig.listeningOptions]
+  );
+
   // 选项颜色标记：按组（attendance/classPerformance/homework/listening/cf:<id>）+ 选项文本取色
   const optStyleOf = (group: string, value: string | undefined) =>
     optionCellStyle(value ? lessonConfig.optionColors?.[group]?.[value] : undefined);
@@ -378,20 +397,6 @@ export function StudentTable({
     }
   };
 
-  const handleAddQuestionType = () => {
-    if (!newQuestionType.name.trim()) return;
-    // 满分校验：非法/非正数回退 100，避免负满分污染正确率计算
-    const fullScore = Number.isFinite(newQuestionType.fullScore) && newQuestionType.fullScore > 0
-      ? newQuestionType.fullScore
-      : 100;
-    const dup = lessonConfig.questionTypes.some(qt => qt.name === newQuestionType.name.trim());
-    if (dup) { toast.error('已存在同名题型'); return; }
-    const newQt = { id: 'qt_' + Date.now(), name: newQuestionType.name.trim(), fullScore, order: lessonConfig.questionTypes.length };
-    onSaveLessonConfig(lessonNumber, { questionTypes: [...lessonConfig.questionTypes, newQt] });
-    setNewQuestionType({ name: '', fullScore: 100 });
-    setShowAddQuestionTypeDialog(false);
-    toast.success('题型添加成功！');
-  };
 
   const handleCopyFeedback = async (studentName: string) => {
     const record = getStudentRecord(studentName);
@@ -466,7 +471,7 @@ export function StudentTable({
             <Badge variant="secondary" className="text-base bg-[rgb(var(--brand-rgb)/0.12)] text-[color:var(--brand)] border border-[rgb(var(--brand-rgb)/0.2)]">第{lessonNumber}课</Badge>
           </CardTitle>
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => setShowAddQuestionTypeDialog(true)} variant="outline" size="sm" title="配置题型" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+            <Button onClick={onOpenConfig} variant="outline" size="sm" title="配置题型 / 字段 / 显示样式" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Settings2 className="w-4 h-4" /><span className="hidden sm:inline">配置题型</span>
             </Button>
             <Button onClick={handleGenerateImage} variant="outline" size="sm" title="生成公示图片" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
@@ -649,6 +654,14 @@ export function StudentTable({
                       const weakPoints = record ? getWeakPoints(record) : [];
                       const totalScore = record?.totalScore || 0;
                       const correctRate = record?.correctRate || 0;
+                      // 下拉展示取值：把导入/历史里的非标准文本对齐到配置选项，匹配不到则原样显示
+                      const attendanceDisplay = resolveOptionForDisplay(record?.attendance, attendanceOpts);
+                      const classPerfDisplay = resolveOptionForDisplay(record?.classPerformance, classPerfOpts);
+                      const homeworkDisplay = resolveOptionForDisplay(record?.homeworkStatus, homeworkOpts);
+                      const listeningDisplay = resolveOptionForDisplay(
+                        record?.listeningStatus === '具体分数' ? undefined : record?.listeningStatus,
+                        listeningOpts
+                      );
                       return (
                         <TableRow key={studentName} className={`hover:bg-[rgb(var(--brand-rgb)/0.04)] transition-colors ${selectedStudents.has(studentName) ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}>
                           <TableCell className="text-center">
@@ -708,9 +721,13 @@ export function StudentTable({
                           {col('attendance') && (
                           <TableCell className="text-base">
                             <div className="space-y-1">
-                              <Select value={record?.attendance || ''} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
+                              <Select value={attendanceDisplay.value} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
                                 <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.attendance ? getAttendanceColor(record.attendance) : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
-                                <SelectContent>{CLEAR_ITEM}{lessonConfig.attendanceOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                                <SelectContent>
+                                  {CLEAR_ITEM}
+                                  {attendanceDisplay.raw && <SelectItem value={attendanceDisplay.raw}>{attendanceDisplay.raw}</SelectItem>}
+                                  {attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                </SelectContent>
                               </Select>
                               {attendanceKind(record?.attendance) === 'transfer' && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
                             </div>
@@ -718,27 +735,39 @@ export function StudentTable({
                           )}
                           {col('classPerformance') && (
                           <TableCell className="text-base">
-                            <Select value={record?.classPerformance || ''} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
+                            <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
                               <SelectTrigger className="w-24 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>{CLEAR_ITEM}{(lessonConfig.classPerformanceOptions?.length ? lessonConfig.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS).map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                              <SelectContent>
+                                {CLEAR_ITEM}
+                                {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}
+                                {classPerfOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                              </SelectContent>
                             </Select>
                           </TableCell>
                           )}
                           {col('homework') && (
                           <TableCell className="text-base">
-                            <Select value={record?.homeworkStatus || ''} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
+                            <Select value={homeworkDisplay.value} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
                               <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.homeworkStatus ? getHomeworkColor(record.homeworkStatus) : ''}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>{CLEAR_ITEM}{lessonConfig.homeworkOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                              <SelectContent>
+                                {CLEAR_ITEM}
+                                {homeworkDisplay.raw && <SelectItem value={homeworkDisplay.raw}>{homeworkDisplay.raw}</SelectItem>}
+                                {homeworkOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                              </SelectContent>
                             </Select>
                           </TableCell>
                           )}
                           {col('listening') && (
                           <TableCell className="text-base">
                             <div className="flex items-center gap-1">
-                              <Select value={record?.listeningStatus || ''} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
+                              <Select value={listeningDisplay.value} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
                                 <SelectTrigger className="w-28 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
+                                  {listeningDisplay.raw && <SelectItem value={listeningDisplay.raw}>{listeningDisplay.raw}</SelectItem>}
+                                  {listeningOpts
+                                    .filter(o => !['未完成', '未加入', '具体分数'].includes(o))
+                                    .map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                   <SelectItem value="未完成">未完成</SelectItem>
                                   <SelectItem value="未加入">未加入</SelectItem>
                                   <SelectItem value="具体分数">具体分数</SelectItem>
@@ -927,19 +956,6 @@ export function StudentTable({
           <div className="space-y-4 mt-4">
             <Input placeholder="输入学生姓名" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddStudent()} className="liquid-glass-input" />
             <Button onClick={handleAddStudent} className="w-full liquid-glass-button">添加</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={showAddQuestionTypeDialog} onOpenChange={setShowAddQuestionTypeDialog}>
-        <DialogContent className="liquid-glass-card">
-          <DialogHeader><DialogTitle>添加题型配置</DialogTitle></DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div><label className="text-sm font-medium mb-2 block">题型名称</label><Input placeholder="如：阅读理解" value={newQuestionType.name} onChange={(e) => setNewQuestionType(prev => ({ ...prev, name: e.target.value }))} className="liquid-glass-input" /></div>
-            <div><label className="text-sm font-medium mb-2 block">满分</label><Input type="number" min="1" step="0.5" placeholder="100" value={newQuestionType.fullScore} onChange={(e) => { const n = parseFloat(e.target.value); setNewQuestionType(prev => ({ ...prev, fullScore: Number.isFinite(n) ? n : 100 })); }} className="liquid-glass-input" /></div>
-            <div className="flex gap-2">
-              <Button onClick={handleAddQuestionType} className="flex-1 liquid-glass-button">添加</Button>
-              <Button onClick={() => setShowAddQuestionTypeDialog(false)} variant="outline" className="flex-1">取消</Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, Columns3, BookMarked } from 'lucide-react';
+import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
+import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut } from '@/lib/auth';
 import { BUILD_SCOPE } from '@/lib/config';
@@ -17,11 +17,12 @@ import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { TransferStudentDialog } from '@/components/TransferStudentDialog';
 import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
+import { matchOption } from '@/lib/optionMatch';
 import { FeedbackGenerator } from '@/components/FeedbackGenerator';
 import { PraiseGenerator } from '@/components/PraiseGenerator';
 import { PraiseTemplateEditor } from '@/components/PraiseTemplateEditor';
 import { StudentImportModal } from '@/components/StudentImportModal';
-import { ConfigPanel } from '@/components/ConfigPanel';
+import { GenerateSettingsDialog } from '@/components/GenerateSettingsDialog';
 import { Leaderboard } from '@/components/Leaderboard';
 
 // 以下三个模块依赖 recharts（图表库）/ xlsx（Excel）/ html2canvas（截图），
@@ -49,7 +50,6 @@ import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/ex
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
 import { DocSyncPanel, DocSyncInfo } from '@/components/DocSyncPanel';
-import { DisplaySettingsPanel } from '@/components/DisplaySettingsPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import type { ParsedRow } from '@/lib/docSync';
 import type { SyncSnapshot } from '@/lib/cloudSync';
@@ -90,7 +90,7 @@ function App() {
     removeStudentFromRoster,
     saveLessonConfig,
     saveRecord,
-    syncQuestionFullScores,
+    syncQuestionTypesFromImport,
     updateRecordField,
     deleteRecord,
     clearRecordContent,
@@ -141,6 +141,8 @@ function App() {
   });
 
   const displaySettings = useDisplaySettings();
+  // 「生成设置」对话框（原在反馈生成页，现由学情记录 → 配置题型打开）
+  const [showGenerateSettings, setShowGenerateSettings] = useState(false);
 
   // 登录后：自举首个管理员 / 刷新成员身份
   // eslint-disable-next-line react-hooks/set-state-in-effect -- 未登录时需同步落回只读身份；已登录走异步请求后置 setState
@@ -160,81 +162,86 @@ function App() {
     };
   }, [isAuthenticated, refreshMembership]);
 
-  // 从在线表格粘贴导入：逐行合并到当前课次
+  // 从在线表格粘贴导入：
+  // ① 先按表格的分数列对齐目标课次题型配置（新增/改名/排序/满分），拿到「列名 → 题型 id」
+  // ② 再把每行分数落到对应题型上（未匹配列也能导入，无需先手工补建题型）
+  // ③ 考勤/课堂表现/作业/课后任务等选项文本归一化到系统配置项，避免下拉显示为空
   const handleImportDocRows = (
     rows: ParsedRow[],
-    target: { classId: string; lessonNumber: number }
+    target: { classId: string; lessonNumber: number },
+    scoreColumns: { name: string; suggestedFullScore: number; matchedQtId?: string }[] = []
   ) => {
     const { classId, lessonNumber } = target;
     const classData = classes[classId];
     if (!classData) { toast.error('目标班级不存在'); return; }
 
     const cfg = getLessonConfig(classId, lessonNumber);
-    const opts = cfg.attendanceOptions || [];
-    const normAttendance = (v?: string): string | undefined => {
+    const normTo = (options: string[]) => (v?: string) => {
       if (!v) return undefined;
-      if (opts.includes(v)) return v;
-      if (v.includes('准时') || v.includes('按时')) return opts.find(o => o.includes('按时') || o.includes('准时')) || v;
-      const hit = opts.find(o => v.includes(o));
-      return hit;
+      if (options.includes(v)) return v;
+      // 「准时/按时」类语义等价项优先
+      if (options.length && /准时|按时/.test(v)) {
+        const hit = options.find(o => /准时|按时/.test(o));
+        if (hit) return hit;
+      }
+      return matchOption(v, options) ?? v;
     };
 
-    // 自动补录缺失学生
+    // ① 题型配置对齐（返回 列名 → qtId）
+    let qtIdByColumn: { [name: string]: string } = {};
+    const syncable = scoreColumns.filter(c => c.name && c.suggestedFullScore >= 0);
+    if (syncable.length > 0) {
+      qtIdByColumn = syncQuestionTypesFromImport(classId, lessonNumber, syncable);
+    }
+    const skippedQtIds = new Set(cfg.questionTypes.map(qt => qt.id));
+
+    // ②③ 写记录
+    const normAttendance = normTo(cfg.attendanceOptions || []);
+    const normClassPerf = normTo(cfg.classPerformanceOptions?.length ? cfg.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS);
+    const normHomework = normTo(cfg.homeworkOptions?.length ? cfg.homeworkOptions : DEFAULT_HOMEWORK_OPTIONS);
+    const normListening = normTo(cfg.listeningOptions?.length ? cfg.listeningOptions : DEFAULT_LISTENING_OPTIONS);
+
     const missing = Array.from(new Set(rows.map(r => r.studentName).filter(n => n && !classData.students.includes(n))));
     if (missing.length > 0) addStudents(classId, missing);
 
     rows.forEach(row => {
       if (!row.studentName) return;
       const att = normAttendance(row.attendance);
+      // 分数：优先按「列名 → 新题型 id」映射；映射不到时回退到解析阶段已命中的 id
+      const scores: { [qtId: string]: number } = {};
+      Object.entries(row.scoreValues || {}).forEach(([colName, v]) => {
+        const qtId = qtIdByColumn[colName];
+        if (qtId) scores[qtId] = v;
+      });
+      Object.entries(row.scores || {}).forEach(([qtId, v]) => {
+        if (!(qtId in scores) && skippedQtIds.has(qtId)) scores[qtId] = v;
+      });
+
       saveRecord(classId, {
         studentName: row.studentName,
         lessonNumber,
         ...(row.seasons && row.seasons.length ? { seasons: row.seasons } : {}),
         ...(att ? { attendance: att } : {}),
-        ...(row.classPerformance ? { classPerformance: row.classPerformance } : {}),
-        ...(row.homeworkStatus ? { homeworkStatus: row.homeworkStatus } : {}),
-        ...(row.listeningStatus ? { listeningStatus: row.listeningStatus } : {}),
+        ...(row.classPerformance ? { classPerformance: normClassPerf(row.classPerformance) } : {}),
+        ...(row.homeworkStatus ? { homeworkStatus: normHomework(row.homeworkStatus) } : {}),
+        ...(row.listeningStatus
+          ? { listeningStatus: row.listeningStatus === '具体分数' ? '具体分数' : normListening(row.listeningStatus) }
+          : {}),
         ...(row.listeningScore !== undefined ? { listeningScore: row.listeningScore } : {}),
-        scores: row.scores || {}
+        scores
       });
     });
 
-    // 切到目标班级+课次，确保导入结果立即可见
     setCurrentClassId(classId);
     setCurrentLessonNumber(lessonNumber);
-    toast.success(`已导入 ${rows.length} 条到第${lessonNumber}课${missing.length ? `，新增 ${missing.length} 名学生` : ''}`);
+    const typeCount = Object.keys(qtIdByColumn).length;
+    toast.success(
+      `已导入 ${rows.length} 条到第${lessonNumber}课${missing.length ? `，新增 ${missing.length} 名学生` : ''}`
+      + (typeCount ? `，题型配置已按表格对齐（${typeCount} 列）` : '')
+    );
   };
 
-  const handleCreateQuestionTypes = (
-    target: { classId: string; lessonNumber: number },
-    columns: { name: string; suggestedFullScore: number }[]
-  ) => {
-    const cfg = getLessonConfig(target.classId, target.lessonNumber);
-    const existing = new Set(cfg.questionTypes.map(q => q.name));
-    const add = columns
-      .filter(c => c.name && !existing.has(c.name))
-      .map((c, i) => ({ id: 'qt_' + Date.now() + '_' + i, name: c.name, fullScore: c.suggestedFullScore || 100, order: cfg.questionTypes.length + i }));
-    if (add.length === 0) return;
-    saveLessonConfig(target.classId, target.lessonNumber, { questionTypes: [...cfg.questionTypes, ...add] });
-  };
 
-  // 导入在线表格时：把已匹配题型的满分同步为当次卷面真实满分（按列最大值推断），
-  // 并以统一分母重算该课次全部记录的总分/正确率/排名（返回实际更新数，供提示）
-  const handleSyncFullScores = (
-    target: { classId: string; lessonNumber: number },
-    updates: { qtId: string; name: string; suggestedFullScore: number }[]
-  ): number => {
-    try {
-      return syncQuestionFullScores(
-        target.classId,
-        target.lessonNumber,
-        updates.map(u => ({ qtId: u.qtId, fullScore: u.suggestedFullScore }))
-      );
-    } catch (e) {
-      console.warn('同步题型满分失败', e);
-      return 0;
-    }
-  };
 
   const handleDeleteLesson = () => {
     if (!currentClassId) { toast.error('请先选择班级'); return; }
@@ -839,7 +846,7 @@ function App() {
                   onExportExcel={handleExportRosterExcel}
                   getPublicityHTML={() => currentClass ? exportToHTML(currentClass.id, currentLessonNumber, displaySettings.settings.exportStyle) : ''}
                   onViewStudentAnalysis={handleViewStudentAnalysis}
-                  onSaveLessonConfig={handleSaveLessonConfig}
+                  onOpenConfig={() => setShowGenerateSettings(true)}
                 />
               </div>
             </div>
@@ -883,41 +890,10 @@ function App() {
               onViewStudent={handleViewStudentAnalysis}
             />
 
-            {/* 生成设置：数据可视化 / 表格字段 / 公示样式（原「系统配置」并入此处） */}
-            <div className="pt-1 space-y-3">
-              <div className="space-y-0.5">
-                <h2 className="text-lg font-semibold text-[color:var(--ink)]">生成设置</h2>
-                <p className="text-xs text-[color:var(--ink-4)]">调整反馈/学情表的字段、板块归类、显示与公示样式，保存后反馈即时生效</p>
-              </div>
-              <Tabs defaultValue="visualization" className="gap-4">
-                <TabsList className="grid w-full grid-cols-2 h-10 p-1 rounded-[var(--r-md)]">
-                  <TabsTrigger
-                    value="visualization"
-                    className="gap-1.5 text-sm rounded-[var(--r-md)] data-[state=active]:bg-[color:var(--brand)] data-[state=active]:text-white data-[state=active]:shadow-sm"
-                  >
-                    <BarChart3 className="w-4 h-4" />数据可视化
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="fields"
-                    className="gap-1.5 text-sm rounded-[var(--r-md)] data-[state=active]:bg-[color:var(--brand)] data-[state=active]:text-white data-[state=active]:shadow-sm"
-                  >
-                    <Columns3 className="w-4 h-4" />表格字段
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="visualization">
-                    <DisplaySettingsPanel display={displaySettings} />
-                </TabsContent>
-                <TabsContent value="fields">
-                    <ConfigPanel
-                      appConfig={appConfig}
-                      lessonConfig={currentLessonConfig}
-                      lessonNumber={currentLessonNumber}
-                      onSaveAppConfig={handleSaveAppConfig}
-                      onSaveLessonConfig={handleSaveLessonConfig}
-                    />
-                </TabsContent>
-              </Tabs>
-            </div>
+
+            
+
+
             </div>
           </TabsContent>
 
@@ -973,10 +949,6 @@ function App() {
                 onRefresh={refreshMembership}
               />
               {membership.admin && (
-                <CloudSyncPanel sync={cloudSync} />
-              )}
-              <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
-              {membership.admin && (
                 <>
                   {/* 顶部显眼位：推送 / 导入 并排双卡 */}
                   <DocSyncPanel
@@ -989,19 +961,31 @@ function App() {
                     getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
                     knownLessons={getAllLessons(currentClassId || undefined)}
                     onImportRows={handleImportDocRows}
-                    onCreateQuestionTypes={handleCreateQuestionTypes}
-                    onSyncFullScores={handleSyncFullScores}
                     onExportExcel={handleExportAllData}
                   />
-                  <DocSyncInfo display={displaySettings} />
+                  {/* 云同步状态与连接配置（与上方双卡互换位置） */}
+                  <CloudSyncPanel sync={cloudSync} />
                 </>
               )}
+              <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
+              {membership.admin && <DocSyncInfo display={displaySettings} />}
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
       {/* 学生导入模态框 */}
+      <GenerateSettingsDialog
+        open={showGenerateSettings}
+        onOpenChange={setShowGenerateSettings}
+        display={displaySettings}
+        appConfig={appConfig}
+        lessonConfig={currentLessonConfig}
+        lessonNumber={currentLessonNumber}
+        onSaveAppConfig={handleSaveAppConfig}
+        onSaveLessonConfig={handleSaveLessonConfig}
+      />
+
       <StudentImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}

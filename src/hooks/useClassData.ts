@@ -66,9 +66,9 @@ export const DEFAULT_CLASS_PERFORMANCE_OPTIONS = [
 
 // 全局默认选项（v3：带表情符号的正式选项集；v3 起同时按"内容"兜底迁移旧 v1 选项）
 export const DEFAULT_OPTIONS_VERSION = 3;
-const DEFAULT_ATTENDANCE_OPTIONS = ['迟到❗', '准时👍', '请假🏫', '调课👩‍'];
-const DEFAULT_HOMEWORK_OPTIONS = ['完成✅', '未做完❎', '未完成❌', '补发⚠️', '按要求❗', '错题本欠缺✍️', '笔记不过关📒'];
-const DEFAULT_LISTENING_OPTIONS = ['很棒哦👏', '未完成⭕'];
+export const DEFAULT_ATTENDANCE_OPTIONS = ['迟到❗', '准时👍', '请假🏫', '调课👩‍'];
+export const DEFAULT_HOMEWORK_OPTIONS = ['完成✅', '未做完❎', '未完成❌', '补发⚠️', '按要求❗', '错题本欠缺✍️', '笔记不过关📒'];
+export const DEFAULT_LISTENING_OPTIONS = ['很棒哦👏', '未完成⭕'];
 
 // 旧 v1 选项集（无表情）；若存储中仍是这些内容则强制升级
 const V1_ATTENDANCE = ['按时出勤', '迟到', '缺勤', '请假', '调课'];
@@ -751,6 +751,99 @@ export function useClassData() {
     });
   }, [currentLessonNumber, appConfig]);
 
+  // 导入即对齐课次题型配置：以导入表格的列为准，重建目标课次的题型；
+  // - 命中已有题型 → 沿用其 id（保住已录分数），满分按本次列数据最大值更新
+  // - 表格新增列 → 补建题型（满分取列最大值）
+  // - 表格中不存在、但本课次已有分数的题型 → 追加保留（避免历史分数变成孤儿数据）
+  // - 表格中不存在且本课次无分数的题型 → 移除
+  // 返回「列名 → 题型 id」映射，供导入方把分数落到正确的题型上。
+  const syncQuestionTypesFromImport = useCallback((
+    classId: string,
+    lessonNumber: number,
+    columns: { name: string; suggestedFullScore: number; matchedQtId?: string }[]
+  ): { [columnName: string]: string } => {
+    const mapping: { [columnName: string]: string } = {};
+    if (!columns.length) return mapping;
+    const classData = classes[classId];
+    if (!classData) return mapping;
+
+    const key = lessonNumber.toString();
+    const baseCfg = classData.lessonConfigs[key]
+      || (lessonNumber > 1 ? classData.lessonConfigs[(lessonNumber - 1).toString()] : undefined)
+      || getDefaultLessonConfig(appConfig);
+
+    // 本课次已录入的题型分数（用于判断能否安全移除某题型）
+    const usedQtIds = new Set<string>();
+    classData.records.forEach(r => {
+      if (r.lessonNumber !== lessonNumber) return;
+      Object.entries(r.scores || {}).forEach(([qtId, v]) => { if ((v || 0) !== 0) usedQtIds.add(qtId); });
+    });
+
+    const byName = new Map(baseCfg.questionTypes.map(qt => [qt.name, qt]));
+    const nextTypes: QuestionType[] = [];
+    const takenIds = new Set<string>();
+
+    columns.forEach((col, i) => {
+      const name = (col.name || '').trim();
+      if (!name) return;
+      const existing = (col.matchedQtId ? baseCfg.questionTypes.find(q => q.id === col.matchedQtId) : undefined)
+        || byName.get(name);
+      const fullScore = col.suggestedFullScore > 0 ? col.suggestedFullScore : (existing?.fullScore || 100);
+      if (existing && !takenIds.has(existing.id)) {
+        takenIds.add(existing.id);
+        nextTypes.push({ ...existing, name, fullScore, order: i });
+      } else {
+        const id = 'qt_' + Date.now() + '_' + i + '_' + Math.floor(Math.random() * 1000);
+        nextTypes.push({ id, name, fullScore, order: i });
+      }
+      mapping[name] = nextTypes[nextTypes.length - 1].id;
+    });
+
+    // 表格里没有、但本课已有分数的题型：追加保留，避免数据丢失
+    baseCfg.questionTypes.forEach(qt => {
+      if (takenIds.has(qt.id)) return;
+      if (usedQtIds.has(qt.id)) {
+        nextTypes.push({ ...qt, order: nextTypes.length });
+        mapping[qt.name] = qt.id;
+      }
+    });
+
+    const changed = nextTypes.length !== baseCfg.questionTypes.length
+      || nextTypes.some((qt, i) => {
+        const old = baseCfg.questionTypes[i];
+        return !old || old.id !== qt.id || old.name !== qt.name || (old.fullScore || 0) !== (qt.fullScore || 0);
+      });
+
+    if (changed) {
+      const updatedConfig: LessonConfig = { ...baseCfg, questionTypes: nextTypes };
+      setClasses(prev => {
+        const cd = prev[classId];
+        if (!cd) return prev;
+        // 配置变了 → 用新满分重算该课次总分/正确率并重排名次
+        const updateRecords = (records: StudentRecord[]) => rerankLesson(
+          records.map(r => {
+            if (r.lessonNumber !== lessonNumber) return r;
+            const { totalScore, correctRate } = computeTotals(r.scores, r.customValues, updatedConfig, r.attendance);
+            return (r.totalScore !== totalScore || r.correctRate !== correctRate)
+              ? { ...r, totalScore, correctRate }
+              : r;
+          }),
+          lessonNumber
+        );
+        return {
+          ...prev,
+          [classId]: {
+            ...cd,
+            lessonConfigs: { ...cd.lessonConfigs, [key]: updatedConfig },
+            records: updateRecords(cd.records)
+          }
+        };
+      });
+    }
+
+    return mapping;
+  }, [classes, appConfig]);
+
   // 同步题型真实满分并重算该课次全部记录：
   // 在线表格导入时按列数据最大值推断各题型卷面满分（如第一次课 50、第二次 35），
   // 回填到课次配置后，以统一分母（getLessonFullScore）重算总分/正确率/排名，
@@ -1262,6 +1355,7 @@ export function useClassData() {
     saveLessonConfig,
     saveRecord,
     syncQuestionFullScores,
+    syncQuestionTypesFromImport,
     updateRecordField,
     deleteRecord,
     clearRecordContent,

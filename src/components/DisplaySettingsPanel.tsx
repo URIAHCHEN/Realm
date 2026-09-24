@@ -36,12 +36,13 @@ function SectionCard(
 /** 单行设置项：左文右控件，行高与内边距统一 */
 function SettingRow({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
   return (
-    <div className="rounded-[var(--r-md)] bg-black/[0.04] px-3.5 py-2.5 flex items-center justify-between gap-3 transition-colors hover:bg-black/[0.07]">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-[color:var(--ink)]">{title}</p>
-        <p className="text-xs text-[color:var(--ink-4)]">{desc}</p>
+    <div className="rounded-[var(--r-md)] bg-black/[0.04] px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 transition-colors hover:bg-black/[0.07]">
+      {/* min-w 保证文字块不会被控件挤到逐字换行；空间不足时控件整体换到下一行 */}
+      <div className="min-w-[11rem] flex-1">
+        <p className="text-sm font-medium text-[color:var(--ink)] leading-snug">{title}</p>
+        <p className="text-xs text-[color:var(--ink-4)] leading-snug mt-0.5">{desc}</p>
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className="flex-shrink-0 ml-auto">{children}</div>
     </div>
   );
 }
@@ -54,7 +55,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
   return (
     <div className="space-y-5">
       {/* 平铺两列：主题配色 / 数据可视化 */}
-      <div className="grid gap-5 lg:grid-cols-2 items-start">
+      <div className="grid gap-5 xl:grid-cols-2 items-start">
         <SectionCard icon={<Palette className="w-4 h-4" />} title="主题配色" desc="影响全站强调色，切换即时生效">
           <div className="flex flex-wrap gap-2.5">
             {THEME_PRESETS.map(p => (
@@ -74,12 +75,12 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
           </div>
         </SectionCard>
 
-        <SectionCard icon={<BarChart3 className="w-4 h-4" />} title="数据可视化" desc="学情表内数据条与色阶规则">
+        <SectionCard icon={<BarChart3 className="w-4 h-4" />} title="数据可视化" desc="数据条与色阶规则">
           <div className="space-y-2">
             <SettingRow title="题型得分数据条" desc="得分单元格内渲染比例数据条">
               <Switch aria-label="题型得分数据条" checked={settings.showDataBars} onCheckedChange={v => update({ showDataBars: v })} />
             </SettingRow>
-            <SettingRow title="数据条规则" desc="条长按满分占比或与班均差距计算">
+            <SettingRow title="数据条规则" desc="条长按满分占比或与班均差距">
               <Select value={settings.dataBarMode} onValueChange={v => update({ dataBarMode: v as never })}>
                 <SelectTrigger className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -100,7 +101,7 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 </SelectContent>
               </Select>
             </SettingRow>
-            <SettingRow title="学习轨迹显示未选季度" desc="开启则四季都显示、未选标灰">
+            <SettingRow title="学习轨迹显示未选季度" desc="开启则四季都显示，未选标灰">
               <Switch aria-label="学习轨迹显示未选季度" checked={settings.showAllSeasons} onCheckedChange={v => update({ showAllSeasons: v })} />
             </SettingRow>
           </div>

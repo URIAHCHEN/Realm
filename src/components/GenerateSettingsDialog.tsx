@@ -27,8 +27,10 @@ export function GenerateSettingsDialog({
 }: GenerateSettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="liquid-glass-card max-w-[min(1100px,94vw)] max-h-[88vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-5 pb-3 border-b border-black/[0.06]">
+      <DialogContent
+        className="liquid-glass-card sm:max-w-[min(1280px,96vw)] w-[96vw] h-[86vh] sm:h-[84vh] overflow-hidden flex flex-col p-0 gap-0"
+      >
+        <DialogHeader className="px-7 pt-5 pb-4 border-b border-black/[0.06] flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <SlidersHorizontal className="w-4 h-4" style={{ color: 'var(--brand)' }} />
             生成设置
@@ -38,8 +40,8 @@ export function GenerateSettingsDialog({
           </p>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <Tabs defaultValue="visualization" className="gap-4">
+        <div className="flex-1 overflow-y-auto px-7 py-5">
+          <Tabs defaultValue="visualization" className="gap-5">
             <TabsList className="grid w-full grid-cols-2 h-10 p-1 rounded-[var(--r-md)]">
               <TabsTrigger
                 value="visualization"

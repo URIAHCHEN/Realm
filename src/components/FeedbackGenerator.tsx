@@ -7,12 +7,29 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
-  CircleAlert, RotateCcw, Send, Sparkles,
-} from 'lucide-react';
+  CircleAlert, RotateCcw, Send, Sparkles, Table2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
+
+/**
+ * 生成可直接粘进表格（Excel / 腾讯文档 / 金山）的 TSV：
+ * 单元格内含换行或制表符时按 RFC4180 用双引号包裹并把内部引号转义，
+ * 这样粘贴后每份反馈完整落在一个单元格内，不会把版式撑散。
+ */
+function toTsvCell(text: string): string {
+  const t = (text ?? '').replace(/\r\n/g, '\n');
+  if (/[\n\t"]/.test(t)) return '"' + t.replace(/"/g, '""') + '"';
+  return t;
+}
+
+/** 多列对照表：首行表头，之后每个学生一行 */
+function buildTsvTable(headers: string[], rows: string[][]): string {
+  const head = headers.map(toTsvCell).join('\t');
+  const body = rows.map(r => r.map(toTsvCell).join('\t')).join('\n');
+  return `${head}\n${body}`;
+}
 
 interface FeedbackGeneratorProps {
   students: string[];
@@ -198,19 +215,6 @@ export function FeedbackGenerator({
     }
   };
 
-  const handleCopyAll = async () => {
-    const ordered = students.filter(s => generated[s]);
-    if (ordered.length === 0) {
-      toast.error('还没有生成任何反馈');
-      return;
-    }
-    const text = ordered.map(s => generated[s]).join('\n\n──────────────\n\n');
-    const ok = await copyToClipboard(text);
-    if (ok) {
-      toast.success(`已复制 ${ordered.length} 份反馈（用分隔线隔开）`);
-    }
-  };
-
   const handleResetStatus = () => {
     setCopiedSet(new Set());
     toast.success('已重置复制状态');
@@ -225,11 +229,71 @@ export function FeedbackGenerator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, lessonConfig]);
 
-  const excludedAbsentCount = useMemo(
-    () => lessonRecords.filter(r => isAbsentRecord(r)).length,
+  // 自动排除缺勤/请假的学员，并在复制后明确提示，避免漏发
+  const absentNames = useMemo(
+    () => lessonRecords.filter(r => isAbsentRecord(r)).map(r => getNickname(r.studentName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [lessonRecords]
   );
+  const excludedAbsentCount = absentNames.length;
 
+  // 一键复制全班（表格）：一列学生 / 一列私发 / 一列四个一，直接粘进表格即可对照
+  const handleCopyBatchTable = async () => {
+    if (batchRows.length === 0) {
+      toast.error('没有可复制的反馈（本课暂无到课学员记录）');
+      return;
+    }
+    const rows = batchRows.map(r => {
+      const rec = recordOf(r.name);
+      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback) : '';
+      const fourInOneText = rec
+        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials)
+        : '';
+      return [getNickname(r.name), privateText, fourInOneText];
+    });
+    const text = buildTsvTable(['学生姓名', '私发反馈', '四个一反馈'], rows);
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
+      toast.success(`已复制 ${rows.length} 位学员的对照表（学生 / 私发 / 四个一）`, {
+        description: absentNames.length
+          ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}`
+          : '粘贴到表格即可按列对照；含多行的反馈会整体落在一个单元格内',
+      });
+    } else {
+      toast.error('复制失败，请手动选择复制');
+    }
+  };
+
+  // 一键复制全班（单列）：按当前模式只导出私发或只导出四个一
+  const handleCopyBatchSingle = async () => {
+    if (batchRows.length === 0) {
+      toast.error('没有可复制的反馈（本课暂无到课学员记录）');
+      return;
+    }
+    const isFour = feedbackMode === 'fourInOne';
+    const rows = batchRows.map(r => {
+      const rec = recordOf(r.name);
+      const text = rec
+        ? (isFour
+          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials)
+          : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback))
+        : '';
+      return [getNickname(r.name), text];
+    });
+    const text = buildTsvTable(['学生姓名', isFour ? '四个一反馈' : '私发反馈'], rows);
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
+      toast.success(`已复制 ${rows.length} 位学员的${isFour ? '四个一' : '私发'}反馈（单列表格）`, {
+        description: absentNames.length ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}` : undefined,
+      });
+    } else {
+      toast.error('复制失败，请手动选择复制');
+    }
+  };
+
+  // 纯文本版（分隔线）：适合直接发群里，便于逐条阅读
   const handleCopyBatch = async () => {
     if (batchRows.length === 0) {
       toast.error('没有可群发的反馈（本课暂无到课学员记录）');
@@ -239,7 +303,9 @@ export function FeedbackGenerator({
     const ok = await copyToClipboard(text);
     if (ok) {
       setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
-      toast.success(`已复制 ${batchRows.length} 份群发反馈（用分隔线隔开）`);
+      toast.success(`已复制 ${batchRows.length} 份反馈（纯文本，分隔线隔开）`, {
+        description: absentNames.length ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}` : undefined,
+      });
     } else {
       toast.error('复制失败，请手动选择复制');
     }
@@ -306,7 +372,7 @@ export function FeedbackGenerator({
               </div>
               <div>
                 <p className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</p>
-                <p className="text-xs text-[color:var(--ink-4)]">按课次配置的反馈模板一键生成全班私发话术，逐个复制发送并跟踪进度</p>
+                <p className="text-xs text-[color:var(--ink-4)]">一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，粘贴到表格即可逐列使用（缺勤自动排除）</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -314,9 +380,23 @@ export function FeedbackGenerator({
                 <Wand2 className="w-4 h-4" />
                 一键生成全班
               </Button>
-              <Button variant="outline" className="rounded-xl gap-2 h-9" onClick={handleCopyAll}>
+              <Button
+                variant="outline"
+                className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"
+                onClick={handleCopyBatchTable}
+                title="一列学生、一列私发、一列四个一；粘贴到 Excel / 腾讯文档即成对照表"
+              >
+                <Table2 className="w-4 h-4" />
+                复制对照表（三列）
+              </Button>
+              <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
+                title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
                 <Copy className="w-4 h-4" />
-                复制全部
+                仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}（两列）
+              </Button>
+              <Button variant="ghost" className="h-9 px-3 text-sm rounded-[var(--r-md)] gap-1.5 text-[color:var(--ink-4)]" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里">
+                <ClipboardList className="w-4 h-4" />
+                复制纯文本
               </Button>
               <Button variant="ghost" className="rounded-xl gap-1.5 h-9 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
                 <RotateCcw className="w-4 h-4" />

@@ -623,17 +623,17 @@ export function StudentTable({
                       <TableHead aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-20 text-[13px] font-semibold tracking-wide text-slate-500" title="按姓氏拼音排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('name')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">姓名{sortCaret('name')}</button>
                       </TableHead>
-                      {col('seasons') && <TableHead className="min-w-[116px] w-[116px] text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('seasons')}</TableHead>}
-                      {col('attendance') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('attendance')}</TableHead>}
-                      {col('classPerformance') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('classPerformance')}</TableHead>}
-                      {col('homework') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('homework')}</TableHead>}
-                      {col('listening') && <TableHead className="w-28 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('listening')}</TableHead>}
+                      {col('seasons') && <TableHead className="min-w-[116px] w-[116px] text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('seasons')}</TableHead>}
+                      {col('attendance') && <TableHead className="w-24 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('attendance')}</TableHead>}
+                      {col('classPerformance') && <TableHead className="w-24 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('classPerformance')}</TableHead>}
+                      {col('homework') && <TableHead className="w-24 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('homework')}</TableHead>}
+                      {col('listening') && <TableHead className="w-28 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('listening')}</TableHead>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => (
-                        <TableHead key={qt.id} aria-sort={sortKey === `qt:${qt.id}` ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-xs font-bold whitespace-normal break-all leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`}>
+                        <TableHead key={qt.id} aria-sort={sortKey === `qt:${qt.id}` ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="min-w-[64px] text-center text-[13px] font-semibold tracking-wide text-slate-500 whitespace-nowrap" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`}>
                           <button type="button" onClick={() => toggleSort(`qt:${qt.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(`qt:${qt.id}`); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">{qt.name}{sortCaret(`qt:${qt.id}`)}</button>
                         </TableHead>
                       ))}
-                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold break-all leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
+                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-[13px] font-semibold tracking-wide text-slate-500 whitespace-nowrap" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
                       <TableHead aria-sort={sortKey === 'total' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500" title="点击排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('total')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('total'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">总分{sortCaret('total')}</button>
                       </TableHead>

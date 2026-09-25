@@ -21,51 +21,51 @@ interface Palette {
 }
 
 const PALETTES: Record<ExportStyle, Palette> = {
-  // 模板同款蓝色系
+  // 干净中性底 + 品牌蓝点缀：避免大面积半透明蓝造成的"浑浊感"
   gradient: {
-    pageBg: 'linear-gradient(135deg, #e8f1fd 0%, #d6e6fa 100%)',
+    pageBg: 'linear-gradient(180deg, #f3f6fa 0%, #eef2f8 100%)',
     cardBg: '#ffffff',
-    bannerBg: 'linear-gradient(135deg, #3b8beb 0%, #1e5fd6 100%)',
+    bannerBg: 'linear-gradient(135deg, #3b7ff0 0%, #1e5fd6 100%)',
     bannerText: '#ffffff',
-    headBg: '#1e5fd6',
+    headBg: '#2b6be4',
     headText: '#ffffff',
-    text: '#1f2937',
-    muted: '#64748b',
-    accent: '#2563eb',
-    accentSoft: 'rgba(37,99,235,0.35)',
-    rowBorder: '#e2e8f0',
-    altRowBg: '#f7fafd',
-    track: 'rgba(37,99,235,0.10)',
+    text: '#111827',
+    muted: '#6b7280',
+    accent: '#1e5fd6',
+    accentSoft: 'rgba(30,95,214,0.10)',
+    rowBorder: '#eef1f5',
+    altRowBg: '#fafbfd',
+    track: '#f4f6fa',
   },
   minimal: {
-    pageBg: '#f5f6f8',
+    pageBg: '#f6f7f9',
     cardBg: '#ffffff',
-    bannerBg: '#f8fafc',
+    bannerBg: '#ffffff',
     bannerText: '#111827',
-    headBg: '#334155',
-    headText: '#ffffff',
-    text: '#1f2937',
+    headBg: '#f3f5f8',
+    headText: '#374151',
+    text: '#111827',
     muted: '#6b7280',
     accent: '#0a84ff',
-    accentSoft: 'rgba(10,132,255,0.28)',
-    rowBorder: '#e5e7eb',
-    altRowBg: '#f9fafb',
-    track: 'rgba(10,132,255,0.10)',
+    accentSoft: 'rgba(10,132,255,0.10)',
+    rowBorder: '#edf0f4',
+    altRowBg: '#fafbfc',
+    track: '#f4f6fa',
   },
   dark: {
-    pageBg: 'linear-gradient(160deg, #1e293b 0%, #0f172a 100%)',
-    cardBg: '#1e293b',
-    bannerBg: 'rgba(255,255,255,0.06)',
+    pageBg: 'linear-gradient(180deg, #16202f 0%, #0f172a 100%)',
+    cardBg: '#1b2534',
+    bannerBg: '#1b2534',
     bannerText: '#f1f5f9',
-    headBg: 'rgba(255,255,255,0.10)',
-    headText: '#f1f5f9',
+    headBg: 'rgba(255,255,255,0.07)',
+    headText: '#e5eaf3',
     text: '#e2e8f0',
     muted: '#94a3b8',
     accent: '#7dd3fc',
-    accentSoft: 'rgba(125,211,252,0.30)',
-    rowBorder: 'rgba(255,255,255,0.08)',
-    altRowBg: 'rgba(255,255,255,0.03)',
-    track: 'rgba(125,211,252,0.12)',
+    accentSoft: 'rgba(125,211,252,0.14)',
+    rowBorder: 'rgba(255,255,255,0.07)',
+    altRowBg: 'rgba(255,255,255,0.025)',
+    track: 'rgba(255,255,255,0.05)',
   },
 };
 
@@ -91,18 +91,26 @@ const homeworkEmoji = (status: string): string => {
 };
 
 // 成长轨迹标签颜色
+// 底色用浅淡色块、文字用更深一档的同色，保证小字号下也看得清
 const SEASON_COLORS: Record<string, string> = {
   '暑': '#ff9f43',
   '秋': '#3b82f6',
   '寒': '#06b6d4',
   '春': '#10b981',
 };
+const SEASON_TEXT_COLORS: Record<string, string> = {
+  '暑': '#c2600a',
+  '秋': '#1d4ed8',
+  '寒': '#0e7490',
+  '春': '#047857',
+};
 
 const seasonChips = (seasons: string[]): string => {
   if (!seasons || seasons.length === 0) return '<span style="color:#cbd5e1">-</span>';
   return seasons.map(s => {
     const color = SEASON_COLORS[s] || '#94a3b8';
-    return `<span style="display:inline-block;width:26px;padding:2px 0;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:${color};text-align:center">${s}</span>`;
+    const textColor = SEASON_TEXT_COLORS[s] || color;
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;margin:0 2px;border-radius:7px;font-size:12.5px;font-weight:700;line-height:1;color:${textColor};background:${color}12;border:1px solid ${color}2e">${s}</span>`;
   }).join('');
 };
 
@@ -119,11 +127,10 @@ function esc(v: unknown): string {
 }
 
 // 统一规格的分数徽章：固定宽度保证所有列整齐
-function scoreBadge(pct: number, score: string | number, p: Palette, color?: string): string {
-  const w = Math.max(0, Math.min(100, pct));
-  const base = color || p.accent;
-  const soft = `${base}2e`;
-  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:58px;padding:3px 0;border-radius:8px;font-variant-numeric:tabular-nums;font-weight:600;background:linear-gradient(90deg,${soft} ${w}%,${p.track} ${w}%)">${score}</span>`;
+function scoreBadge(pct: number, score: string | number, color?: string): string {
+  // 语义色 + 极浅同色底（不再用半透明蓝铺满，避免整张图发灰发紫）
+  const tone = color || heat(pct);
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:52px;padding:3px 8px;border-radius:8px;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px;color:${tone};background:${tone}14;border:1px solid ${tone}26">${score}</span>`;
 }
 
 export function buildPublicityHTML(
@@ -168,7 +175,7 @@ export function buildPublicityHTML(
       const glow = rank === 1 ? '#f0a92c' : rank === 2 ? '#94a3b8' : '#cd7f45';
       return `<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-weight:800;background:${grad};color:#ffffff;box-shadow:0 2px 7px ${glow}66;font-size:14px">${rank}</span>`;
     }
-    return `<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-weight:600;background:${style === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};color:${p.muted};font-size:13px">${rank}</span>`;
+    return `<span style="font-variant-numeric:tabular-nums;font-weight:600;color:${p.muted};font-size:13.5px">${rank}</span>`;
   };
 
   // 统一单元格样式：全居中、固定行高、底部细分隔线；溢出裁剪，保证固定列宽不错位
@@ -179,7 +186,6 @@ export function buildPublicityHTML(
     const rankVal = r.rank || i + 1;
     // 正确率：<80 红色，≥80 绿色
     const rateColor = ratePct < 80 ? '#dc2626' : (style === 'dark' ? p.text : '#16a34a');
-    const totalBg = style === 'dark' ? 'rgba(34,197,94,0.18)' : '#e8f8ee';
     return `<tr style="${i % 2 === 1 ? 'background:' + p.altRowBg + ';' : ''}">
       <td style="${td}">${rankBadge(rankVal)}</td>
       <td style="${td}font-weight:600">${esc(getNickname(r.studentName))}</td>
@@ -189,28 +195,28 @@ export function buildPublicityHTML(
       <td style="${td}white-space:nowrap;font-size:13px">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
       ${questionTypes.map(qt => {
         const score = r.scores[qt.id] || 0;
-        return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score, p)}</td>`;
+        return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score)}</td>`;
       }).join('')}
       ${customFields.map(cf => {
         const v = r.customValues?.[cf.id];
         const disp = (v === '' || v == null) ? '-' : esc(cf.kind === 'number' ? `${v}` : String(v));
         return `<td style="${td}${cf.kind === 'number' ? 'font-weight:600' : 'font-size:13px'}">${disp}</td>`;
       }).join('')}
-      <td style="${td}"><span style="display:inline-flex;align-items:center;justify-content:center;width:76px;padding:3px 0;border-radius:8px;font-weight:800;font-variant-numeric:tabular-nums;background:${totalBg};color:#16a34a">${r.totalScore}<span style="font-weight:500;font-size:11px">/${fullScore}</span></span></td>
+      <td style="${td}"><span style="font-weight:800;font-variant-numeric:tabular-nums;color:${style === 'dark' ? p.text : '#1e5fd6'};font-size:14.5px">${r.totalScore}</span><span style="font-weight:500;font-size:11px;color:${p.muted}">/${fullScore}</span></td>
       <td style="${td}font-weight:700;color:${rateColor}">${ratePct}%</td>
     </tr>`;
   }).join('');
 
   // 底部班级平均分行
-  const avgRow = `<tr style="background:${style === 'dark' ? 'rgba(37,99,235,0.15)' : '#eef4fd'};font-weight:700">
-      <td style="${td}" colspan="2">📊 班级平均</td>
+  const avgRow = `<tr style="background:${style === 'dark' ? 'rgba(255,255,255,0.06)' : '#f6f8fb'};font-weight:700">
+      <td style="${td}" colspan="2">班级平均</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
-      ${questionTypes.map(qt => `<td style="${td}">${scoreBadge(100, avgQtScores[qt.id] || 0, p, '#2563eb')}</td>`).join('')}
+      ${questionTypes.map(qt => `<td style="${td}">${scoreBadge(100, avgQtScores[qt.id] || 0, '#2563eb')}</td>`).join('')}
       ${customFields.map(cf => `<td style="${td}">${cf.kind === 'number' ? (avgCustomScores[cf.id] || 0) : '-'}</td>`).join('')}
-      <td style="${td}"><span style="color:#16a34a">${avgTotal}</span><span style="font-weight:500;font-size:11px;color:${p.muted}">/${fullScore}</span></td>
+      <td style="${td}"><span style="color:${style === 'dark' ? p.text : '#1e5fd6'}">${avgTotal}</span><span style="font-weight:500;font-size:11px;color:${p.muted}">/${fullScore}</span></td>
       <td style="${td}color:${avgRate < 80 ? '#dc2626' : '#16a34a'}">${avgRate}%</td>
     </tr>`;
 
@@ -233,15 +239,16 @@ export function buildPublicityHTML(
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif; background: ${p.pageBg}; min-height: 100vh; padding: 28px; color: ${p.text}; }
-  .container { width: fit-content; max-width: 100%; margin: 0 auto; background: ${p.cardBg}; border-radius: 22px; overflow: hidden; box-shadow: 0 18px 52px rgba(30,95,214,0.18); }
+  .container { width: fit-content; max-width: 100%; margin: 0 auto; background: ${p.cardBg}; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 36px rgba(17,24,39,0.10), 0 1px 0 rgba(17,24,39,0.04); }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .accent { height: 5px; background: linear-gradient(90deg, ${p.accent}, ${p.headBg}); }
   .banner { background: ${p.bannerBg}; color: ${p.bannerText}; padding: 28px 34px 24px; text-align: center; }
-  .banner h1 { font-size: 30px; font-weight: 800; letter-spacing: 3px; margin-bottom: 8px; }
+  .banner h1 { font-size: 26px; font-weight: 800; letter-spacing: 1.5px; margin-bottom: 6px; }
   .banner p { opacity: ${style === 'gradient' ? '0.92' : '0.72'}; font-size: 14.5px; font-weight: 500; }
   .banner .meta { display:inline-block; margin-top:10px; padding:3px 12px; border-radius:999px; font-size:11.5px; letter-spacing:0.3px; background:${style === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.22)'}; opacity:0.9; }
   .content { padding: 18px 18px 16px; overflow-x: auto; }
   table { width: ${tableWidth}px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
-  th { background: ${p.headBg}; color: ${p.headText}; padding: 12px 6px; font-weight: 700; white-space: nowrap; font-size: 13px; letter-spacing: 0.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+  th { background: ${p.headBg}; color: ${p.headText}; padding: 11px 6px; font-weight: 700; white-space: nowrap; font-size: 12.5px; letter-spacing: 0.3px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
   thead th:first-child { border-radius: 10px 0 0 0; }
   thead th:last-child { border-radius: 0 10px 0 0; }
   tbody tr { transition: none; }

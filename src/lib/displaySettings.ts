@@ -13,6 +13,8 @@ export interface DisplaySettings {
   heatmapMode: HeatmapMode;
   /** 学习轨迹（四季）列：true=全部显示未选标灰；false=仅显示已选 */
   showAllSeasons: boolean;
+  /** 自动隐藏「本课无数据」的题型/自定义列：导入的表格里没出现的题就不用占一列 */
+  autoHideEmptyColumns: boolean;
   hiddenColumns: string[];
   syncIntervalSec: number;
   exportStyle: ExportStyle;
@@ -24,7 +26,7 @@ export const COLUMN_LABELS: { id: string; label: string; always?: boolean }[] = 
   { id: 'seasons', label: '学习轨迹' },
   { id: 'attendance', label: '考勤' },
   { id: 'classPerformance', label: '课堂表现' },
-  { id: 'homework', label: '书面作业' },
+  { id: 'homework', label: '课堂练习' },
   { id: 'listening', label: '课后任务' },
   { id: 'note', label: '备注' },
   { id: 'scores', label: '题型得分', always: true },
@@ -51,6 +53,7 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showRankHeatmap: true,
   heatmapMode: 'rank',
   showAllSeasons: true,
+  autoHideEmptyColumns: true,
   hiddenColumns: [],
   syncIntervalSec: 3,
   exportStyle: 'gradient',

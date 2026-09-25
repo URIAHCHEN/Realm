@@ -149,7 +149,30 @@ export function StudentTable({
   const [bulkQtId, setBulkQtId] = useState('');
   const { settings } = useDisplaySettings();
   const col = (id: string) => isColumnVisible(settings, id);
-  const customFields = lessonConfig.customFields || [];
+  const customFields = useMemo(() => lessonConfig.customFields || [], [lessonConfig.customFields]);
+
+  // 自动隐藏「本课无数据」的列：导入的表格没出现的题型/自定义列不再占位置。
+  // 安全阀：若整节课所有题型都为空（例如新课次刚建、还没录分），则照常全部显示，
+  // 否则会把录分入口也藏起来。
+  const visibleQuestionTypes = useMemo(() => {
+    const all = lessonConfig.questionTypes || [];
+    if (!settings.autoHideEmptyColumns || records.length === 0) return all;
+    const nonEmpty = all.filter(qt => records.some(r => (r.scores?.[qt.id] ?? 0) !== 0));
+    return nonEmpty.length > 0 ? nonEmpty : all;
+  }, [settings.autoHideEmptyColumns, lessonConfig.questionTypes, records]);
+
+  const visibleCustomFields = useMemo(() => {
+    if (!settings.autoHideEmptyColumns || records.length === 0) return customFields;
+    const hasValue = (cfId: string) => records.some(r => {
+      const v = r.customValues?.[cfId];
+      if (v === undefined || v === null) return false;
+      if (typeof v === 'number') return v !== 0;
+      const t = String(v).trim();
+      return t !== '' && t !== '0';
+    });
+    const nonEmpty = customFields.filter(cf => hasValue(cf.id));
+    return nonEmpty.length > 0 ? nonEmpty : customFields;
+  }, [settings.autoHideEmptyColumns, customFields, records]);
 
   // 自定义列标题（留空回退默认名）
   const columnLabel = (key: string) => {
@@ -611,12 +634,12 @@ export function StudentTable({
                       {col('classPerformance') && <TableHead className="w-24 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('classPerformance')}</TableHead>}
                       {col('homework') && <TableHead className="w-24 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('homework')}</TableHead>}
                       {col('listening') && <TableHead className="w-28 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('listening')}</TableHead>}
-                      {col('scores') && lessonConfig.questionTypes.map(qt => (
+                      {col('scores') && visibleQuestionTypes.map(qt => (
                         <TableHead key={qt.id} aria-sort={sortKey === `qt:${qt.id}` ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="min-w-[64px] text-center text-[13px] font-semibold tracking-wide text-slate-500 whitespace-nowrap" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`}>
                           <button type="button" onClick={() => toggleSort(`qt:${qt.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(`qt:${qt.id}`); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">{qt.name}{sortCaret(`qt:${qt.id}`)}</button>
                         </TableHead>
                       ))}
-                      {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-[13px] font-semibold tracking-wide text-slate-500 whitespace-nowrap" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
+                      {visibleCustomFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-[13px] font-semibold tracking-wide text-slate-500 whitespace-nowrap" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
                       <TableHead aria-sort={sortKey === 'total' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500" title="点击排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('total')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('total'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">总分{sortCaret('total')}</button>
                       </TableHead>
@@ -760,7 +783,7 @@ export function StudentTable({
                             </div>
                           </TableCell>
                           )}
-                          {col('scores') && lessonConfig.questionTypes.map(qt => {
+                          {col('scores') && visibleQuestionTypes.map(qt => {
                             const score = record?.scores?.[qt.id] || 0;
                             const avgScore = stats.avgScores[qt.id] || 0;
                             const isWeak = isQtWeak(qt, score, avgScore);
@@ -793,7 +816,7 @@ export function StudentTable({
                               </TableCell>
                             );
                           })}
-                          {customFields.map(cf => (
+                          {visibleCustomFields.map(cf => (
                             <TableCell key={cf.id} className="text-center text-base">
                               {cf.kind === 'number' ? (
                                 <ScoreInput
@@ -897,7 +920,7 @@ export function StudentTable({
                       {col('classPerformance') && <TableCell className="bg-white"></TableCell>}
                       {col('homework') && <TableCell className="bg-white"></TableCell>}
                       {col('listening') && <TableCell className="bg-white"></TableCell>}
-                      {col('scores') && lessonConfig.questionTypes.map(qt => (
+                      {col('scores') && visibleQuestionTypes.map(qt => (
                         <TableCell key={qt.id} className="text-center text-sm">
                           <span className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold text-[color:var(--brand)] bg-white/70 border border-[rgb(var(--brand-rgb)/0.2)]">
                             {(stats.avgScores[qt.id] ?? 0).toFixed(1)}

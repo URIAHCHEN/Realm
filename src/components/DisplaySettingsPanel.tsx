@@ -101,6 +101,9 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
                 </SelectContent>
               </Select>
             </SettingRow>
+            <SettingRow title="自动隐藏空列" desc="本课无数据的题型/自定义列自动收起">
+              <Switch aria-label="自动隐藏空列" checked={settings.autoHideEmptyColumns} onCheckedChange={v => update({ autoHideEmptyColumns: v })} />
+            </SettingRow>
             <SettingRow title="学习轨迹显示未选季度" desc="开启则四季都显示，未选标灰">
               <Switch aria-label="学习轨迹显示未选季度" checked={settings.showAllSeasons} onCheckedChange={v => update({ showAllSeasons: v })} />
             </SettingRow>

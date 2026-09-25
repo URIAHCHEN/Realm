@@ -549,7 +549,8 @@ export function FeedbackGenerator({
               <div className="flex flex-wrap gap-1.5">
                 {(isFourInOne ? FOUR_IN_ONE_VARIABLES : [
                   { key: '【学生昵称】', desc: '' }, { key: '【学生短昵称】', desc: '' }, { key: '【课次】', desc: '' },
-                  { key: '【考勤】', desc: '' }, { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
+                  { key: '【考勤】', desc: '' }, { key: '【课堂表现】', desc: '' },
+                  { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
                   { key: '【成绩详情】', desc: '' }, { key: '【总分】', desc: '' }, { key: '【满分】', desc: '' },
                   { key: '【排名】', desc: '' }, { key: '【正确率】', desc: '' }, { key: '【薄弱项】', desc: '' },
                   { key: '【作业内容】', desc: '' },

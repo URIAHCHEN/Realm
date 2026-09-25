@@ -11,6 +11,7 @@ import type {
 import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { migrateLegacyOption } from '@/lib/optionMatch';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
 import { toast } from 'sonner';
 
@@ -90,6 +91,7 @@ const defaultAppConfig: AppConfig = {
 跟您同步一下孩子第【课次】课的情况：
 
 🏫 考勤：【考勤】
+🙋 课堂表现：【课堂表现】
 📝 作业：【作业】
 🎙️ 课后任务：【课后任务】
 
@@ -238,6 +240,38 @@ function recomputeAllRates(classes: { [key: string]: Class }, appConfig: AppConf
 }
 
 // 历史数据规范化：把「请假」记录的已计总分/正确率清零并重排各课次名次（旧数据加载/云端导入时执行）
+// 历史选项值迁移：把记录里旧版选项（按时出勤/超赞完成/圆满完成/没带/专注高效…）
+// 换成现行选项，避免下拉框出现"看得见却选不中"的幽灵值（与最新选项集保持一致）
+function migrateLegacyRecordOptions(all: { [key: string]: Class }): { [key: string]: Class } {
+  let changed = false;
+  const next: { [key: string]: Class } = {};
+  Object.entries(all).forEach(([cid, cls]) => {
+    if (!cls?.records?.length) { next[cid] = cls; return; }
+    let clsChanged = false;
+    const records = cls.records.map(r => {
+      const attendance = migrateLegacyOption(r.attendance);
+      const homeworkStatus = migrateLegacyOption(r.homeworkStatus);
+      const listeningStatus = migrateLegacyOption(r.listeningStatus);
+      const classPerformance = migrateLegacyOption(r.classPerformance);
+      if (
+        attendance === r.attendance && homeworkStatus === r.homeworkStatus
+        && listeningStatus === r.listeningStatus && classPerformance === r.classPerformance
+      ) return r;
+      clsChanged = true;
+      return {
+        ...r,
+        ...(attendance !== undefined ? { attendance } : {}),
+        ...(homeworkStatus !== undefined ? { homeworkStatus } : {}),
+        ...(listeningStatus !== undefined ? { listeningStatus } : {}),
+        ...(classPerformance !== undefined ? { classPerformance } : {}),
+      } as StudentRecord;
+    });
+    if (clsChanged) changed = true;
+    next[cid] = clsChanged ? { ...cls, records } : cls;
+  });
+  return changed ? next : all;
+}
+
 function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
   let changed = false;
   const next: { [key: string]: Class } = {};
@@ -277,7 +311,7 @@ export function useClassData() {
     const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
     if (saved && typeof saved === 'object') {
       // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
-      return recomputeAllRates(normalizeLeaveTotals(saved), appConfig);
+      return recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(saved)), appConfig);
     }
     // 初始化示例数据
     return {
@@ -679,14 +713,19 @@ export function useClassData() {
         const { totalScore, correctRate } = computeTotals(scores, record.customValues, lessonConfig, record.attendance);
 
         const newRecord: StudentRecord = {
+          // 先承载调用方传入的全部字段（课堂表现 / 备注 / 调课原因 / 自定义列…），
+          // 否则逐字段手写会静默丢弃未列出的字段——导入"课堂表现"丢失就是由此而来
+          ...record,
           id: generateId(),
           studentName: record.studentName || '',
           lessonNumber: record.lessonNumber || currentLessonNumber,
           seasons: record.seasons || [],
-          attendance: record.attendance || '按时出勤',
-          homeworkStatus: record.homeworkStatus || '圆满完成',
-          listeningStatus: record.listeningStatus || '具体分数',
-          listeningScore: record.listeningScore || 0,
+          // 未提供的状态一律留空，不再塞入旧版选项（原为 '按时出勤' / '圆满完成' / '具体分数'，
+          // 这些值已在新版选项中废弃，写进去会导致下拉框显示成"看得见但选不中"的幽灵值）
+          attendance: record.attendance ?? '',
+          homeworkStatus: record.homeworkStatus ?? '',
+          listeningStatus: record.listeningStatus ?? '',
+          listeningScore: record.listeningScore ?? 0,
           scores,
           customValues: record.customValues || {},
           totalScore,
@@ -1305,7 +1344,7 @@ export function useClassData() {
     const mergedAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
     setAppConfig(mergedAppConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率
-    setClasses(recomputeAllRates(normalizeLeaveTotals(data?.classes || {}), mergedAppConfig));
+    setClasses(recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(data?.classes || {})), mergedAppConfig));
     setNicknames(data?.nicknames || {});
     setSchoolScores(data?.schoolScores || {});
   }, []);

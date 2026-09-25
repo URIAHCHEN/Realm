@@ -57,3 +57,28 @@ export function resolveOptionForDisplay(
   if (matched) return { value: matched };
   return { value: raw, raw };
 }
+
+// ── 历史数据清理：旧版（v1/v2）选项 → 现行选项 ──
+// 这些值已被新版选项集废弃，但仍可能存在于历史记录或旧导入数据中；
+// 它们会导致下拉框"显示成幽灵值、但选项里选不中"，因此加载时统一迁移。
+const LEGACY_ALIASES: Record<string, string> = {
+  // 考勤
+  '按时出勤': '准时👍',
+  '迟到': '迟到❗',
+  '请假': '请假🏫',
+  '调课': '调课👩',
+  // 作业
+  '超赞完成': '完成✅',
+  '圆满完成': '完成✅',
+  '没带': '按要求❗',
+  // 课堂表现（旧四项 → 现行选项，语义最接近的一项）
+  '专注高效': '认真上课， 积极参与棒👍',
+  '积极互动': '认真积极， 继续保持呀🤗',
+};
+
+/** 把单个选项文本迁移到现行选项；无可迁移时原样返回 */
+export function migrateLegacyOption(value: string | undefined | null): string | undefined {
+  const raw = (value || '').trim();
+  if (!raw) return value == null ? undefined : raw;
+  return LEGACY_ALIASES[raw] ?? raw;
+}

@@ -81,6 +81,8 @@ export interface ParseResult {
   fullScoreUpdates: { qtId: string; name: string; suggestedFullScore: number }[];
   /** 按表格顺序排列的全部分数列（含未匹配列），导入端用它对齐课次题型配置 */
   scoreColumns: ScoreColumn[];
+  /** 表头「总分（N）」声明的卷面总分，用于校准各列满分 */
+  declaredTotalScore?: number;
 }
 
 function splitLine(line: string): string[] {
@@ -99,6 +101,69 @@ function splitLine(line: string): string[] {
 }
 
 const norm = (s: string) => s.replace(/\s+/g, '').replace(/[（）()]/g, '');
+
+// 常用题型满分档位（学校常用卷面）：名称命中时优先采用，
+// 因为"列内最大值"在没人拿满分时会低估（如语篇填词全班最高 2 分，实际满分 5 分）。
+const CANONICAL_FULL_SCORES: Record<string, number> = {
+  '语法选择': 15, '完形填空': 10, '阅读理解': 10, '语篇填词': 5, '完成句子': 10,
+  '语法填空': 10, '单项选择': 5,
+};
+
+/**
+ * 推断各分数列的真实满分，三重依据按"证据强度"协同：
+ *   ① 数据最大值（真实卷面下限）
+ *   ② 常用档位表（名称命中时给出常见值，弥补"无人满分"造成的低估）
+ *   ③ 表头「总分（N）」——最强的校准信号：各列之和必须等于 N
+ * 返回与传入列一一对应的满分数组。
+ */
+function inferFullScores(
+  cols: { name: string; colMax: number; configFullScore?: number }[],
+  declaredTotal?: number
+): number[] {
+  const canonOf = (name: string) => CANONICAL_FULL_SCORES[norm(name)] ?? 0;
+  const base = cols.map(c => {
+    const cfg = c.configFullScore && c.configFullScore > 0 ? c.configFullScore : 0;
+    return Math.max(cfg, canonOf(c.name), c.colMax > 0 ? c.colMax : 0) || 1;
+  });
+  if (!declaredTotal || declaredTotal <= 0) return base;
+
+  let sum = base.reduce((a, b) => a + b, 0);
+  const eq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+  if (eq(sum, declaredTotal)) return base;
+
+  if (sum > declaredTotal) {
+    // 高估：把高于"数据最大值"的部分回收（优先回收增量最大的列，且不低于数据最大值）
+    const cands = cols
+      .map((c, i) => ({ i, over: base[i] - (c.colMax > 0 ? c.colMax : base[i]) }))
+      .filter(x => x.over > 0.001)
+      .sort((a, b) => b.over - a.over);
+    for (const x of cands) {
+      if (sum <= declaredTotal) break;
+      const shrink = Math.min(x.over, sum - declaredTotal);
+      base[x.i] -= shrink;
+      sum -= shrink;
+    }
+    return base;
+  }
+
+  // 低估：优先把"常用档位/配置"高于当前值的列提上去（增量大的先补），逼近表头总分
+  const ups = cols
+    .map((c, i) => {
+      const cfg = c.configFullScore || 0;
+      const target = Math.max(cfg, canonOf(c.name), c.colMax || 0);
+      return { i, gain: target - base[i] };
+    })
+    .filter(x => x.gain > 0.001)
+    .sort((a, b) => b.gain - a.gain);
+  for (const u of ups) {
+    if (sum >= declaredTotal) break;
+    const add = Math.min(u.gain, declaredTotal - sum);
+    base[u.i] += add;
+    sum += add;
+  }
+  return base;
+}
+
 
 // 按表头名匹配列：支持 排名/姓名/考勤/作业(书面作业)/课后任务/题型名/总分/正确率
 export function parseClipboardTable(
@@ -212,6 +277,16 @@ export function parseClipboardTable(
 
   // 未匹配、但数据多为数值的列 → 候选新题型（usedIdx 已含姓名/固定列/已匹配题型）
   const rawHeaders = splitLine(lines[0]);
+
+  // 表头「总分（50）」→ 50：这是校准各列满分最可靠的依据
+  const declaredTotalScore = (() => {
+    const i = rawHeaders.findIndex(h => norm(h).includes('总分'));
+    if (i < 0) return undefined;
+    const m = rawHeaders[i].match(/(\d+(?:\.\d+)?)/);
+    const n = m ? parseFloat(m[1]) : NaN;
+    return !isNaN(n) && n > 0 ? n : undefined;
+  })();
+
   const dataLines = lines.slice(1);
   const unmatchedColumns: { name: string; suggestedFullScore: number }[] = [];
   const unmatchedIdx: { name: string; idx: number; suggestedFullScore: number }[] = [];
@@ -263,17 +338,25 @@ export function parseClipboardTable(
     ...unmatchedIdx.map(({ name, idx, suggestedFullScore }) => ({ idx, name, suggestedFullScore })),
   ].sort((a, b) => a.idx - b.idx);
 
-  const scoreColumns: ScoreColumn[] = allColIdx.map(col => {
+  const colStats = allColIdx.map(col => {
     const nums = dataLines
       .map(l => parseFloat((splitLine(l)[col.idx] || '').trim()))
       .filter(n => !isNaN(n) && n >= 0);
-    const byData = nums.length ? Math.max(1, Math.ceil(Math.max(...nums) * 100) / 100) : 0;
+    const colMax = nums.length ? Math.max(...nums) : 0;
+    const cfgQt = col.matchedQtId ? questionTypes.find(q => q.id === col.matchedQtId) : undefined;
     return {
       name: col.name,
       matchedQtId: col.matchedQtId,
-      suggestedFullScore: byData || col.suggestedFullScore || 1,
+      colMax: colMax > 0 ? Math.ceil(colMax * 2) / 2 : 0,   // 向上取到 0.5 的整数倍
+      configFullScore: cfgQt?.fullScore || col.suggestedFullScore || 0,
     };
   });
+  const inferred = inferFullScores(colStats, declaredTotalScore);
+  const scoreColumns: ScoreColumn[] = colStats.map((c, i) => ({
+    name: c.name,
+    matchedQtId: c.matchedQtId,
+    suggestedFullScore: inferred[i],
+  }));
 
-  return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates, scoreColumns };
+  return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates, scoreColumns, declaredTotalScore };
 }

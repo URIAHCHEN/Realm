@@ -44,6 +44,11 @@ export function generatePersonalFeedback(
   // 生成短昵称
   const shortNickname = generateShortNickname(nickname);
   
+  // 课堂表现缺失时，删掉该行（避免留下"🙋 课堂表现："这种空标签）
+  if (!record.classPerformance || !String(record.classPerformance).trim()) {
+    template = template.replace(/.*【课堂表现】.*\n?/g, '');
+  }
+
   // 处理薄弱项 - 如果没有薄弱项，删除包含【薄弱项】的行
   if (weakPoints.length === 0) {
     // 删除包含【薄弱项】的整行

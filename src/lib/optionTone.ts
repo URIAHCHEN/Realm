@@ -44,3 +44,15 @@ export function optionToneStyle(value: string | undefined | null): string {
   const t = optionTone(value);
   return `color:${t.fg};font-weight:600`;
 }
+
+export type ToneLevel = 'good' | 'warn' | 'bad' | 'info' | 'muted';
+
+/** 语义分级：用于「作业优秀率」这类需要按语义聚合的统计（不再逐个硬编码选项文案） */
+export function optionToneLevel(value: string | undefined | null): ToneLevel {
+  const t = optionTone(value);
+  if (t === TONES.good) return 'good';
+  if (t === TONES.warn) return 'warn';
+  if (t === TONES.bad) return 'bad';
+  if (t === TONES.info) return 'info';
+  return 'muted';
+}

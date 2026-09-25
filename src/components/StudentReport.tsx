@@ -53,6 +53,7 @@ import {
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { optionToneLevel } from '@/lib/optionTone';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -74,13 +75,34 @@ interface StudentReportProps {
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+// 分数段按「正确率」分档：各次小测满分不同（50/57/…），按绝对分数分档会让所有人挤在低档；
+// 正确率 = 得分 / 该课次满分，跨课次可直接比较（用户反馈的核心问题）
 const SCORE_RANGES = [
-  { label: '90-100', min: 90, max: 100, color: '#10b981' },
-  { label: '80-89', min: 80, max: 89, color: '#3b82f6' },
-  { label: '70-79', min: 70, max: 79, color: '#f59e0b' },
-  { label: '60-69', min: 60, max: 69, color: '#f97316' },
-  { label: '0-59', min: 0, max: 59, color: '#ef4444' }
+  { label: '90% 以上', min: 90, max: 101, color: '#10b981' },
+  { label: '80-89%', min: 80, max: 89.999, color: '#3b82f6' },
+  { label: '70-79%', min: 70, max: 79.999, color: '#f59e0b' },
+  { label: '60-69%', min: 60, max: 69.999, color: '#f97316' },
+  { label: '60% 以下', min: 0, max: 59.999, color: '#ef4444' }
 ];
+
+/** 语义分级徽章样式（用于概况卡与列表配色） */
+const TONE_BADGE: Record<string, string> = {
+  good: 'bg-green-100 text-green-700',
+  warn: 'bg-yellow-100 text-yellow-700',
+  bad: 'bg-red-100 text-red-700',
+  info: 'bg-blue-100 text-blue-700',
+  muted: 'bg-black/[0.06] text-[color:var(--ink-2)]',
+};
+
+/** 汇总各课次配置里出现过的选项（保序去重）——用于动态生成「出勤/作业概况」维度 */
+function collectOptions(configs: { [lesson: string]: LessonConfig }, key: 'attendanceOptions' | 'homeworkOptions' | 'listeningOptions' | 'classPerformanceOptions'): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  Object.keys(configs)
+    .sort((a, b) => Number(a) - Number(b))
+    .forEach(k => (configs[k]?.[key] || []).forEach(opt => { if (!seen.has(opt)) { seen.add(opt); out.push(opt); } }));
+  return out;
+}
 
 export function StudentReport({
   students,
@@ -115,6 +137,11 @@ export function StudentReport({
     });
     return Array.from(seen.values()).sort((a, b) => a.order - b.order);
   }, [lessonConfigs]);
+
+  // 动态选项清单：跨课次收集当前配置里出现过的选项（改文案后统计自动跟随）
+  const attendanceOptions = useMemo(() => collectOptions(lessonConfigs, 'attendanceOptions'), [lessonConfigs]);
+  const homeworkOptions = useMemo(() => collectOptions(lessonConfigs, 'homeworkOptions'), [lessonConfigs]);
+  const listeningOptions = useMemo(() => collectOptions(lessonConfigs, 'listeningOptions'), [lessonConfigs]);
 
   // 获取选中学生的所有记录
   const studentRecords = useMemo(() => {
@@ -181,12 +208,19 @@ export function StudentReport({
       absent: studentAttKinds.filter(k => k === 'absent' || k === 'leave').length
     };
 
+    // 按语义分级统计（兼容任意选项文案：完成✅/超赞完成 都算优秀）
     const homeworkStats = {
-      excellent: studentRecords.filter(r => r.homeworkStatus === '超赞完成').length,
-      good: studentRecords.filter(r => r.homeworkStatus === '圆满完成').length,
-      average: studentRecords.filter(r => r.homeworkStatus === '基本完成').length,
-      poor: studentRecords.filter(r => r.homeworkStatus === '未完成').length
+      excellent: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
+      good: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
+      average: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
+      poor: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length
     };
+    const optionCounts = (opts: string[], pick: (r: typeof studentRecords[number]) => string | undefined) =>
+      opts.map(opt => ({ option: opt, count: studentRecords.filter(r => pick(r) === opt).length }))
+        .filter(x => x.count > 0 || opts.length <= 6);
+    const attendanceBreakdown = optionCounts(attendanceOptions, r => r.attendance);
+    const homeworkBreakdown = optionCounts(homeworkOptions, r => r.homeworkStatus);
+    const listeningBreakdown = optionCounts(listeningOptions, r => r.listeningStatus);
 
     return {
       totalLessons,
@@ -196,9 +230,12 @@ export function StudentReport({
       avgQuestionTypeScores,
       learningTrajectory,
       attendanceStats,
-      homeworkStats
+      homeworkStats,
+      attendanceBreakdown,
+      homeworkBreakdown,
+      listeningBreakdown,
     };
-  }, [studentRecords, lessonConfigs]);
+  }, [studentRecords, lessonConfigs, attendanceOptions, homeworkOptions, listeningOptions]);
 
   // 班级统计数据
   const classStats = useMemo(() => {
@@ -217,9 +254,10 @@ export function StudentReport({
       : 0;
 
     // 分数段分布
+    // 按正确率分档（见 SCORE_RANGES 注释）
     const distribution = SCORE_RANGES.map(range => ({
       ...range,
-      count: validRecords.filter(r => r.totalScore >= range.min && r.totalScore <= range.max).length
+      count: validRecords.filter(r => r.correctRate >= range.min && r.correctRate <= range.max).length
     }));
 
     // 各题型平均分（仅到课学员；请假学员的 0 分不计入分子与分母）
@@ -267,15 +305,32 @@ export function StudentReport({
       transfer: classAttKinds.filter(k => k === 'transfer').length
     };
 
-    // 作业概况
+    // 作业/课堂练习概况：全部按「语义分级」聚合，不再硬编码 v1 选项文案；
+    // 「优秀」并入课后任务表现（老师反馈的优秀率要能反映课堂练习 + 课后任务）
+    const hasHomeworkOption = (v?: string) => !!v && v.trim() !== '' && v !== '具体分数';
+    const hwRecords = classReportRecords.filter(r => hasHomeworkOption(r.homeworkStatus));
+    const listeningRecords = classReportRecords.filter(r => hasHomeworkOption(r.listeningStatus));
+    const qualityPool = [...hwRecords, ...listeningRecords.filter(r => !hwRecords.includes(r))];
     const homeworkSummary = {
       total: classReportRecords.length,
-      excellent: classReportRecords.filter(r => r.homeworkStatus === '超赞完成').length,
-      good: classReportRecords.filter(r => r.homeworkStatus === '圆满完成').length,
-      average: classReportRecords.filter(r => r.homeworkStatus === '基本完成').length,
-      poor: classReportRecords.filter(r => r.homeworkStatus === '未完成').length,
-      notBring: classReportRecords.filter(r => r.homeworkStatus === '没带').length
+      hwTotal: hwRecords.length,
+      /** 质量类统计的分母：填过课堂练习或课后任务的记录数（去重） */
+      qualityTotal: qualityPool.length,
+      excellent: qualityPool.filter(r =>
+        optionToneLevel(r.homeworkStatus) === 'good'
+        || (hasHomeworkOption(r.listeningStatus) && optionToneLevel(r.listeningStatus) === 'good')).length,
+      good: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
+      average: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
+      poor: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length,
+      notBring: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length,
     };
+
+    // 动态维度：以「当前配置里出现过的选项」为准统计，选项改文案后无需改代码
+    const classOptionCounts = (opts: string[], pick: (r: typeof classReportRecords[number]) => string | undefined) =>
+      opts.map(opt => ({ option: opt, count: classReportRecords.filter(r => pick(r) === opt).length }));
+    const attendanceBreakdown = classOptionCounts(attendanceOptions, r => r.attendance);
+    const homeworkBreakdown = classOptionCounts(homeworkOptions, r => r.homeworkStatus);
+    const listeningBreakdown = classOptionCounts(listeningOptions, r => r.listeningStatus);
 
     return {
       avgScore: Math.round(avgScore * 10) / 10,
@@ -287,9 +342,12 @@ export function StudentReport({
       weakPoints,
       attendanceSummary,
       homeworkSummary,
+      attendanceBreakdown,
+      homeworkBreakdown,
+      listeningBreakdown,
       validCount: validRecords.length
     };
-  }, [classReportRecords, lessonConfigs]);
+  }, [classReportRecords, lessonConfigs, attendanceOptions, homeworkOptions, listeningOptions]);
 
   // 饼图数据 - 题型得分分布
   const pieData = useMemo(() => {
@@ -531,6 +589,10 @@ interface PersonalReportProps {
     learningTrajectory: { lesson: number; score: number; correctRate: number; listeningScore: number }[];
     attendanceStats: { total: number; onTime: number; late: number; absent: number };
     homeworkStats: { excellent: number; good: number; average: number; poor: number };
+    /** 动态维度：按当前配置选项聚合（选项改文案后自动跟随） */
+    attendanceBreakdown: { option: string; count: number }[];
+    homeworkBreakdown: { option: string; count: number }[];
+    listeningBreakdown: { option: string; count: number }[];
   } | null;
   examTableData: { examName: string; date: string; score: number; totalScore: number; rate: number; classRank?: number; gradeRank?: number; classSize?: number }[];
   pieData: { name: string; value: number; color: string }[];
@@ -870,18 +932,15 @@ function PersonalReport({
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">按时出勤</span>
-                <Badge className="bg-green-100 text-green-700">{studentStats?.attendanceStats.onTime} 次</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">迟到</span>
-                <Badge className="bg-yellow-100 text-yellow-700">{studentStats?.attendanceStats.late} 次</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">缺勤</span>
-                <Badge className="bg-red-100 text-red-700">{studentStats?.attendanceStats.absent} 次</Badge>
-              </div>
+              {(studentStats?.attendanceBreakdown || []).map(({ option, count }) => (
+                <div key={option} className="flex justify-between items-center">
+                  <span className="text-[color:var(--ink-2)]">{option}</span>
+                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
+                </div>
+              ))}
+              {(studentStats?.attendanceBreakdown || []).length === 0 && (
+                <p className="text-sm text-[color:var(--ink-4)]">本课次暂无考勤记录</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -890,23 +949,26 @@ function PersonalReport({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <BookOpen className="w-5 h-5 text-[color:var(--brand)]" />
-              作业完成情况
+              课堂练习 / 课后任务
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">超赞完成</span>
-                <Badge className="bg-green-100 text-green-700">{studentStats?.homeworkStats.excellent} 次</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">圆满完成</span>
-                <Badge className="bg-[rgb(var(--brand-rgb)/0.13)] text-[color:var(--brand)]">{studentStats?.homeworkStats.good} 次</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[color:var(--ink-2)]">基本完成</span>
-                <Badge className="bg-yellow-100 text-yellow-700">{studentStats?.homeworkStats.average} 次</Badge>
-              </div>
+              {(studentStats?.homeworkBreakdown || []).map(({ option, count }) => (
+                <div key={option} className="flex justify-between items-center">
+                  <span className="text-[color:var(--ink-2)]">{option}</span>
+                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
+                </div>
+              ))}
+              {(studentStats?.listeningBreakdown || []).map(({ option, count }) => (
+                <div key={'l-' + option} className="flex justify-between items-center">
+                  <span className="text-[color:var(--ink-2)]">课后任务 · {option}</span>
+                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
+                </div>
+              ))}
+              {(studentStats?.homeworkBreakdown || []).length === 0 && (studentStats?.listeningBreakdown || []).length === 0 && (
+                <p className="text-sm text-[color:var(--ink-4)]">本课次暂无课堂练习/课后任务记录</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1023,7 +1085,10 @@ interface ClassReportProps {
     questionTypeAvg: { id: string; name: string; avgScore: number; fullScore: number; correctRate: number }[];
     weakPoints: { id: string; name: string; avgScore: number; fullScore: number; correctRate: number }[];
     attendanceSummary: { total: number; onTime: number; late: number; absent: number; leave: number; transfer: number };
-    homeworkSummary: { total: number; excellent: number; good: number; average: number; poor: number; notBring: number };
+    attendanceBreakdown: { option: string; count: number }[];
+    homeworkBreakdown: { option: string; count: number }[];
+    listeningBreakdown: { option: string; count: number }[];
+    homeworkSummary: { total: number; hwTotal: number; qualityTotal: number; excellent: number; good: number; average: number; poor: number; notBring: number };
     validCount: number;
   } | null;
   classReportRecords: StudentRecord[];
@@ -1062,8 +1127,9 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
   const attendanceRate = classStats.attendanceSummary.total > 0
     ? Math.round(((classStats.attendanceSummary.onTime + classStats.attendanceSummary.late) / classStats.attendanceSummary.total) * 100)
     : 0;
-  const homeworkExcellentRate = classStats.homeworkSummary.total > 0
-    ? Math.round(((classStats.homeworkSummary.excellent + classStats.homeworkSummary.good) / classStats.homeworkSummary.total) * 100)
+  // 分母改为「填过课堂练习或课后任务的记录数」，分子为其中语义为"优秀"的条数
+  const homeworkExcellentRate = classStats.homeworkSummary.qualityTotal > 0
+    ? Math.round((classStats.homeworkSummary.excellent / classStats.homeworkSummary.qualityTotal) * 100)
     : 0;
 
   return (
@@ -1138,7 +1204,8 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
       <div className="report-section">
         <h2 className="report-section-title">
           <BarChart3 className="w-5 h-5 inline mr-2" />
-          班级分数段分布
+          班级正确率分布
+          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（按各课次满分换算，跨课次可直接比较）</span>
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="report-chart-container" style={{ height: 280 }}>
@@ -1205,22 +1272,18 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-green-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-green-700">{classStats.attendanceSummary.onTime}</p>
-                <p className="text-xs text-green-600">按时出勤</p>
-              </div>
-              <div className="p-3 bg-yellow-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-yellow-700">{classStats.attendanceSummary.late}</p>
-                <p className="text-xs text-yellow-600">迟到</p>
-              </div>
-              <div className="p-3 bg-red-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-red-700">{classStats.attendanceSummary.absent}</p>
-                <p className="text-xs text-red-600">缺勤</p>
-              </div>
-              <div className="p-3 bg-black/[0.04] rounded-xl text-center">
-                <p className="text-2xl font-bold text-[color:var(--ink-2)]">{classStats.attendanceSummary.leave + classStats.attendanceSummary.transfer}</p>
-                <p className="text-xs text-[color:var(--ink-2)]">请假/调课</p>
-              </div>
+              {classStats.attendanceBreakdown.map(({ option, count }) => {
+                const lv = optionToneLevel(option);
+                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                  : lv === 'bad' ? 'bg-red-50 text-red-700' : lv === 'info' ? 'bg-blue-50 text-blue-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                return (
+                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
+                    <p className="text-2xl font-bold">{count}</p>
+                    <p className="text-xs">{option}</p>
+                  </div>
+                );
+              })}
+              {classStats.attendanceBreakdown.length === 0 && <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无考勤记录</p>}
             </div>
           </CardContent>
         </Card>
@@ -1234,22 +1297,38 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-green-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-green-700">{classStats.homeworkSummary.excellent}</p>
-                <p className="text-xs text-green-600">超赞完成</p>
-              </div>
-              <div className="p-3 bg-[rgb(var(--brand-rgb)/0.08)] rounded-xl text-center">
-                <p className="text-2xl font-bold text-[color:var(--brand)]">{classStats.homeworkSummary.good}</p>
-                <p className="text-xs text-[color:var(--brand)]">圆满完成</p>
-              </div>
-              <div className="p-3 bg-yellow-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-yellow-700">{classStats.homeworkSummary.average + classStats.homeworkSummary.poor}</p>
-                <p className="text-xs text-yellow-600">未完成/基本完成</p>
-              </div>
-              <div className="p-3 bg-black/[0.04] rounded-xl text-center">
-                <p className="text-2xl font-bold text-[color:var(--ink-2)]">{classStats.homeworkSummary.notBring}</p>
-                <p className="text-xs text-[color:var(--ink-2)]">没带</p>
-              </div>
+              {classStats.homeworkBreakdown.map(({ option, count }) => {
+                const lv = optionToneLevel(option);
+                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                  : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                return (
+                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
+                    <p className="text-2xl font-bold">{count}</p>
+                    <p className="text-xs">{option}</p>
+                  </div>
+                );
+              })}
+              {classStats.listeningBreakdown.length > 0 && (
+                <div className="col-span-2 pt-1">
+                  <p className="text-xs text-[color:var(--ink-4)] mb-2">课后任务完成情况</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {classStats.listeningBreakdown.map(({ option, count }) => {
+                      const lv = optionToneLevel(option);
+                      const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                        : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                      return (
+                        <div key={'l-' + option} className={`p-3 rounded-xl text-center ${box}`}>
+                          <p className="text-2xl font-bold">{count}</p>
+                          <p className="text-xs">{option}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {classStats.homeworkBreakdown.length === 0 && classStats.listeningBreakdown.length === 0 && (
+                <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
+              )}
             </div>
           </CardContent>
         </Card>

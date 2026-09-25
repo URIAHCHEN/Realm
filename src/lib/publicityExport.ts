@@ -69,6 +69,8 @@ const PALETTES: Record<ExportStyle, Palette> = {
   },
 };
 
+import { optionToneStyle } from '@/lib/optionTone';
+
 const heat = (pct: number) => pct >= 85 ? '#16a34a' : pct >= 70 ? '#2563eb' : pct >= 55 ? '#d97706' : '#dc2626';
 export { heat };
 
@@ -190,9 +192,9 @@ export function buildPublicityHTML(
       <td style="${td}">${rankBadge(rankVal)}</td>
       <td style="${td}font-weight:600">${esc(getNickname(r.studentName))}</td>
       <td style="${td}white-space:nowrap">${seasonChips(r.seasons || [])}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${esc(attendanceEmoji(r.attendance))}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${esc(homeworkEmoji(r.homeworkStatus))}</td>
-      <td style="${td}white-space:nowrap;font-size:13px">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
+      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.attendance)}">${esc(attendanceEmoji(r.attendance))}</td>
+      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.homeworkStatus)}">${esc(homeworkEmoji(r.homeworkStatus))}</td>
+      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.listeningStatus === '具体分数' ? '完成' : r.listeningStatus)}">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
       ${questionTypes.map(qt => {
         const score = r.scores[qt.id] || 0;
         return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score)}</td>`;

@@ -17,6 +17,7 @@ import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
+import { optionToneClass } from '@/lib/optionTone';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
 
@@ -58,7 +59,7 @@ const DEFAULT_COLUMN_LABELS: Record<string, string> = {
   seasons: '学习轨迹',
   attendance: '考勤',
   classPerformance: '课堂表现',
-  homework: '书面作业',
+  homework: '课堂练习',
   listening: '课后任务',
   note: '备注',
   pass: '是否过关',
@@ -76,24 +77,6 @@ const heatClass = (pct: number): string => {
   return '0';
 };
 
-const getAttendanceColor = (attendance: string) => {
-  switch (attendanceKind(attendance)) {
-    case 'onTime': return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
-    case 'late': return 'text-amber-600 bg-amber-50/80 border-amber-200';
-    case 'absent': return 'text-rose-600 bg-rose-50/80 border-rose-200';
-    case 'leave': return 'text-blue-600 bg-blue-50/80 border-blue-200';
-    case 'transfer': return 'text-cyan-600 bg-cyan-50/80 border-cyan-200';
-    default: return '';
-  }
-};
-
-const getHomeworkColor = (status: string) => {
-  if (!status) return '';
-  if (status.includes('超赞')) return 'text-amber-600 bg-amber-50/80 border-amber-200';
-  if (status.includes('圆满') || status.includes('完成')) return 'text-emerald-600 bg-emerald-50/80 border-emerald-200';
-  if (status.includes('未完成') || status.includes('没带')) return 'text-rose-600 bg-rose-50/80 border-rose-200';
-  return '';
-};
 
 // 选项颜色 → 单元格样式（浅色文字提亮为深灰保证可读）
 function optionCellStyle(hex: string | undefined): CSSProperties | undefined {
@@ -722,7 +705,7 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             <div className="space-y-1">
                               <Select value={attendanceDisplay.value} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.attendance ? getAttendanceColor(record.attendance) : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg ${optionToneClass(record?.attendance)}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {attendanceDisplay.raw && <SelectItem value={attendanceDisplay.raw}>{attendanceDisplay.raw}</SelectItem>}
@@ -736,7 +719,7 @@ export function StudentTable({
                           {col('classPerformance') && (
                           <TableCell className="text-base tnum">
                             <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className="w-40 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-40 h-9 text-sm rounded-lg ${optionToneClass(record?.classPerformance)}`} style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}
@@ -748,7 +731,7 @@ export function StudentTable({
                           {col('homework') && (
                           <TableCell className="text-base tnum">
                             <Select value={homeworkDisplay.value} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.homeworkStatus ? getHomeworkColor(record.homeworkStatus) : ''}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-28 h-9 text-sm rounded-lg ${optionToneClass(record?.homeworkStatus)}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {homeworkDisplay.raw && <SelectItem value={homeworkDisplay.raw}>{homeworkDisplay.raw}</SelectItem>}
@@ -761,7 +744,7 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             <div className="flex items-center gap-1">
                               <Select value={listeningDisplay.value} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className="w-28 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className={`w-28 h-9 text-sm rounded-lg ${optionToneClass(record?.listeningStatus === '具体分数' ? '完成' : record?.listeningStatus)}`} style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {listeningDisplay.raw && <SelectItem value={listeningDisplay.raw}>{listeningDisplay.raw}</SelectItem>}

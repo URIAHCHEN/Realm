@@ -198,7 +198,7 @@ export function parseClipboardTable(
 
   const attIdx = findIdx(['考勤']);
   const cpIdx = findIdx(['课堂表现']);
-  const hwIdx = findIdx(['书面作业', '作业']);
+  const hwIdx = findIdx(['书面作业', '课堂练习', '作业']);   // 「课堂练习」是同一列的常用叫法（对外表头已统一为课堂练习）
   // 先匹配更具体的「课后任务分数」，再匹配「课后任务」，避免分数列抢占状态列
   const listenScoreIdx = findIdx(['课后任务分数', '乐听说分数']);
   const listenIdx = findIdx(['课后任务', '乐听说']);

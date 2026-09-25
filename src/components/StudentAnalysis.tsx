@@ -1,8 +1,9 @@
 // 学员学情分析弹窗 —— 现代化管理后台风格：KPI 总览 + 多维图表 + 课次时间线 + 校内成绩
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ResponsiveContainer,
@@ -23,9 +24,8 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Minus, BarChart3, Activity, School,
-  CalendarCheck, BookOpen, Mic, Trophy, Layers, FileText, Target
-} from 'lucide-react';
-import type { StudentRecord, LessonConfig, SchoolScore, QuestionType } from '@/types';
+  CalendarCheck, BookOpen, Mic, Trophy, Layers, FileText, Target, Download } from 'lucide-react';
+import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 
 import { attendanceRateOf, isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
@@ -50,29 +50,29 @@ const tooltipStyle = {
   fontSize: 13,
 };
 
-// 考勤徽章
-const attendanceBadge = (status: string) => {
-  const map: Record<string, string> = {
-    '按时出勤': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    '迟到': 'bg-amber-50 text-amber-700 border-amber-200',
-    '缺勤': 'bg-rose-50 text-rose-700 border-rose-200',
-    '请假': 'bg-blue-50 text-blue-700 border-blue-200',
-    '调课': 'bg-cyan-50 text-cyan-700 border-cyan-200',
-  };
-  return <Badge variant="outline" className={`text-xs ${map[status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>{status}</Badge>;
-};
+// 选项着色：按语义关键词判断，不再硬编码旧版选项文本
+// （老师改选项文案、或导入的是新选项时，颜色依然正确）
+function optionToneClass(value: string): string {
+  const v = (value || '').trim();
+  if (!v) return 'bg-slate-50 text-slate-400 border-slate-200';
+  if (/请假|调课/.test(v)) return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (/缺勤|未完成|未做完|没带/.test(v)) return 'bg-rose-50 text-rose-700 border-rose-200';
+  if (/迟到|补发|按要求|不过关|欠缺|走神|内向|需要|留意/.test(v)) return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (/完成|准时|很棒|优秀|认真|积极|超赞|圆满|参与|细心/.test(v)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  return 'bg-slate-50 text-slate-600 border-slate-200';
+}
 
-// 作业徽章
-const homeworkBadge = (status: string) => {
-  const map: Record<string, string> = {
-    '超赞完成': 'bg-amber-50 text-amber-700 border-amber-200',
-    '圆满完成': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    '基本完成': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    '没带': 'bg-orange-50 text-orange-700 border-orange-200',
-    '未完成': 'bg-rose-50 text-rose-700 border-rose-200',
-  };
-  return <Badge variant="outline" className={`text-xs ${map[status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>{status}</Badge>;
-};
+const statusBadge = (value: string | undefined) => (
+  <Badge variant="outline" className={`text-xs ${optionToneClass(value || '')}`}>{value || '—'}</Badge>
+);
+const attendanceBadge = (status: string) => statusBadge(status);
+const homeworkBadge = (status: string) => statusBadge(status);
+const listeningBadge = (status: string, score?: number) => (
+  <Badge variant="outline" className={`text-xs ${optionToneClass(status === '具体分数' ? '完成' : status)}`}>
+    <Mic className="w-3 h-3 mr-1" />
+    {status === '具体分数' ? `${score ?? 0}分` : (status || '—')}
+  </Badge>
+);
 
 // KPI 卡片
 function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; tone: string }) {
@@ -88,7 +88,11 @@ function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; lab
 }
 
 // 单条课次时间线卡片
-function LessonTimelineCard({ record, questionTypes, fullScore }: { record: StudentRecord; questionTypes: QuestionType[]; fullScore: number }) {
+function LessonTimelineCard({ record, lessonConfig }: { record: StudentRecord; lessonConfig: LessonConfig }) {
+  // 关键修复：每一课次用**它自己的**题型配置与满分渲染
+  // （原来统一取最新课次的题型，导致 Day1 显示 Day2 的题型、分数全为 0）
+  const questionTypes = lessonConfig.questionTypes || [];
+  const fullScore = getLessonFullScore(lessonConfig);
   const rateTrend = record.correctRate >= 80 ? 'text-emerald-600' : record.correctRate >= 60 ? 'text-amber-600' : 'text-rose-600';
   return (
     <div className="relative pl-6">
@@ -104,10 +108,7 @@ function LessonTimelineCard({ record, questionTypes, fullScore }: { record: Stud
           <div className="flex items-center gap-2">
             {attendanceBadge(record.attendance)}
             {homeworkBadge(record.homeworkStatus)}
-            <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">
-              <Mic className="w-3 h-3 mr-1" />
-              {record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}
-            </Badge>
+            {listeningBadge(record.listeningStatus, record.listeningScore)}
           </div>
         </div>
         {/* 题型得分条 */}
@@ -140,6 +141,8 @@ function LessonTimelineCard({ record, questionTypes, fullScore }: { record: Stud
   );
 }
 
+const esc = (v: unknown) => String(v ?? '');
+
 export function StudentAnalysis({
   isOpen,
   onClose,
@@ -157,12 +160,26 @@ export function StudentAnalysis({
     [currentClassData]
   );
 
-  // 统一取最新课次的题型配置
-  const questionTypes = useMemo(() => {
-    if (records.length === 0) return [];
-    const configs = records.map(r => getLessonConfig(currentClassData.classId, r.lessonNumber));
-    return configs[configs.length - 1].questionTypes;
+  // 该生所有课次出现过的题型名（按首次出现顺序去重）——跨课次分析按「题型名」对齐，
+  // 因为不同课次的题型 id 不同，按 id 对齐会全部为 0（原雷达图空白即由此而来）
+  const qtNames = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    records.forEach(r => {
+      getLessonConfig(currentClassData.classId, r.lessonNumber).questionTypes.forEach(qt => {
+        if (!seen.has(qt.name)) { seen.add(qt.name); list.push(qt.name); }
+      });
+    });
+    return list;
   }, [records, currentClassData, getLessonConfig]);
+
+  /** 某课次某题型的得分率（用该课次自己的满分作分母）；该课次没有此题型时返回 null */
+  const rateOfQt = (record: StudentRecord, qtName: string): number | null => {
+    const cfg = getLessonConfig(currentClassData.classId, record.lessonNumber);
+    const qt = cfg.questionTypes.find(q => q.name === qtName);
+    if (!qt || !qt.fullScore) return null;
+    return Math.round(((record.scores[qt.id] || 0) / qt.fullScore) * 1000) / 10;
+  };
 
   // KPI 统计
   const kpis = useMemo(() => {
@@ -189,26 +206,75 @@ export function StudentAnalysis({
     [records]
   );
 
-  // 题型雷达图（平均得分率 %）
+  // 题型雷达图（跨课次按题型名取平均得分率 %）——只统计真正有该题型的课次
   const radarData = useMemo(() => {
     if (records.length === 0) return [];
-    return questionTypes.map(qt => {
-      const pcts = records.map(r => {
-        const score = r.scores[qt.id] || 0;
-        return qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0;
-      });
-      return { subject: qt.name, 得分率: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10 };
+    return qtNames.map(name => {
+      const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      return {
+        subject: name,
+        得分率: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10 : 0,
+        课次数: pcts.length,
+      };
     });
-  }, [records, questionTypes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, qtNames, currentClassData, getLessonConfig]);
 
-  // 各题型分数多线趋势
+  // 各题型「得分率」多线趋势（统一换算成百分比，跨课次可比；
+  // 原实现直接画原始分数，题型满分不同会导致曲线误导）
   const qtTrendData = useMemo(() => {
     return records.map(r => {
-      const row: Record<string, string | number> = { name: `D${r.lessonNumber}` };
-      questionTypes.forEach(qt => { row[qt.name] = r.scores[qt.id] || 0; });
+      const row: Record<string, string | number | null> = { name: `D${r.lessonNumber}` };
+      qtNames.forEach(name => { row[name] = rateOfQt(r, name); });
       return row;
     });
-  }, [records, questionTypes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, qtNames, currentClassData, getLessonConfig]);
+
+  const trendCardRef = useRef<HTMLDivElement>(null);
+  const [exportingTrend, setExportingTrend] = useState(false);
+
+  // 导出「入门测趋势」为 PNG，文件名带学生姓名，便于直接发给家长
+  const handleExportTrend = async () => {
+    const node = trendCardRef.current;
+    if (!node || exportingTrend) return;
+    setExportingTrend(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${nickname}_入门测趋势.png`;
+      a.click();
+      toast.success(`已导出 ${nickname}_入门测趋势.png`);
+    } catch (e) {
+      toast.error('导出失败：' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportingTrend(false);
+    }
+  };
+
+  // 入门测趋势：每次课的正确率 / 班级最高 / 班级平均 / 班级排名（班级口径含全班，请假缺勤不计）
+  const entranceTrend = useMemo(() => {
+    const classRecords = currentClassData?.records || [];
+    return records.map(r => {
+      const sameLesson = classRecords.filter(x => x.lessonNumber === r.lessonNumber && !isAbsentRecord(x));
+      const rates = sameLesson.map(x => x.correctRate);
+      const maxRate = rates.length ? Math.max(...rates) : 0;
+      const avgRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length * 10) / 10 : 0;
+      const sorted = [...sameLesson].sort((a, b) => b.correctRate - a.correctRate);
+      const rank = sorted.findIndex(x => x.id === r.id) + 1;
+      return {
+        lesson: r.lessonNumber,
+        学生正确率: r.correctRate,
+        班级最高: maxRate,
+        班级平均: avgRate,
+        班级排名: rank || r.rank,
+        班级人数: sameLesson.length,
+      };
+    });
+  }, [records, currentClassData]);
 
   // 校内成绩
   const schoolData = useMemo(() =>
@@ -359,20 +425,89 @@ export function StudentAnalysis({
                 </div>
               </div>
 
+              {/* 入门测趋势：正确率 / 班级最高 / 班级平均 + 班级排名，可导出为以学生姓名命名的图片 */}
+              <div ref={trendCardRef} className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />入门测趋势
+                    <span className="text-xs font-normal text-slate-400">{esc(nickname)} · {currentClassData.className} · 共 {entranceTrend.length} 次</span>
+                  </p>
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={handleExportTrend} disabled={exportingTrend}
+                    title="导出为 PNG（文件名带学生姓名）">
+                    <Download className="w-3.5 h-3.5" />{exportingTrend ? '导出中…' : '导出图片'}
+                  </Button>
+                </div>
+
+                {/* 数据表：一眼看清每次课的正确率与班级位置 */}
+                <div className="overflow-x-auto mb-3">
+                  <table className="w-full text-xs tabular-nums">
+                    <thead>
+                      <tr className="text-slate-500">
+                        <th className="text-left font-semibold py-1.5 px-2 whitespace-nowrap">指标</th>
+                        {entranceTrend.map(t => (
+                          <th key={t.lesson} className="font-semibold py-1.5 px-2 whitespace-nowrap">第{t.lesson}次</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-[rgb(var(--brand-rgb)/0.05)]">
+                        <td className="py-1.5 px-2 font-semibold text-slate-600 whitespace-nowrap">{esc(nickname)}正确率</td>
+                        {entranceTrend.map(t => (
+                          <td key={t.lesson} className={`py-1.5 px-2 text-center font-bold ${t.学生正确率 >= 80 ? 'text-emerald-600' : t.学生正确率 >= 60 ? 'text-amber-600' : 'text-rose-600'}`}>{t.学生正确率}%</td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级最高正确率</td>
+                        {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级最高}%</td>)}
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级平均正确率</td>
+                        {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级平均}%</td>)}
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级排名【前】</td>
+                        {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级排名}<span className="text-slate-400">/{t.班级人数}</span></td>)}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={entranceTrend.map(t => ({
+                      name: `第${t.lesson}次`,
+                      学生正确率: t.学生正确率,
+                      班级最高: t.班级最高,
+                      班级平均: t.班级平均,
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Line type="monotone" dataKey="班级最高" stroke="#cbd5e1" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="班级平均" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各题型分数趋势
+                  <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各题型得分率趋势
+                  <span className="text-xs font-normal text-slate-400">（按题型名跨课次对齐，分母为该课次满分）</span>
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={qtTrendData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
                       <Tooltip contentStyle={tooltipStyle} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      {questionTypes.map((qt, i) => (
-                        <Line key={qt.id} type="monotone" dataKey={qt.name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                      {qtNames.map((name, i) => (
+                        <Line key={name} type="monotone" dataKey={name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -385,7 +520,7 @@ export function StudentAnalysis({
           <TabsContent value="detail" className="mt-4">
             <div className="max-h-[52vh] overflow-y-auto pr-1">
               {[...records].reverse().map(record => (
-                <LessonTimelineCard key={record.id} record={record} questionTypes={questionTypes} fullScore={getLessonFullScore(getLessonConfig(currentClassData.classId, record.lessonNumber))} />
+                <LessonTimelineCard key={record.id} record={record} lessonConfig={getLessonConfig(currentClassData.classId, record.lessonNumber)} />
               ))}
             </div>
           </TabsContent>

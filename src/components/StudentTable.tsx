@@ -736,7 +736,7 @@ export function StudentTable({
                           {col('classPerformance') && (
                           <TableCell className="text-base tnum">
                             <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className="w-32 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className="w-40 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}

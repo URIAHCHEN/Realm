@@ -24,10 +24,10 @@ import {
   PolarRadiusAxis,
   Radar,
   Legend,
-  LineChart,
   Line,
-  AreaChart,
-  Area
+  Area,
+  ComposedChart,
+  ReferenceLine
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -115,7 +115,7 @@ export function StudentReport({
   const [reportMode, setReportMode] = useState<'personal' | 'class'>('personal');
   const [selectedStudent, setSelectedStudent] = useState<string>(students[0] || '');
   const [selectedLesson, setSelectedLesson] = useState<number | 'all'>('all');
-  const [trendType, setTrendType] = useState<'line' | 'bar' | 'area'>('line');
+  const [trendType, setTrendType] = useState<'line' | 'bar' | 'area'>('bar');
   const [scoreSort, setScoreSort] = useState<'lesson' | 'asc' | 'desc'>('lesson');
   const [showListening, setShowListening] = useState(true);
   const [showCorrectRate, setShowCorrectRate] = useState(true);
@@ -374,14 +374,42 @@ export function StudentReport({
     return list;
   }, [studentRecords, scoreSort, lessonConfigs]);
 
-  // 折线图数据 - 学习趋势
-  const trendData = useMemo(() => {
-    return studentRecords.map(r => ({
-      lesson: r.lessonNumber,
-      score: r.totalScore,
-      listeningScore: r.listeningScore
-    }));
-  }, [studentRecords]);
+  // 班级组合图数据：每次课「班级平均正确率（柱）+ 最高/最低（线）+ 目标线 + 达标人数」
+  const classComboTrend = useMemo(() => {
+    const scored = classReportRecords.filter(r => !isAbsentRecord(r));
+    const lessons = Array.from(new Set(scored.map(r => r.lessonNumber))).sort((a, b) => a - b);
+    return lessons.map(ln => {
+      const rs = scored.filter(r => r.lessonNumber === ln);
+      const rates = rs.map(r => r.correctRate);
+      return {
+        lesson: `第${ln}课`,
+        班级平均: rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : 0,
+        班级最高: rates.length ? Math.max(...rates) : 0,
+        班级最低: rates.length ? Math.min(...rates) : 0,
+        达标人数: rs.filter(r => r.correctRate >= 80).length,
+        人数: rs.length,
+      };
+    });
+  }, [classReportRecords]);
+
+  // 组合图数据：每次课「本生正确率（柱）+ 班级平均/最高（线）+ 目标线」
+  // 统一用正确率口径，跨课次可比（各次满分不同，绝对分不可比）
+  const comboTrend = useMemo(() => {
+    const classPresent = records.filter(r => !isAbsentRecord(r));
+    return studentRecords.map(r => {
+      const sameLesson = classPresent.filter(x => x.lessonNumber === r.lessonNumber);
+      const rates = sameLesson.map(x => x.correctRate);
+      const avg = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : 0;
+      return {
+        lesson: `第${r.lessonNumber}课`,
+        学生正确率: r.correctRate,
+        班级平均: avg,
+        班级最高: rates.length ? Math.max(...rates) : 0,
+        班级排名: r.rank,
+      };
+    });
+  }, [studentRecords, records]);
+
 
   // 雷达图数据 - 能力维度（坐标轴上限取各题型真实满分，而非写死 100）
   const radarData = useMemo(() => {
@@ -542,7 +570,8 @@ export function StudentReport({
           examTableData={examTableData}
           pieData={pieData}
           barData={barData}
-          trendData={trendData}
+          comboTrend={comboTrend}
+
           radarData={radarData}
           currentClassName={currentClassName}
           selectedStudent={selectedStudent}
@@ -567,6 +596,7 @@ export function StudentReport({
             currentClassName={currentClassName}
             selectedLesson={selectedLesson}
             classStats={classStats}
+            classComboTrend={classComboTrend}
             classReportRecords={classReportRecords}
             getNickname={getNickname}
             customFields={allCustomFields}
@@ -597,7 +627,7 @@ interface PersonalReportProps {
   examTableData: { examName: string; date: string; score: number; totalScore: number; rate: number; classRank?: number; gradeRank?: number; classSize?: number }[];
   pieData: { name: string; value: number; color: string }[];
   barData: { lesson: string; lessonNum: number; score: number; correctRate: number; fullMark: number }[];
-  trendData: { lesson: number; score: number; listeningScore: number }[];
+  comboTrend: { lesson: string; 学生正确率: number; 班级平均: number; 班级最高: number; 班级排名: number }[];
   radarData: { subject: string; A: number; fullMark: number }[];
   currentClassName: string;
   selectedStudent: string;
@@ -623,7 +653,7 @@ function PersonalReport({
   examTableData,
   pieData,
   barData,
-  trendData,
+  comboTrend,
   radarData,
   currentClassName,
   selectedStudent,
@@ -709,7 +739,7 @@ function PersonalReport({
                 <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="line">折线图</SelectItem>
-                  <SelectItem value="bar">柱状图</SelectItem>
+                  <SelectItem value="bar">组合图（柱+线）</SelectItem>
                   <SelectItem value="area">面积图</SelectItem>
                 </SelectContent>
               </Select>
@@ -779,50 +809,29 @@ function PersonalReport({
         <h2 className="report-section-title">
           <TrendingUp className="w-5 h-5 inline mr-2" />
           学习趋势分析
+          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=本生正确率，线=班级平均/最高，红线=目标 80%）</span>
         </h2>
         <div className="report-chart-container" style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            {trendType === 'line' ? (
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="lesson" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                <Legend />
-                <Line type="monotone" dataKey="score" name="入门测成绩" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} />
-                {showListening && <Line type="monotone" dataKey="listeningScore" name="课后任务成绩" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981' }} />}
-              </LineChart>
-            ) : trendType === 'bar' ? (
-              <BarChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="lesson" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                <Legend />
-                <Bar dataKey="score" name="入门测成绩" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                {showListening && <Bar dataKey="listeningScore" name="课后任务成绩" fill="#10b981" radius={[4, 4, 0, 0]} />}
-              </BarChart>
-            ) : (
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05} />
-                  </linearGradient>
-                  <linearGradient id="listenGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="lesson" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                <Legend />
-                <Area type="monotone" dataKey="score" name="入门测成绩" stroke="#3b82f6" strokeWidth={2} fill="url(#scoreGrad)" />
-                {showListening && <Area type="monotone" dataKey="listeningScore" name="课后任务成绩" stroke="#10b981" strokeWidth={2} fill="url(#listenGrad)" />}
-              </AreaChart>
-            )}
+            <ComposedChart data={comboTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="lesson" stroke="#6b7280" />
+              <YAxis domain={[0, 100]} unit="%" stroke="#6b7280" />
+              <Tooltip
+                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(v: number, n: string) => [n === '班级排名' ? v : `${v}%`, n]}
+              />
+              <Legend />
+              {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
+              <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '目标 80%', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+              {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
+              {trendType === 'bar' && <Bar dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
+              {trendType === 'line' && <Line type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }} />}
+              {trendType === 'area' && <Area type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="#3b82f622" />}
+              {/* 班级对比线：定位"自己在班里什么位置" */}
+              <Line type="monotone" dataKey="班级平均" name="班级平均" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="班级最高" name="班级最高" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -1076,6 +1085,7 @@ function PersonalReport({
 interface ClassReportProps {
   currentClassName: string;
   selectedLesson: number | 'all';
+  classComboTrend: { lesson: string; 班级平均: number; 班级最高: number; 班级最低: number; 达标人数: number; 人数: number }[];
   classStats: {
     avgScore: number;
     maxScore: number;
@@ -1096,7 +1106,7 @@ interface ClassReportProps {
   customFields: import('@/types').CustomField[];
 }
 
-function ClassReport({ currentClassName, selectedLesson, classStats, classReportRecords, getNickname, customFields }: ClassReportProps) {
+function ClassReport({ currentClassName, selectedLesson, classStats, classComboTrend, classReportRecords, getNickname, customFields }: ClassReportProps) {
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
   const lowScoreStudents = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
@@ -1260,6 +1270,35 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classReport
           )}
         </div>
       </div>
+
+      {/* 各次课正确率组合图：柱=班级平均、线=最高/最低、红线=目标 80% */}
+      {classComboTrend.length > 0 && (
+        <div className="report-section">
+          <h2 className="report-section-title">
+            <Activity className="w-5 h-5 inline mr-2" />
+            各次课正确率对比
+            <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=班级平均，线=最高/最低，红线=目标 80%）</span>
+          </h2>
+          <div className="report-chart-container" style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={classComboTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="lesson" stroke="#6b7280" />
+                <YAxis domain={[0, 100]} unit="%" stroke="#6b7280" />
+                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} formatter={(v: number, n: string) => [`${v}`, n]} />
+                <Legend />
+                <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '目标 80%', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+                <Bar dataKey="班级平均" name="班级平均正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={26} />
+                <Line type="monotone" dataKey="班级最高" name="班级最高" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="班级最低" name="班级最低" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-[color:var(--ink-4)] mt-2">
+            口径：请假/缺勤不计入；正确率 = 得分 ÷ 该课次满分，跨课次可直接比较
+          </p>
+        </div>
+      )}
 
       {/* 出勤与作业概况 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

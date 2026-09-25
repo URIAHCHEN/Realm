@@ -12,6 +12,7 @@ import type { Membership } from '@/lib/members';
 import { MembersPanel } from '@/components/MembersPanel';
 import { SyncStatusBanner } from '@/components/SyncStatusBanner';
 import { BackendOfflineBanner } from '@/components/BackendOfflineBanner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { FeedbackLibrary } from '@/components/FeedbackLibrary';
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
@@ -19,6 +20,7 @@ import { TransferStudentDialog } from '@/components/TransferStudentDialog';
 import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
 import { matchOption } from '@/lib/optionMatch';
+import { readTemplateStore } from '@/lib/templateStore';
 import { FeedbackGenerator } from '@/components/FeedbackGenerator';
 import { PraiseGenerator } from '@/components/PraiseGenerator';
 import { PraiseTemplateEditor } from '@/components/PraiseTemplateEditor';
@@ -130,7 +132,8 @@ function App() {
     appConfig,
     classes,
     nicknames,
-    schoolScores
+    schoolScores,
+    templates: readTemplateStore(),
   }), [appConfig, classes, nicknames, schoolScores]);
 
   const cloudSync = useCloudSync({
@@ -811,6 +814,7 @@ function App() {
 
           {/* 学情记录 Tab */}
           <TabsContent value="records" className="space-y-6">
+            <ErrorBoundary label="学情记录">
             <div className="flex gap-6">
               {/* 左侧边栏 */}
               <div className="w-72 flex-shrink-0 space-y-4">
@@ -858,10 +862,12 @@ function App() {
                 />
               </div>
             </div>
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 表扬榜 Tab：榜单 + 班群表彰生成 + 表彰模板编辑/预览 */}
           <TabsContent value="leaderboard" className="space-y-6">
+            <ErrorBoundary label="表扬榜">
             <Leaderboard
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}
@@ -881,10 +887,12 @@ function App() {
               lessonNumber={currentLessonNumber}
               onSaveLessonConfig={handleSaveLessonConfig}
             />
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 反馈生成 Tab */}
           <TabsContent value="feedback">
+            <ErrorBoundary label="反馈生成">
             <div className="max-w-6xl mx-auto space-y-5">
             <FeedbackGenerator
               students={currentClass?.students || []}
@@ -903,19 +911,23 @@ function App() {
 
 
             </div>
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 反馈素材 Tab */}
           <TabsContent value="library" className="space-y-6">
+            <ErrorBoundary label="反馈素材">
             <FeedbackLibrary
               items={appConfig.savedFeedbacks || []}
               onChange={(list) => updateAppConfig({ savedFeedbacks: list })}
               currentLesson={currentLessonNumber}
             />
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 校内成绩 Tab（懒加载：仅切到本 Tab 时才加载图表与 Excel 依赖） */}
           <TabsContent value="school">
+            <ErrorBoundary label="校内成绩">
             <Suspense fallback={<ModuleLoading label="校内成绩" />}>
               <SchoolScorePanel
                 students={currentClass?.students || []}
@@ -928,10 +940,12 @@ function App() {
                 getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               />
             </Suspense>
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 学情报告 Tab（懒加载：仅切到本 Tab 时才加载图表与截图依赖） */}
           <TabsContent value="report">
+            <ErrorBoundary label="学情报告">
             <Suspense fallback={<ModuleLoading label="学情报告" />}>
               <StudentReport
                 students={currentClass?.students || []}
@@ -942,12 +956,14 @@ function App() {
                 currentClassName={currentClass?.name || ''}
               />
             </Suspense>
+          </ErrorBoundary>
           </TabsContent>
 
           {/* 系统配置已并入「反馈生成 → 生成设置」 */}
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud">
+            <ErrorBoundary label="同步中心">
             <div className="max-w-6xl mx-auto space-y-5">
               <SyncStatusBanner
                 status={cloudSync.status}
@@ -978,6 +994,7 @@ function App() {
               <MembersPanel isAdmin={membership.admin} onChanged={refreshMembership} />
               {membership.admin && <DocSyncInfo display={displaySettings} />}
             </div>
+          </ErrorBoundary>
           </TabsContent>
         </Tabs>
       </div>

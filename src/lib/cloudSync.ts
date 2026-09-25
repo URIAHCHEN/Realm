@@ -5,6 +5,7 @@ import { BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend 
 import { ensureFreshToken, getAccessToken, getCachedSession } from '@/lib/auth';
 import { markBackendOffline, markBackendOnline, isTransientBackendFailure } from '@/lib/connectivity';
 import type { AppConfig, Class, SchoolScore } from '@/types';
+import type { TemplateStore } from '@/lib/templateStore';
 
 // 同步快照：与导出备份格式一致，方便离线/云端互换
 export interface SyncSnapshot {
@@ -12,6 +13,8 @@ export interface SyncSnapshot {
   classes: { [key: string]: Class };
   nicknames: { [classId: string]: { [studentName: string]: string } };
   schoolScores: { [studentName: string]: SchoolScore[] };
+  /** 模板登记表：模板按槽位带时间戳同步，避免整包覆盖导致"部署后模板丢失" */
+  templates?: TemplateStore;
 }
 
 export interface CloudSyncConfig {

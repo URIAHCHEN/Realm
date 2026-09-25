@@ -12,6 +12,10 @@ import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
+import {
+  SLOT, readTemplateStore, writeTemplateStore, stampTemplate, mergeTemplateStores,
+  getStamp, type TemplateStore,
+} from '@/lib/templateStore';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
 import { toast } from 'sonner';
 
@@ -129,12 +133,16 @@ const getDefaultLessonConfig = (appConfig: AppConfig): LessonConfig => ({
   passThreshold: 80
 });
 
-// 旧课次配置缺少「课堂表现」选项时兜底，保证列与配置面板始终可用
-const withClassPerformanceDefaults = (cfg: LessonConfig): LessonConfig => ({
+// 旧课次配置缺少「课堂表现」选项 / 模板字段时兜底，保证列、配置面板、反馈生成始终可用。
+// 模板兜底尤其关键：课次配置里缺 feedbackTemplate 时，模板引擎会拿到 undefined 并在
+// .replace() 处抛错 → 反馈生成整页白屏（历史上确实发生过）。
+const withLessonDefaults = (cfg: LessonConfig, appConfig: AppConfig): LessonConfig => ({
   ...cfg,
   classPerformanceOptions: (cfg.classPerformanceOptions && cfg.classPerformanceOptions.length)
     ? cfg.classPerformanceOptions
     : [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
+  feedbackTemplate: cfg.feedbackTemplate || appConfig.defaultFeedbackTemplate,
+  praiseTemplate: cfg.praiseTemplate || appConfig.defaultPraiseTemplate,
 });
 
 // 旧版本存储的全局默认选项 → 迁移到 v3 正式选项集（带表情符号）。
@@ -200,9 +208,9 @@ function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRe
 function resolveLessonConfigPure(classData: Class, lessonNumber: number, appConfig: AppConfig): LessonConfig {
   const cfgs = classData.lessonConfigs || {};
   const cfg = cfgs[lessonNumber.toString()];
-  if (cfg) return withClassPerformanceDefaults(cfg);
+  if (cfg) return withLessonDefaults(cfg, appConfig);
   const prev = lessonNumber - 1;
-  if (prev > 0 && cfgs[prev.toString()]) return withClassPerformanceDefaults(cfgs[prev.toString()]);
+  if (prev > 0 && cfgs[prev.toString()]) return withLessonDefaults(cfgs[prev.toString()], appConfig);
   return getDefaultLessonConfig(appConfig);
 }
 
@@ -299,11 +307,59 @@ function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: C
   return changed ? next : all;
 }
 
+// 加载期自愈：把登记表里记录的模板文本写回配置。
+// 场景：某次整体快照覆盖、或旧包缺字段导致配置里的模板是旧的/空的，
+// 而登记表始终保留着"最后一次编辑"的内容与时间戳 → 用更新的那份覆盖回来。
+function applyTemplateStore(
+  appConfig: AppConfig,
+  classes: { [key: string]: Class }
+): { appConfig: AppConfig; classes: { [key: string]: Class } } {
+  const store = readTemplateStore();
+  if (!Object.keys(store).length) return { appConfig, classes };
+
+  const nextApp: AppConfig = { ...appConfig };
+  const gFb = getStamp(SLOT.globalFeedback, store);
+  if (gFb && gFb.text !== nextApp.defaultFeedbackTemplate) nextApp.defaultFeedbackTemplate = gFb.text;
+  const gPr = getStamp(SLOT.globalPraise, store);
+  if (gPr && gPr.text !== nextApp.defaultPraiseTemplate) nextApp.defaultPraiseTemplate = gPr.text;
+
+  let classesChanged = false;
+  const nextClasses: { [key: string]: Class } = {};
+  Object.entries(classes).forEach(([cid, cls]) => {
+    const cfgs = cls?.lessonConfigs || {};
+    let cfgChanged = false;
+    const nextCfgs: typeof cfgs = { ...cfgs };
+    Object.keys(cfgs).forEach(lessonKey => {
+      const lesson = Number(lessonKey);
+      const cfg = cfgs[lessonKey];
+      if (!cfg) return;
+      const fb = getStamp(SLOT.lessonFeedback(cid, lesson), store);
+      const pr = getStamp(SLOT.lessonPraise(cid, lesson), store);
+      const f4 = getStamp(SLOT.lessonFourInOne(cid, lesson), store);
+      const patch: Partial<LessonConfig> = {};
+      if (fb && fb.text !== cfg.feedbackTemplate) patch.feedbackTemplate = fb.text;
+      if (pr && pr.text !== cfg.praiseTemplate) patch.praiseTemplate = pr.text;
+      if (f4 && f4.text !== cfg.fourInOneTemplate) patch.fourInOneTemplate = f4.text;
+      if (Object.keys(patch).length) {
+        nextCfgs[lessonKey] = { ...cfg, ...patch };
+        cfgChanged = true;
+      }
+    });
+    if (cfgChanged) { classesChanged = true; nextClasses[cid] = { ...cls, lessonConfigs: nextCfgs }; }
+    else nextClasses[cid] = cls;
+  });
+
+  return { appConfig: nextApp, classes: classesChanged ? nextClasses : classes };
+}
+
 export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = safeParse<Partial<AppConfig>>('appConfig', {});
-    return migrateDefaultOptions({ ...defaultAppConfig, ...saved }, saved);
+    const base = migrateDefaultOptions({ ...defaultAppConfig, ...saved }, saved);
+    // 模板自愈：登记表里的最后一次编辑优先（避免被旧配置/新部署的默认值冲掉）
+    const savedClasses = safeParse<{ [key: string]: Class } | null>('classData', null);
+    return applyTemplateStore(base, savedClasses && typeof savedClasses === 'object' ? savedClasses : {}).appConfig;
   });
 
   // 班级数据
@@ -311,7 +367,9 @@ export function useClassData() {
     const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
     if (saved && typeof saved === 'object') {
       // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
-      return recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(saved)), appConfig);
+      const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(saved)), appConfig);
+      // 课次模板自愈：登记表里的最后一次编辑优先
+      return applyTemplateStore(appConfig, migrated).classes;
     }
     // 初始化示例数据
     return {
@@ -404,12 +462,12 @@ export function useClassData() {
     if (!classData) return getDefaultLessonConfig(appConfig);
     
     const config = classData.lessonConfigs[lessonNumber.toString()];
-    if (config) return withClassPerformanceDefaults(config);
+    if (config) return withLessonDefaults(config, appConfig);
     
     // 如果没有课次配置，尝试使用上一节课的配置
     const prevLesson = lessonNumber - 1;
     if (prevLesson > 0 && classData.lessonConfigs[prevLesson.toString()]) {
-      return withClassPerformanceDefaults(classData.lessonConfigs[prevLesson.toString()]);
+      return withLessonDefaults(classData.lessonConfigs[prevLesson.toString()], appConfig);
     }
     
     return getDefaultLessonConfig(appConfig);
@@ -653,6 +711,10 @@ export function useClassData() {
 
   // 保存课次配置
   const saveLessonConfig = useCallback((classId: string, lessonNumber: number, config: Partial<LessonConfig>) => {
+    // 课次模板打戳登记：只有"文本真的变了"才更新时间戳
+    if (config.feedbackTemplate !== undefined) stampTemplate(SLOT.lessonFeedback(classId, lessonNumber), config.feedbackTemplate);
+    if (config.praiseTemplate !== undefined) stampTemplate(SLOT.lessonPraise(classId, lessonNumber), config.praiseTemplate);
+    if (config.fourInOneTemplate !== undefined) stampTemplate(SLOT.lessonFourInOne(classId, lessonNumber), config.fourInOneTemplate);
     setClasses(prev => {
       const classData = prev[classId];
       if (!classData) return prev;
@@ -681,7 +743,7 @@ export function useClassData() {
       const baseCfg = classData.lessonConfigs[lessonNumber.toString()]
         || (lessonNumber > 1 ? classData.lessonConfigs[(lessonNumber - 1).toString()] : undefined)
         || getDefaultLessonConfig(appConfig);
-      const lessonConfig = withClassPerformanceDefaults(baseCfg);
+      const lessonConfig = withLessonDefaults(baseCfg, appConfig);
 
       const existingIndex = classData.records.findIndex(
         r => r.studentName === record.studentName && r.lessonNumber === record.lessonNumber
@@ -1152,6 +1214,9 @@ export function useClassData() {
 
   // 更新应用配置
   const updateAppConfig = useCallback((newConfig: Partial<AppConfig>) => {
+    // 模板类字段打戳登记（时间戳合并的依据）；文本没变则不打戳，避免无意义地"变新"
+    if (newConfig.defaultFeedbackTemplate !== undefined) stampTemplate(SLOT.globalFeedback, newConfig.defaultFeedbackTemplate);
+    if (newConfig.defaultPraiseTemplate !== undefined) stampTemplate(SLOT.globalPraise, newConfig.defaultPraiseTemplate);
     setAppConfig(prev => ({ ...prev, ...newConfig }));
   }, []);
 
@@ -1328,7 +1393,8 @@ export function useClassData() {
       appConfig,
       classes,
       nicknames,
-      schoolScores
+      schoolScores,
+      templates: readTemplateStore(),
     };
   }, [appConfig, classes, nicknames, schoolScores]);
 
@@ -1338,13 +1404,26 @@ export function useClassData() {
     classes: { [key: string]: Class };
     nicknames: { [classId: string]: { [studentName: string]: string } };
     schoolScores: { [studentName: string]: SchoolScore[] };
+    /** 模板登记表（时间戳合并用）；旧备份可能没有该字段 */
+    templates?: TemplateStore;
   }) => {
     // 防御：字段缺失/为 null 时回退空对象；appConfig 与默认值合并，
     // 避免旧备份缺新字段（如课堂表现选项）导致新课次配置残缺
-    const mergedAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
-    setAppConfig(mergedAppConfig);
+    // 模板登记表：按时间戳"更新者胜出"合并——旧快照永远无法回退新改的模板
+    const incomingTemplates = (data as { templates?: TemplateStore } | null)?.templates;
+    const { merged: mergedTemplates, changed: tplChanged } = mergeTemplateStores(readTemplateStore(), incomingTemplates);
+    if (tplChanged > 0 || incomingTemplates) writeTemplateStore(mergedTemplates);
+
+    const baseAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率
-    setClasses(recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(data?.classes || {})), mergedAppConfig));
+    const migratedClasses = recomputeAllRates(
+      normalizeLeaveTotals(migrateLegacyRecordOptions(data?.classes || {})),
+      baseAppConfig
+    );
+    // 用合并后的登记表覆盖配置中的模板字段（本地更新者胜出）
+    const healed = applyTemplateStore(baseAppConfig, migratedClasses);
+    setAppConfig(healed.appConfig);
+    setClasses(healed.classes);
     setNicknames(data?.nicknames || {});
     setSchoolScores(data?.schoolScores || {});
   }, []);

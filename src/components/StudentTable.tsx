@@ -611,41 +611,41 @@ export function StudentTable({
               <div className="h-[600px] border rounded-lg overflow-auto">
                 {/* 直接用原生 table（不套 ui/Table 的 overflow-x 容器），让外层 h-[600px] 成为唯一滚动口，
                     使 thead 吸顶与 .class-stats-row 吸底同时生效且横向滚动列对齐 */}
-                <table className="w-full caption-bottom text-sm border-separate" style={{ borderSpacing: 0 }}>
+                <table className="w-full caption-bottom text-sm border-separate data-table" style={{ borderSpacing: 0 }}>
                   <TableHeader className="sticky top-0 z-20 bg-[#f5f6f8] [&_tr]:border-b [&_tr]:border-slate-200">
                     <TableRow>
                       <TableHead className="w-10 text-center">
                         <Checkbox checked={allSelected && students.length > 0} onCheckedChange={toggleSelectAll} aria-label="全选" className="translate-y-[2px]" />
                       </TableHead>
-                      <TableHead aria-sort={sortKey === 'rank' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-14 text-base font-bold" title="点击排序（升→降→取消）">
+                      <TableHead aria-sort={sortKey === 'rank' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-14 text-[13px] font-semibold tracking-wide text-slate-500" title="点击排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('rank')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('rank'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">排名{sortCaret('rank')}</button>
                       </TableHead>
-                      <TableHead aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-20 text-base font-bold" title="按姓氏拼音排序（升→降→取消）">
+                      <TableHead aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-20 text-[13px] font-semibold tracking-wide text-slate-500" title="按姓氏拼音排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('name')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">姓名{sortCaret('name')}</button>
                       </TableHead>
-                      {col('seasons') && <TableHead className="w-28 text-base font-bold">{columnLabel('seasons')}</TableHead>}
-                      {col('attendance') && <TableHead className="w-24 text-base font-bold">{columnLabel('attendance')}</TableHead>}
-                      {col('classPerformance') && <TableHead className="w-24 text-base font-bold">{columnLabel('classPerformance')}</TableHead>}
-                      {col('homework') && <TableHead className="w-24 text-base font-bold">{columnLabel('homework')}</TableHead>}
-                      {col('listening') && <TableHead className="w-28 text-base font-bold">{columnLabel('listening')}</TableHead>}
+                      {col('seasons') && <TableHead className="w-[112px] text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('seasons')}</TableHead>}
+                      {col('attendance') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('attendance')}</TableHead>}
+                      {col('classPerformance') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('classPerformance')}</TableHead>}
+                      {col('homework') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('homework')}</TableHead>}
+                      {col('listening') && <TableHead className="w-28 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('listening')}</TableHead>}
                       {col('scores') && lessonConfig.questionTypes.map(qt => (
                         <TableHead key={qt.id} aria-sort={sortKey === `qt:${qt.id}` ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-xs font-bold whitespace-normal break-all leading-tight" title={`${qt.name}${qt.category ? ' · ' + qt.category : ''}｜点击按该题型分数排序`}>
                           <button type="button" onClick={() => toggleSort(`qt:${qt.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(`qt:${qt.id}`); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">{qt.name}{sortCaret(`qt:${qt.id}`)}</button>
                         </TableHead>
                       ))}
                       {customFields.map(cf => <TableHead key={cf.id} className="min-w-20 text-center text-xs font-bold break-all leading-tight" title={cf.name}>{cf.name}{cf.kind === 'number' && cf.fullScore ? <span className="text-[color:var(--ink-4)]"> ({cf.fullScore})</span> : null}</TableHead>)}
-                      <TableHead aria-sort={sortKey === 'total' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-base font-bold" title="点击排序（升→降→取消）">
+                      <TableHead aria-sort={sortKey === 'total' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500" title="点击排序（升→降→取消）">
                         <button type="button" onClick={() => toggleSort('total')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('total'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">总分{sortCaret('total')}</button>
                       </TableHead>
                       {col('correctRate') && (
-                        <TableHead aria-sort={sortKey === 'rate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-base font-bold" title="点击排序（升→降→取消）">
+                        <TableHead aria-sort={sortKey === 'rate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500" title="点击排序（升→降→取消）">
                           <button type="button" onClick={() => toggleSort('rate')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('rate'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">正确率{sortCaret('rate')}</button>
                         </TableHead>
                       )}
-                      {col('correctRate') && <TableHead className="w-16 text-center text-base font-bold">{columnLabel('pass')}</TableHead>}
-                      {col('weakPoints') && <TableHead className="text-base font-bold">薄弱项</TableHead>}
-                      {col('note') && <TableHead className="w-24 text-base font-bold">{columnLabel('note')}</TableHead>}
-                      {col('actions') && <TableHead className="w-44 text-center text-base font-bold">操作</TableHead>}
+                      {col('correctRate') && <TableHead className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('pass')}</TableHead>}
+                      {col('weakPoints') && <TableHead className="text-[13px] font-semibold tracking-wide text-slate-500">薄弱项</TableHead>}
+                      {col('note') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('note')}</TableHead>}
+                      {col('actions') && <TableHead className="w-44 text-center text-[13px] font-semibold tracking-wide text-slate-500">操作</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -667,7 +667,7 @@ export function StudentTable({
                           <TableCell className="text-center">
                             <Checkbox checked={selectedStudents.has(studentName)} onCheckedChange={() => toggleSelect(studentName)} aria-label={`选择 ${studentName}`} className="translate-y-[2px]" />
                           </TableCell>
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             {record?.rank ? (
                               settings.showRankHeatmap && settings.heatmapMode === 'score' ? (
                                 <Badge variant="secondary" className={`heat-badge heat-${heatClass(fullScore > 0 ? (totalScore / fullScore) * 100 : 0)} rounded-full text-base py-1 px-3 font-bold`}>{record.rank}</Badge>
@@ -676,7 +676,7 @@ export function StudentTable({
                               )
                             ) : <span className="text-slate-300 text-base">-</span>}
                           </TableCell>
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <button
                               type="button"
                               onClick={() => onViewStudentAnalysis(studentName)}
@@ -688,7 +688,7 @@ export function StudentTable({
                             </button>
                           </TableCell>
                           {col('seasons') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <div className="flex gap-1 items-center flex-wrap">
                               {(() => {
                                 const selectedSet = new Set(record?.seasons || []);
@@ -719,7 +719,7 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('attendance') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <div className="space-y-1">
                               <Select value={attendanceDisplay.value} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
                                 <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.attendance ? getAttendanceColor(record.attendance) : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
@@ -734,9 +734,9 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('classPerformance') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className="w-24 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className="w-24 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}
@@ -746,7 +746,7 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('homework') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <Select value={homeworkDisplay.value} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
                               <SelectTrigger className={`w-24 h-9 text-sm border rounded-lg ${record?.homeworkStatus ? getHomeworkColor(record.homeworkStatus) : ''}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
@@ -758,10 +758,10 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('listening') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <div className="flex items-center gap-1">
                               <Select value={listeningDisplay.value} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className="w-28 h-9 text-sm border rounded-lg bg-white/80" style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className="w-28 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {listeningDisplay.raw && <SelectItem value={listeningDisplay.raw}>{listeningDisplay.raw}</SelectItem>}
@@ -790,7 +790,7 @@ export function StudentTable({
                               ? 'score-input'
                               : `w-14 h-9 text-center text-base rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
                             return (
-                              <TableCell key={qt.id} className="text-base">
+                              <TableCell key={qt.id} className="text-base tnum">
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -825,7 +825,7 @@ export function StudentTable({
                                   value={String(record?.customValues?.[cf.id] ?? '')}
                                   onValueChange={(v) => handleCustomChange(studentName, cf.id, unwrapClear(v))}
                                 >
-                                  <SelectTrigger className="min-w-20 h-9 text-sm rounded-lg bg-white/80" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
+                                  <SelectTrigger className="min-w-20 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
                                   <SelectContent>
                                     {CLEAR_ITEM}
                                     {(cf.options || []).map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}
@@ -835,7 +835,7 @@ export function StudentTable({
                             </TableCell>
                           ))}
                           <TableCell className="text-center text-base">
-                            <span className="total-bar-wrap">
+                            <span className="total-bar-wrap tnum">
                               {settings.showDataBars && fullScore > 0 && totalScore > 0 && (
                                 <span className="total-bar" style={{ width: `${Math.min(100, (totalScore / fullScore) * 100)}%` }} />
                               )}
@@ -858,7 +858,7 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('weakPoints') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             {weakPoints.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {weakPoints.slice(0, 2).map((wp, i) => (
@@ -875,7 +875,7 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('note') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <Input
                               type="text"
                               placeholder="输入备注"
@@ -886,7 +886,7 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('actions') && (
-                          <TableCell className="text-base">
+                          <TableCell className="text-base tnum">
                             <div className="flex justify-center gap-1">
                               <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} aria-label="复制反馈" title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
                               {onClearRecord && (

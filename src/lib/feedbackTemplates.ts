@@ -26,7 +26,7 @@ export function generatePersonalFeedback(
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
   }
   const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
-  const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate);
+  const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate) || '';
   let template = baseTemplate;
   
   // 构建成绩详情

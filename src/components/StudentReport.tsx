@@ -519,7 +519,7 @@ export function StudentReport({
                   </SelectContent>
                 </Select>
                 <div className="hidden sm:block flex-1" />
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" data-html2canvas-ignore="true">
                   <Button variant="outline" size="sm" className="gap-2" onClick={exportClassReportCSV}>
                     <FileSpreadsheet className="w-4 h-4" />
                     导出CSV
@@ -700,7 +700,7 @@ function PersonalReport({
         </p>
       </div>
 
-      <Card className="mb-6 liquid-glass-card">
+      <Card className="mb-6 liquid-glass-card" data-html2canvas-ignore="true">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex items-center gap-2">
@@ -746,7 +746,7 @@ function PersonalReport({
               </Select>
             </div>
             <div className="flex-1" />
-            <Button variant="outline" size="sm" className="gap-2 h-8" onClick={handleExportPersonalImage} disabled={isExportingImage}>
+            <Button variant="outline" size="sm" className="gap-2 h-8" data-html2canvas-ignore="true" onClick={handleExportPersonalImage} disabled={isExportingImage}>
               <ImageIcon className="w-4 h-4" />
               {isExportingImage ? '生成中...' : '导出图片'}
             </Button>

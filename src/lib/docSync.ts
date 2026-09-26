@@ -70,6 +70,8 @@ export interface ScoreColumn {
   suggestedFullScore: number;
   /** 命中已有题型时给出其 id，用于沿用（保住已录分数） */
   matchedQtId?: string;
+  /** true = 不计入小测总分（如口语得分：属于作业成绩，且可空） */
+  excludeFromTotal?: boolean;
 }
 
 export interface ParseResult {
@@ -107,7 +109,18 @@ const norm = (s: string) => s.replace(/\s+/g, '').replace(/[（）()]/g, '');
 const CANONICAL_FULL_SCORES: Record<string, number> = {
   '语法选择': 15, '完形填空': 10, '阅读理解': 10, '语篇填词': 5, '完成句子': 10,
   '语法填空': 10, '单项选择': 5,
+  // 口语为百分制；它是作业成绩的一部分，不计入小测总分（见 excludeFromTotal）
+  '口语': 100, '口语得分': 100, '口语成绩': 100,
 };
+
+/**
+ * 判定某列是否为「不计入小测总分」的附加项。
+ * 目前覆盖：口语类（口语/口语得分/口语成绩/朗读/跟读/口语表达…）——
+ * 它属于作业成绩，且并非每次课都登记，因此需要按"可空 + 不计入总分"处理。
+ */
+export function isNonQuizColumn(name: string): boolean {
+  return /口语|朗读|跟读|配音|口试/.test(name || '');
+}
 
 /**
  * 推断各分数列的真实满分，三重依据按"证据强度"协同：
@@ -356,6 +369,7 @@ export function parseClipboardTable(
     name: c.name,
     matchedQtId: c.matchedQtId,
     suggestedFullScore: inferred[i],
+    excludeFromTotal: isNonQuizColumn(c.name) || undefined,
   }));
 
   return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates, scoreColumns, declaredTotalScore };

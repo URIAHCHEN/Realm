@@ -6,7 +6,11 @@ import type { LessonConfig } from '@/types';
 
 export function getLessonFullScore(cfg: LessonConfig | undefined | null): number {
   if (!cfg) return 0;
-  const qtTotal = (cfg.questionTypes || []).reduce((sum, qt) => sum + (qt.fullScore || 0), 0);
+  // excludeFromTotal 的题型（如口语得分）不计入小测分母
+  const qtTotal = (cfg.questionTypes || []).reduce(
+    (sum, qt) => (qt.excludeFromTotal ? sum : sum + (qt.fullScore || 0)),
+    0
+  );
   const cfTotal = (cfg.customFields || []).reduce(
     (sum, cf) => (cf.kind === 'number' && cf.includeInTotal ? sum + (cf.fullScore || 0) : sum),
     0

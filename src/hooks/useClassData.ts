@@ -179,7 +179,8 @@ function computeTotals(
     return { totalScore: 0, correctRate: 0 };
   }
   const total =
-    (lessonConfig.questionTypes || []).reduce((sum, qt) => sum + (scores?.[qt.id] || 0), 0) +
+    // 不计入总分的题型（口语等附加项）跳过
+    (lessonConfig.questionTypes || []).reduce((sum, qt) => (qt.excludeFromTotal ? sum : sum + (scores?.[qt.id] || 0)), 0) +
     (lessonConfig.customFields || []).reduce(
       (sum, cf) => (cf.kind === 'number' && cf.includeInTotal ? sum + (Number(customValues?.[cf.id]) || 0) : sum),
       0
@@ -280,6 +281,37 @@ function migrateLegacyRecordOptions(all: { [key: string]: Class }): { [key: stri
   return changed ? next : all;
 }
 
+// 历史配置迁移：把「口语得分」这类附加项题型补上 excludeFromTotal 标记
+// （老数据里它们被当成普通题型计入了总分，需要按新口径纠正；幂等，可重复执行）
+function migrateExcludeFromTotal(all: { [key: string]: Class }): { [key: string]: Class } {
+  const shouldExclude = (name: string) => /口语|朗读|跟读|配音|口试/.test(name || '');
+  let changed = false;
+  const next: { [key: string]: Class } = {};
+  Object.entries(all).forEach(([cid, cls]) => {
+    const cfgs = cls?.lessonConfigs || {};
+    let cfgChanged = false;
+    const nextCfgs: typeof cfgs = { ...cfgs };
+    Object.entries(cfgs).forEach(([key, cfg]) => {
+      if (!cfg?.questionTypes?.length) return;
+      let typeChanged = false;
+      const types = cfg.questionTypes.map(qt => {
+        if (shouldExclude(qt.name) && !qt.excludeFromTotal) {
+          typeChanged = true;
+          return { ...qt, excludeFromTotal: true };
+        }
+        return qt;
+      });
+      if (typeChanged) {
+        nextCfgs[key] = { ...cfg, questionTypes: types };
+        cfgChanged = true;
+      }
+    });
+    if (cfgChanged) { changed = true; next[cid] = { ...cls, lessonConfigs: nextCfgs }; }
+    else next[cid] = cls;
+  });
+  return changed ? next : all;
+}
+
 function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
   let changed = false;
   const next: { [key: string]: Class } = {};
@@ -367,7 +399,7 @@ export function useClassData() {
     const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
     if (saved && typeof saved === 'object') {
       // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
-      const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(saved)), appConfig);
+      const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
       // 课次模板自愈：登记表里的最后一次编辑优先
       return applyTemplateStore(appConfig, migrated).classes;
     }
@@ -531,6 +563,17 @@ export function useClassData() {
 
     const avgScores: { [key: string]: number } = {};
     questionTypes.forEach(qt => {
+      if (qt.excludeFromTotal) {
+        // 附加项（如口语得分）：并非每次课都登记 → 只对"已登记"的值求平均，
+        // 未登记（key 不存在）不能当作 0，否则班均会被拉低
+        const registered = present
+          .map(r => r.scores[qt.id])
+          .filter((v): v is number => typeof v === 'number');
+        avgScores[qt.id] = registered.length > 0
+          ? Math.round(registered.reduce((a, b) => a + b, 0) / registered.length * 10) / 10
+          : 0;
+        return;
+      }
       // 仅统计出勤学员；到课学员的 0 分也计入班均（不再用 >0 过滤，避免班均虚高）
       const typeScores = present.map(r => r.scores[qt.id] || 0);
       avgScores[qt.id] = typeScores.length > 0
@@ -548,9 +591,11 @@ export function useClassData() {
     const lessonRecords = currentClass.records.filter(
       r => r.lessonNumber === record.lessonNumber
     );
-    const stats = calculateClassStats(lessonRecords, questionTypes);
+    // 附加项（如口语得分）不属于小测，不参与薄弱项分析
+    const quizTypes = questionTypes.filter(qt => !qt.excludeFromTotal);
+    const stats = calculateClassStats(lessonRecords, quizTypes);
 
-    return computeCategoryWeakPoints(record, questionTypes, stats.avgScores);
+    return computeCategoryWeakPoints(record, quizTypes, stats.avgScores);
   }, [currentClass, calculateClassStats]);
 
   // 创建新班级
@@ -861,7 +906,7 @@ export function useClassData() {
   const syncQuestionTypesFromImport = useCallback((
     classId: string,
     lessonNumber: number,
-    columns: { name: string; suggestedFullScore: number; matchedQtId?: string }[]
+    columns: { name: string; suggestedFullScore: number; matchedQtId?: string; excludeFromTotal?: boolean }[]
   ): { [columnName: string]: string } => {
     const mapping: { [columnName: string]: string } = {};
     if (!columns.length) return mapping;
@@ -890,12 +935,14 @@ export function useClassData() {
       const existing = (col.matchedQtId ? baseCfg.questionTypes.find(q => q.id === col.matchedQtId) : undefined)
         || byName.get(name);
       const fullScore = col.suggestedFullScore > 0 ? col.suggestedFullScore : (existing?.fullScore || 100);
+      // 不计入小测总分的列（口语等）→ 落到题型标记上；已存在题型时一并纠正
+      const excludeFromTotal = col.excludeFromTotal || undefined;
       if (existing && !takenIds.has(existing.id)) {
         takenIds.add(existing.id);
-        nextTypes.push({ ...existing, name, fullScore, order: i });
+        nextTypes.push({ ...existing, name, fullScore, order: i, excludeFromTotal });
       } else {
         const id = 'qt_' + Date.now() + '_' + i + '_' + Math.floor(Math.random() * 1000);
-        nextTypes.push({ id, name, fullScore, order: i });
+        nextTypes.push({ id, name, fullScore, order: i, excludeFromTotal });
       }
       mapping[name] = nextTypes[nextTypes.length - 1].id;
     });
@@ -1417,7 +1464,7 @@ export function useClassData() {
     const baseAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率
     const migratedClasses = recomputeAllRates(
-      normalizeLeaveTotals(migrateLegacyRecordOptions(data?.classes || {})),
+      normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(data?.classes || {}))),
       baseAppConfig
     );
     // 用合并后的登记表覆盖配置中的模板字段（本地更新者胜出）

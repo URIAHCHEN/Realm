@@ -138,6 +138,33 @@ export function StudentReport({
     return Array.from(seen.values()).sort((a, b) => a.order - b.order);
   }, [lessonConfigs]);
 
+  // 附加项清单（如口语得分）：不计入小测，但属于作业成绩的一部分 → 单独统计
+  const optionalScoreFields = useMemo(() => {
+    const seen = new Map<string, { name: string; fullScore: number; ids: string[] }>();
+    Object.keys(lessonConfigs).forEach(k => {
+      (lessonConfigs[k]?.questionTypes || []).forEach(qt => {
+        if (!qt.excludeFromTotal) return;
+        const cur = seen.get(qt.name) || { name: qt.name, fullScore: qt.fullScore, ids: [] as string[] };
+        if (!cur.ids.includes(qt.id)) cur.ids.push(qt.id);
+        seen.set(qt.name, cur);
+      });
+    });
+    return Array.from(seen.values());
+  }, [lessonConfigs]);
+
+  /** 统计某批记录在附加项上的表现：只累加"已登记"的值，未登记不计入 */
+  const summarizeOptional = (field: { name: string; ids: string[] }, recs: StudentRecord[]) => {
+    const values = recs
+      .map(r => field.ids.map(id => r.scores?.[id]).find(v => typeof v === 'number'))
+      .filter((v): v is number => typeof v === 'number');
+    return {
+      name: field.name,
+      registered: values.length,
+      total: recs.length,
+      avg: values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : 0,
+    };
+  };
+
   // 动态选项清单：跨课次收集当前配置里出现过的选项（改文案后统计自动跟随）
   const attendanceOptions = useMemo(() => collectOptions(lessonConfigs, 'attendanceOptions'), [lessonConfigs]);
   const homeworkOptions = useMemo(() => collectOptions(lessonConfigs, 'homeworkOptions'), [lessonConfigs]);
@@ -173,7 +200,8 @@ export function StudentReport({
     studentRecords.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
-        config.questionTypes.forEach(qt => {
+        // 附加项（口语等）不属于小测科目，不参与题型均分/正确率统计
+        config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
           if (!questionTypeScores[qt.id]) {
             questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullScore: qt.fullScore || 0 };
           }
@@ -374,6 +402,16 @@ export function StudentReport({
     return list;
   }, [studentRecords, scoreSort, lessonConfigs]);
 
+  // 口语类统计行：个人报告用（选中学生）/ 班级报告用（全班）
+  const optionalStudentRows = useMemo(
+    () => optionalScoreFields.map(f => summarizeOptional(f, studentRecords)),
+    [optionalScoreFields, studentRecords]
+  );
+  const optionalClassRows = useMemo(
+    () => optionalScoreFields.map(f => summarizeOptional(f, classReportRecords)),
+    [optionalScoreFields, classReportRecords]
+  );
+
   // 班级组合图数据：每次课「班级平均正确率（柱）+ 最高/最低（线）+ 目标线 + 达标人数」
   const classComboTrend = useMemo(() => {
     const scored = classReportRecords.filter(r => !isAbsentRecord(r));
@@ -571,6 +609,7 @@ export function StudentReport({
           pieData={pieData}
           barData={barData}
           comboTrend={comboTrend}
+          optionalRows={optionalStudentRows}
 
           radarData={radarData}
           currentClassName={currentClassName}
@@ -597,6 +636,7 @@ export function StudentReport({
             selectedLesson={selectedLesson}
             classStats={classStats}
             classComboTrend={classComboTrend}
+            optionalRows={optionalClassRows}
             classReportRecords={classReportRecords}
             getNickname={getNickname}
             customFields={allCustomFields}
@@ -628,6 +668,7 @@ interface PersonalReportProps {
   pieData: { name: string; value: number; color: string }[];
   barData: { lesson: string; lessonNum: number; score: number; correctRate: number; fullMark: number }[];
   comboTrend: { lesson: string; 学生正确率: number; 班级平均: number; 班级最高: number; 班级排名: number }[];
+  optionalRows: { name: string; registered: number; total: number; avg: number }[];
   radarData: { subject: string; A: number; fullMark: number }[];
   currentClassName: string;
   selectedStudent: string;
@@ -654,6 +695,7 @@ function PersonalReport({
   pieData,
   barData,
   comboTrend,
+  optionalRows,
   radarData,
   currentClassName,
   selectedStudent,
@@ -978,6 +1020,19 @@ function PersonalReport({
               {(studentStats?.homeworkBreakdown || []).length === 0 && (studentStats?.listeningBreakdown || []).length === 0 && (
                 <p className="text-sm text-[color:var(--ink-4)]">本课次暂无课堂练习/课后任务记录</p>
               )}
+              {optionalRows.length > 0 && (
+                <div className="pt-2 mt-1 border-t border-black/5 space-y-2">
+                  <p className="text-xs text-[color:var(--ink-4)]">口语类（作业成绩，不计入小测总分）</p>
+                  {optionalRows.map(st => (
+                    <div key={st.name} className="flex justify-between items-center">
+                      <span className="text-[color:var(--ink-2)]">{st.name}</span>
+                      <Badge className={TONE_BADGE.muted}>
+                        {st.registered > 0 ? `平均 ${st.avg} 分 · 已登记 ${st.registered}/${st.total} 次` : '尚未登记'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1086,6 +1141,7 @@ interface ClassReportProps {
   currentClassName: string;
   selectedLesson: number | 'all';
   classComboTrend: { lesson: string; 班级平均: number; 班级最高: number; 班级最低: number; 达标人数: number; 人数: number }[];
+  optionalRows: { name: string; registered: number; total: number; avg: number }[];
   classStats: {
     avgScore: number;
     maxScore: number;
@@ -1106,7 +1162,7 @@ interface ClassReportProps {
   customFields: import('@/types').CustomField[];
 }
 
-function ClassReport({ currentClassName, selectedLesson, classStats, classComboTrend, classReportRecords, getNickname, customFields }: ClassReportProps) {
+function ClassReport({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields }: ClassReportProps) {
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
   const lowScoreStudents = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
@@ -1367,6 +1423,19 @@ function ClassReport({ currentClassName, selectedLesson, classStats, classComboT
               )}
               {classStats.homeworkBreakdown.length === 0 && classStats.listeningBreakdown.length === 0 && (
                 <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
+              )}
+              {optionalRows.length > 0 && (
+                <div className="col-span-2 pt-2 mt-1 border-t border-black/5">
+                  <p className="text-xs text-[color:var(--ink-4)] mb-2">口语类（作业成绩，不计入小测总分；仅统计已登记）</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {optionalRows.map(st => (
+                      <div key={st.name} className="p-3 rounded-xl text-center bg-blue-50 text-blue-700">
+                        <p className="text-2xl font-bold">{st.registered > 0 ? st.avg : '—'}</p>
+                        <p className="text-xs">{st.name}均分 · 已登记 {st.registered} 次</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </CardContent>

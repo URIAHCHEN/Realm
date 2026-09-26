@@ -265,8 +265,13 @@ export function StudentTable({
   };
 
   // 薄弱项（按板块、得分率口径）
+  // 薄弱项只分析小测科目：附加项（如口语得分，不计入总分）不参与
   const getWeakPoints = (record: StudentRecord) =>
-    computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
+    computeCategoryWeakPoints(
+      record,
+      lessonConfig.questionTypes.filter(qt => !qt.excludeFromTotal),
+      stats.avgScores
+    );
 
   // —— 列排序：姓名（按姓氏拼音）/ 排名 / 总分 / 正确率 / 各题型分数；点击表头 升→降→取消 ——
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -784,7 +789,12 @@ export function StudentTable({
                           </TableCell>
                           )}
                           {col('scores') && visibleQuestionTypes.map(qt => {
-                            const score = record?.scores?.[qt.id] || 0;
+                            // 附加项（如口语得分）并非每次课都登记：未登记时使用「—」占位，
+                            // 不与"真实 0 分"混淆
+                            const rawScore = record?.scores?.[qt.id];
+                            const isOptional = !!qt.excludeFromTotal;
+                            const score = typeof rawScore === 'number' ? rawScore : 0;
+                            const notRegistered = isOptional && typeof rawScore !== 'number';
                             const avgScore = stats.avgScores[qt.id] || 0;
                             const isWeak = isQtWeak(qt, score, avgScore);
                             const isStrong = isQtStrong(qt, score, avgScore);
@@ -801,13 +811,13 @@ export function StudentTable({
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <span className={`score-cell w-14 h-9 rounded-lg ${settings.showDataBars ? 'border border-black/10' : ''}`}>
-                                        {settings.showDataBars && score > 0 && (
+                                        {settings.showDataBars && score > 0 && !notRegistered && (
                                           <span
                                             className={`score-bar ${isWeak ? 'weak' : isStrong ? 'strong' : ''}`}
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <ScoreInput value={score} max={qt.fullScore} placeholder="0" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
+                                        <ScoreInput value={score} max={qt.fullScore} placeholder={isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
@@ -920,13 +930,18 @@ export function StudentTable({
                       {col('classPerformance') && <TableCell className="bg-white"></TableCell>}
                       {col('homework') && <TableCell className="bg-white"></TableCell>}
                       {col('listening') && <TableCell className="bg-white"></TableCell>}
-                      {col('scores') && visibleQuestionTypes.map(qt => (
-                        <TableCell key={qt.id} className="text-center text-sm">
-                          <span className="inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold text-[color:var(--brand)] bg-white/70 border border-[rgb(var(--brand-rgb)/0.2)]">
-                            {(stats.avgScores[qt.id] ?? 0).toFixed(1)}
-                          </span>
-                        </TableCell>
-                      ))}
+                      {col('scores') && visibleQuestionTypes.map(qt => {
+                        // 附加项（口语等）只对已登记的值求平均；无人登记时显示「—」
+                        const avg = stats.avgScores[qt.id];
+                        const hasAvg = typeof avg === 'number' && avg > 0;
+                        return (
+                          <TableCell key={qt.id} className="text-center text-sm">
+                            <span className={`inline-flex items-center justify-center min-w-[46px] px-2 py-1 rounded-md font-bold bg-white/70 border ${qt.excludeFromTotal ? 'text-[color:var(--ink-3)] border-slate-200' : 'text-[color:var(--brand)] border-[rgb(var(--brand-rgb)/0.2)]'}`}>
+                              {hasAvg ? avg.toFixed(1) : '—'}
+                            </span>
+                          </TableCell>
+                        );
+                      })}
                       <TableCell className="text-center text-sm">
                         <span className="inline-flex items-center justify-center px-2 py-1 rounded-md font-bold text-emerald-700 bg-emerald-50/80 border border-emerald-200">
                           {stats.avgScore.toFixed(1)}

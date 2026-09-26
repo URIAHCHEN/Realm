@@ -148,7 +148,7 @@ export function buildPublicityHTML(
   // 公示只列出到课学员：请假/缺勤者不出现在名单中（平均分本就不计入）
   const sorted = [...records].filter(r => !isAbsentRecord(r)).sort((a, b) => b.totalScore - a.totalScore);
   const fullScore =
-    questionTypes.reduce((sum, qt) => sum + qt.fullScore, 0) +
+    questionTypes.reduce((sum, qt) => (qt.excludeFromTotal ? sum : sum + qt.fullScore), 0) +
     customFields.reduce((sum, cf) => sum + (cf.kind === 'number' && cf.includeInTotal ? (cf.fullScore || 0) : 0), 0);
   const hasData = sorted.length > 0;
 

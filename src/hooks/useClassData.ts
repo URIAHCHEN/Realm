@@ -91,32 +91,33 @@ const defaultAppConfig: AppConfig = {
   defaultListeningOptions: [...DEFAULT_LISTENING_OPTIONS],
   defaultClassPerformanceOptions: [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
   defaultOptionsVersion: DEFAULT_OPTIONS_VERSION,
-  defaultFeedbackTemplate: `【学生昵称】家长您好！
-
-跟您同步一下孩子第【课次】课的情况：
+  // 默认私发模板（2026-09 按去 AI 味原则重写）：
+  //  · 去掉"跟您同步一下""第一时间"这类模板腔与空话
+  //  · 长短句交错，允许口语停顿（破折号、短句）
+  //  · 先给具体信息，再给一句判断；不堆形容词
+  defaultFeedbackTemplate: `【学生昵称】家长好，第【课次】课的情况我写在这儿。
 
 🏫 考勤：【考勤】
 🙋 课堂表现：【课堂表现】
 📝 作业：【作业】
 🎙️ 课后任务：【课后任务】
 
-📊 入门测成绩：
+入门测这边：
 【成绩详情】
-💯 总分：【总分】/【满分】
-📈 班级排名：第【排名】名
-📊 正确率：【正确率】%
+总分【总分】/【满分】，班级第【排名】名，正确率【正确率】%。
 
-⚠️ 薄弱项：【薄弱项】
+⚠️ 还要盯的地方：【薄弱项】
 
-📝 今日作业：
+📝 今日作业
 【作业内容】
 
-孩子这边有任何情况，我都会第一时间跟您说；您在家观察到什么，也随时告诉我，咱们一起帮孩子往前走 💪`,
-  defaultPraiseTemplate: `🏆 第【课次】课【表彰类型】表扬榜
+有变化我会主动告诉您。您在家看到什么，也跟我说一声，两边对得上，孩子才不白练 💪`,
+  // 默认表扬模板：一句事实 + 一句轻收尾，不喊口号
+  defaultPraiseTemplate: `🏆 第【课次】课【表彰类型】
 
 【表彰内容】
 
-恭喜以上同学，这份认真值得被看见！下节课继续加油～💪`,
+上面这几位，这节课的功夫是实打实的。没上榜的也别急，下节课接着来。`,
   defaultQuestionTypes: [...defaultQuestionTypes]
 };
 

@@ -165,7 +165,9 @@ export function StudentTable({
     if (lessonRecs.length === 0) return all;
     const nonEmpty = all.filter(qt => lessonRecs.some(r => (r.scores?.[qt.id] ?? 0) !== 0));
     return nonEmpty.length > 0 ? nonEmpty : all;
-  }, [settings.autoHideEmptyColumns, lessonConfig.questionTypes, records]);
+    // 依赖必须含 lessonNumber：records 是全班所有课次的记录，切课次时其引用不变，
+    // 少了它就会让「自动隐藏」停留在上一课次的结果（状态残留）。
+  }, [settings.autoHideEmptyColumns, lessonConfig.questionTypes, records, lessonNumber]);
 
   const visibleCustomFields = useMemo(() => {
     if (!settings.autoHideEmptyColumns) return customFields;
@@ -180,7 +182,8 @@ export function StudentTable({
     });
     const nonEmpty = customFields.filter(cf => hasValue(cf.id));
     return nonEmpty.length > 0 ? nonEmpty : customFields;
-  }, [settings.autoHideEmptyColumns, customFields, records]);
+    // 同上：切课次时 records 引用不变，必须把 lessonNumber 纳入依赖才能重算。
+  }, [settings.autoHideEmptyColumns, customFields, records, lessonNumber]);
 
   // 自定义列标题（留空回退默认名）
   const columnLabel = (key: string) => {

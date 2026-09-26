@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
-import { copyToClipboard } from '@/lib/feedbackTemplates';
+import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { toast } from 'sonner';
@@ -49,6 +49,8 @@ interface ProgressItem {
   lastScore: number;
   improvement: number;
   improvementRate: number;
+  /** 该生在此范围内有成绩的课次数 */
+  lessonCount: number;
   firstRank?: number;
   lastRank?: number;
   rankChange?: number;
@@ -166,18 +168,26 @@ export function Leaderboard({
         }
       });
 
-    return Array.from(latestByStudent.values())
+    const sorted = Array.from(latestByStudent.values())
       .sort((a, b) => b.totalScore - a.totalScore)
-      .slice(0, 10)
-      .map((r, i) => ({
+      .slice(0, 10);
+    // 并列同名次：与学情表 / 公示导出 / 分析弹窗保持同一口径
+    let lastScore: number | null = null;
+    let lastRank = 0;
+    return sorted.map((r, i) => {
+      const rank = lastScore !== null && r.totalScore === lastScore ? lastRank : i + 1;
+      lastScore = r.totalScore;
+      lastRank = rank;
+      return {
         id: r.id,
         studentName: r.studentName,
         nickname: getNickname(r.studentName),
         shortNickname: generateShortNickname(getNickname(r.studentName)),
         totalScore: r.totalScore,
         correctRate: r.correctRate,
-        rank: i + 1
-      }));
+        rank,
+      };
+    });
   }, [rangeRecords, getNickname]);
 
   // 状元（第一名）
@@ -219,13 +229,17 @@ export function Leaderboard({
           improvementRate,
           firstRank: first.rank,
           lastRank: last.rank,
-          rankChange: first.rank && last.rank ? first.rank - last.rank : undefined
+          rankChange: first.rank && last.rank ? first.rank - last.rank : undefined,
+          // 该生在当前范围内有成绩的课次数（进步至少需要两个课次）
+          lessonCount: recs.length,
         };
       })
-      .filter(item => rangeRecords.length === lessonRecords.length ? true : (item.lastLesson - item.firstLesson + 1) >= progressMinLessons)
+      // 用"该生自己的课次数"判断是否够对比，而不是比较数组长度 ——
+      // 原写法在默认的"当前课次"范围下恒为 true，导致全员以 +0 分上榜
+      .filter(item => item.lessonCount >= progressMinLessons)
       .sort((a, b) => b.improvement - a.improvement)
       .slice(0, 10);
-  }, [rangeRecords, getNickname, lessonRecords.length, progressMinLessons]);
+  }, [rangeRecords, getNickname, progressMinLessons]);
 
   // 课后任务排名
   const listeningRankings: RankingItem[] = useMemo(() => {
@@ -242,16 +256,20 @@ export function Leaderboard({
     return Array.from(latestByStudent.values())
       .sort((a, b) => b.listeningScore - a.listeningScore)
       .slice(0, 5)
-      .map((r, i) => ({
-        id: r.id,
-        studentName: r.studentName,
-        nickname: getNickname(r.studentName),
-        shortNickname: generateShortNickname(getNickname(r.studentName)),
-        totalScore: r.listeningScore,
-        correctRate: r.correctRate,
-        rank: i + 1,
-        listeningScore: r.listeningScore
-      }));
+      .map((r, i, arr) => {
+        // 并列同名次（同分不再硬排先后）
+        const rank = i > 0 && arr[i - 1].listeningScore === r.listeningScore ? 0 : i + 1;
+        return {
+          id: r.id,
+          studentName: r.studentName,
+          nickname: getNickname(r.studentName),
+          shortNickname: generateShortNickname(getNickname(r.studentName)),
+          totalScore: r.listeningScore,
+          correctRate: r.correctRate,
+          rank: rank || (i > 0 ? 0 : 1),
+          listeningScore: r.listeningScore,
+        };
+      });
   }, [rangeRecords, getNickname]);
 
   // 作业优秀学生
@@ -325,7 +343,7 @@ export function Leaderboard({
       if (progressStars.length > 0) {
         progressStars.forEach((s, i) => {
           const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
-          text += `${medal} ${s.nickname}：${s.firstScore}分 → ${s.lastScore}分（+${s.improvement}分`;
+          text += `${medal} ${s.nickname}：${s.firstScore}分 → ${s.lastScore}分（${s.improvement >= 0 ? '+' : ''}${s.improvement}分`;
           if (s.rankChange && s.rankChange > 0) {
             text += `，排名前进${s.rankChange}名`;
           }
@@ -384,12 +402,12 @@ export function Leaderboard({
         content = '排名,姓名,昵称,总分,正确率\n';
         const rows = mode === 'champion' && champion ? [champion] : entranceRankings;
         rows.forEach(r => {
-          content += `${r.rank},${r.studentName},${r.nickname},${r.totalScore},${r.correctRate}%\n`;
+          content += [r.rank, r.studentName, r.nickname, r.totalScore, `${r.correctRate}%`].map(csvCell).join(',') + '\n';
         });
       } else if (mode === 'progress') {
         content = '排名,姓名,昵称,起始课次,起始分数,结束课次,结束分数,提升分数,提升率\n';
         progressStars.forEach((s, i) => {
-          content += `${i + 1},${s.studentName},${s.nickname},第${s.firstLesson}课,${s.firstScore},第${s.lastLesson}课,${s.lastScore},${s.improvement},${s.improvementRate.toFixed(1)}%\n`;
+          content += [i + 1, s.studentName, s.nickname, `第${s.firstLesson}课`, s.firstScore, `第${s.lastLesson}课`, s.lastScore, s.improvement, `${s.improvementRate.toFixed(1)}%`].map(csvCell).join(',') + '\n';
         });
       } else if (mode === 'listening') {
         content = '排名,姓名,昵称,课后任务分数\n';
@@ -423,7 +441,7 @@ export function Leaderboard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = sanitizeFileName(filename);
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`已导出 ${format.toUpperCase()}`);
@@ -452,7 +470,7 @@ export function Leaderboard({
       });
       const link = document.createElement('a');
       const modeLabel = mode === 'top10' ? '前十名' : mode === 'champion' ? '状元' : mode === 'progress' ? '进步之星' : mode === 'listening' ? '课后任务达人' : '作业表彰';
-      link.download = `表扬榜_${modeLabel}_${rangeText}.png`;
+      link.download = sanitizeFileName(`表扬榜_${modeLabel}_${rangeText}.png`);
       link.href = canvas.toDataURL('image/png');
       link.click();
       toast.success('榜单图片已导出');
@@ -609,7 +627,7 @@ export function Leaderboard({
                       <span className="font-bold text-emerald-300">{s.lastScore}分</span>
                     </div>
                     <span className="text-sm text-emerald-200">
-                      +{s.improvement}分 ({s.improvementRate.toFixed(1)}%)
+                      {s.improvement >= 0 ? '+' : ''}{s.improvement}分 ({s.improvementRate >= 0 ? '+' : ''}{s.improvementRate.toFixed(1)}%)
                       {s.rankChange && s.rankChange > 0 ? ` · 排名前进了${s.rankChange}名` : ''}
                     </span>
                   </div>

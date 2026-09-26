@@ -83,9 +83,9 @@ export function generatePersonalFeedback(
     .replace(/【学生昵称】/g, nickname)
     .replace(/【学生短昵称】/g, shortNickname)
     .replace(/【课次】/g, record.lessonNumber.toString())
-    .replace(/【考勤】/g, record.attendance)
+    .replace(/【考勤】/g, record.attendance || '')
     .replace(/【课堂表现】/g, record.classPerformance || '')
-    .replace(/【作业】/g, record.homeworkStatus)
+    .replace(/【作业】/g, record.homeworkStatus || '')
     .replace(/【课后任务】|【乐听说】/g, record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus)
     .replace(/【成绩详情】/g, scoreDetails)
     .replace(/【总分】/g, record.totalScore.toString())
@@ -486,4 +486,16 @@ export function downloadCSV(csv: string, filename: string) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+/** CSV 单元格转义（RFC4180）：含逗号/引号/换行时用双引号包裹并把内部引号转义 */
+export function csvCell(v: unknown): string {
+  const t = v == null ? '' : String(v);
+  return /[,"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+
+/** 导出文件名清洗：去掉各系统的路径/非法字符，避免下载失败或产生怪文件名 */
+export function sanitizeFileName(name: string, fallback = '导出'): string {
+  const t = (name || '').replace(/[\\/:*?"<>|\r\n\t]/g, '_').replace(/\s+/g, ' ').trim();
+  return t || fallback;
 }

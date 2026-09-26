@@ -108,8 +108,11 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
     let raw = e.target.value.replace(/[^\d.]/g, '');
     const dot = raw.indexOf('.');
     if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, ''); // 仅保留一个小数点
-    setText(raw);
-    onCommit(clamp(parseFloat(raw)));
+    const n = clamp(parseFloat(raw));
+    const entered = parseFloat(raw);
+    // 超限/非法时把输入框同步成落库值：否则用户看到 12、实际存的是 10，短暂误导
+    setText(Number.isNaN(entered) ? raw : (n !== entered ? String(n) : raw));
+    onCommit(n);
   };
 
   const handleBlur = () => {

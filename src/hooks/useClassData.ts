@@ -176,7 +176,11 @@ function computeTotals(
   lessonConfig: LessonConfig,
   attendance?: string
 ): { totalScore: number; correctRate: number } {
-  if (attendanceKind(attendance) === 'leave') {
+  // 请假与缺勤一致处理：都不计入总分与正确率。
+  // 原来只清零"请假"，先录分后标缺勤的记录仍会带着分数参与排名，
+  // 与 lessonStats / 报告口径（把两者都排除）矛盾。
+  const kind = attendanceKind(attendance);
+  if (kind === 'leave' || kind === 'absent') {
     return { totalScore: 0, correctRate: 0 };
   }
   const total =
@@ -1378,6 +1382,8 @@ export function useClassData() {
                 id: generateId(),
                 studentName: matchedName,
                 studentCode: row[1]?.toString(),
+                // 考试名固定为「校内考试」时，靠 (姓名+日期+分数) 去重，
+                // 否则同一份 Excel 导入两次会让成绩条数翻倍、污染平均分与进步对比
                 examName: '校内考试',
                 date: new Date().toISOString().split('T')[0],
                 campus: row[2]?.toString(),

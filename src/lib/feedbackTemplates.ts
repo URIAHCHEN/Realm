@@ -15,6 +15,86 @@ export function generateShortNickname(fullName: string): string {
 }
 
 // 生成个性化私发反馈
+
+/**
+ * 动态可选参数：把「本课次表格里的字段」全部变成可用参数。
+ *  - 每个题型（含口语得分这类不计入总分的附加项）：【题型名】= 得分，【题型名得分率】= 百分比
+ *  - 每个自定义列：【列名】= 填写内容
+ * 与固定参数同名的字段跳过（避免覆盖语义）。
+ */
+export interface TemplateVar { key: string; desc: string }
+
+const FIXED_VAR_NAMES = new Set([
+  '学生昵称', '学生短昵称', '课次', '考勤', '课堂表现', '作业', '课后任务', '乐听说',
+  '成绩详情', '总分', '满分', '排名', '正确率', '薄弱项', '作业内容', '表彰类型', '表彰内容',
+]);
+
+export function buildDynamicVariables(cfg: LessonConfig | undefined | null): TemplateVar[] {
+  if (!cfg) return [];
+  const out: TemplateVar[] = [];
+  (cfg.questionTypes || []).forEach(qt => {
+    const n = (qt.name || '').trim();
+    if (!n || FIXED_VAR_NAMES.has(n)) return;
+    out.push({ key: `【${n}】`, desc: `${n}：本生得分` });
+    out.push({ key: `【${n}得分率】`, desc: `${n}：本生得分率` });
+  });
+  (cfg.customFields || []).forEach(cf => {
+    const n = (cf.name || '').trim();
+    if (!n || FIXED_VAR_NAMES.has(n)) return;
+    out.push({ key: `【${n}】`, desc: `${n}：${cf.kind === 'number' ? '分数' : '选项内容'}` });
+  });
+  return out;
+}
+
+/** 某行去掉标签（以及老师写的字段名标题）后若再无内容，就整行删掉（避免"口语得分："这种空标签） */
+function dropLineIfLabelOnly(text: string, label: string, value: string, fieldName?: string): string {
+  if (value !== '') return text;
+  return text
+    .split('\n')
+    .filter(line => {
+      if (!line.includes(label)) return true;
+      let rest = line.replace(label, '');
+      // 行形如「口语得分：【口语得分】」：标题里的字段名也要一起剥掉才算空
+      if (fieldName) rest = rest.split(fieldName).join('');
+      return rest.replace(/[\s:：|｜·—\-*（）()、,，]/g, '') !== '';
+    })
+    .join('\n');
+}
+
+/**
+ * 把题型分数写成模板参数，并清掉"未登记 → 只剩标签"的行。
+ * 未登记（scores 里没有该键）与真实 0 分区分开：0 分会照实写 0。
+ */
+export function applyScoreVariables(
+  template: string,
+  record: StudentRecord,
+  cfg: LessonConfig | undefined | null
+): string {
+  let out = template;
+  (cfg?.questionTypes || []).forEach(qt => {
+    const n = (qt.name || '').trim();
+    if (!n || FIXED_VAR_NAMES.has(n)) return;
+    const raw = record.scores?.[qt.id];
+    const has = typeof raw === 'number';
+    const scoreText = has ? String(raw) : '';
+    const rateText = has && qt.fullScore > 0 ? `${Math.round((raw / qt.fullScore) * 1000) / 10}` : '';
+    const scoreLabel = `【${n}】`;
+    const rateLabel = `【${n}得分率】`;
+    // 注意顺序：必须在"占位符还在"的时候判断该行是否只剩标签 ——
+    // 先替换成空串再判断，行里已经没有占位符，判断必然失效（断言抓出来的）
+    out = dropLineIfLabelOnly(out, scoreLabel, scoreText, n);
+    out = dropLineIfLabelOnly(out, rateLabel, rateText, n);
+    out = out.replace(new RegExp(escapeRegExp(scoreLabel), 'g'), scoreText);
+    out = out.replace(new RegExp(escapeRegExp(rateLabel), 'g'), rateText);
+  });
+  return out;
+}
+
+/** 正则转义（题型名可能含 * ( ) 等字符） */
+function escapeRegExp(v: string): string {
+  return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function generatePersonalFeedback(
   record: StudentRecord,
   lessonConfig: LessonConfig,
@@ -75,8 +155,13 @@ export function generatePersonalFeedback(
   };
   const rawTemplate = baseTemplate;
   customFields.forEach(cf => {
-    template = template.replace(new RegExp('【' + escRe(cf.name) + '】', 'g'), customDisplay(cf.kind, cf.id));
+    const label = '【' + cf.name + '】';
+    const text = customDisplay(cf.kind, cf.id);
+    template = dropLineIfLabelOnly(template, label, text, cf.name);   // 先判断（占位符仍在）
+    template = template.replace(new RegExp(escRe(label), 'g'), text);
   });
+  // 题型（含口语得分等附加项）也作为可用参数
+  template = applyScoreVariables(template, record, lessonConfig);
 
   // 替换模板变量
   let feedback = template
@@ -301,7 +386,16 @@ export function generateFourInOne(
     })
     .join('\n');
 
-  return tpl
+  // 题型（含口语得分等附加项）与自定义列同样可作为参数
+  let fourTpl = applyScoreVariables(tpl, record, lessonConfig);
+  (lessonConfig?.customFields || []).forEach(cf => {
+    const v = record.customValues?.[cf.id];
+    const text = (v === '' || v == null) ? '' : (cf.kind === 'number' ? `${v}分` : String(v));
+    fourTpl = dropLineIfLabelOnly(fourTpl, '【' + cf.name + '】', text, cf.name);
+    fourTpl = fourTpl.replace(new RegExp('【' + escapeRegExp(cf.name) + '】', 'g'), text);
+  });
+
+  return fourTpl
     .replace(/【课次】/g, String(record.lessonNumber))
     .replace(/【昵称】/g, nickname)
     .replace(/【场景】/g, '')

@@ -9,7 +9,7 @@ import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
   CircleAlert, RotateCcw, Send, Sparkles, Table2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT } from '@/lib/feedbackTemplates';
+import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
 import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
 
@@ -102,6 +102,12 @@ export function FeedbackGenerator({
 
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
+
+  // 表格字段 → 可选参数（题型含口语得分等附加项、自定义列），与 lib 的替换逻辑同一份定义
+  const dynamicVars = useMemo(
+    () => buildDynamicVariables(lessonConfig),
+    [lessonConfig]
+  );
 
   const generateFor = (name: string): string | null => {
     const record = recordOf(name);
@@ -627,13 +633,14 @@ export function FeedbackGenerator({
                 placeholder="编辑模板，点击变量可插入…"
               />
               <div className="flex flex-wrap gap-1.5">
-                {(isFourInOne ? FOUR_IN_ONE_VARIABLES : [
+                {(isFourInOne ? [...FOUR_IN_ONE_VARIABLES, ...dynamicVars] : [
                   { key: '【学生昵称】', desc: '' }, { key: '【学生短昵称】', desc: '' }, { key: '【课次】', desc: '' },
                   { key: '【考勤】', desc: '' }, { key: '【课堂表现】', desc: '' },
                   { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
                   { key: '【成绩详情】', desc: '' }, { key: '【总分】', desc: '' }, { key: '【满分】', desc: '' },
                   { key: '【排名】', desc: '' }, { key: '【正确率】', desc: '' }, { key: '【薄弱项】', desc: '' },
                   { key: '【作业内容】', desc: '' },
+                  ...dynamicVars,
                 ]).map(v => (
                   <button
                     key={v.key}

@@ -16,8 +16,11 @@ export function attendanceKind(att: string | undefined | null): AttendanceKind {
   // 「未到校/无故缺勤」这类含「未/缺」的自定义项按缺勤处理
   if (s.includes('迟到')) return 'late';
   if (s.includes('调课')) return 'transfer';
-  if (s.includes('请假')) return 'leave';
-  if (s.includes('缺勤') || s.includes('缺课') || s.includes('未到校') || s.includes('没来') || s.includes('未到')) return 'absent';
+  // 「假」单独判断：病假/事假/公假/丧假 都不含"请假"三个字，
+  // 只匹配"请假"会让这些学生被当成到课，进而照常生成成绩分析（用户反馈的问题）
+  if (s.includes('请假') || s.includes('病假') || s.includes('事假') || s.includes('公假') || s.includes('假')) return 'leave';
+  if (s.includes('缺勤') || s.includes('缺课') || s.includes('缺席') || s.includes('缺考') || s.includes('旷课')
+    || s.includes('未到校') || s.includes('未出勤') || s.includes('没来') || s.includes('未到')) return 'absent';
   if (s.includes('准时') || s.includes('按时') || s.includes('出勤') || s.includes('到课') || s.includes('全勤')) return 'onTime';
   return 'unknown';
 }

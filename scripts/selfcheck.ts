@@ -5,8 +5,10 @@
 import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow } from '@/lib/lessonStats';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
+import { attendanceKind } from '@/lib/attendance';
+import { buildDynamicVariables, generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
-import type { LessonConfig, QuestionType, StudentRecord } from '@/types';
+import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
 
 let passed = 0;
 const failures: string[] = [];
@@ -107,6 +109,49 @@ check(col('口语得分')?.excludeFromTotal === true, '口语列仍被标记为�
 // ============ 5. 新课次继承：内容字段必须清空（历史漏了课堂表现） ============
 group('课次继承边界');
 check(true, '（由 useClassData 白名单重建保证；见 inheritPreviousSeasons 注释）');
+
+// ============ 6. 反馈参数：表格字段可作参数 + 缺勤不生成分析 ============
+group('反馈参数与缺勤口径');
+check(attendanceKind('病假') === 'leave', '「病假」识别为请假（原来识别不出→会照常分析）');
+check(attendanceKind('缺席') === 'absent' && attendanceKind('旷课') === 'absent', '「缺席/旷课」识别为缺勤');
+check(attendanceKind('事假') === 'leave', '「事假」识别为请假');
+
+const fbCfg = {
+  lessonNumber: 1,
+  questionTypes: [
+    { id: 'v1', name: '语法选择', fullScore: 15, order: 0 },
+    { id: 'o1', name: '口语得分', fullScore: 100, order: 1, excludeFromTotal: true },
+  ],
+  customFields: [{ id: 'c1', name: '课堂笔记', kind: 'select', options: ['优秀'], order: 0 }],
+  feedbackTemplate: '',
+} as unknown as LessonConfig;
+const vars = buildDynamicVariables(fbCfg).map(v => v.key);
+check(vars.includes('【语法选择】') && vars.includes('【口语得分】'), '题型（含口语等附加项）出现在可选参数里');
+check(vars.includes('【语法选择得分率】'), '题型得分率也是可选参数');
+check(vars.includes('【课堂笔记】'), '自定义列出现在可选参数里');
+
+const fbStats = { maxScore: 15, minScore: 15, avgScore: 15, avgScores: { v1: 12, o1: 90 } } as unknown as ClassStats;
+const tpl = '考勤：【考勤】\n语法选择：【语法选择】\n口语得分：【口语得分】\n笔记：【课堂笔记】';
+const normal = {
+  id: 'f1', studentName: '甲', lessonNumber: 1, seasons: [], attendance: '准时👍', homeworkStatus: '', listeningStatus: '',
+  listeningScore: 0, scores: { v1: 14, o1: 89 }, customValues: { c1: '优秀' }, totalScore: 14, correctRate: 93.3, rank: 1, date: '2026-09-26',
+} as unknown as StudentRecord;
+const out = generatePersonalFeedback(normal, { ...fbCfg, feedbackTemplate: tpl } as unknown as LessonConfig, fbStats, '甲');
+check(out.includes('语法选择：14'), `【语法选择】替换为得分（实际片段：${out.split('\n')[1] || ''}）`);
+check(out.includes('口语得分：89'), '【口语得分】替换为得分');
+check(out.includes('笔记：优秀'), '自定义列参数替换成功');
+
+// 未登记口语：该行应整行移除，而不是留"口语得分："
+const noOral = { ...normal, id: 'f2', scores: { v1: 10 } } as unknown as StudentRecord;
+const out2 = generatePersonalFeedback(noOral, { ...fbCfg, feedbackTemplate: tpl } as unknown as LessonConfig, fbStats, '乙');
+check(!out2.includes('口语得分：'), '未登记的口语行被整行移除（不留空标签）');
+check(out2.includes('语法选择：10'), '同模板其他字段不受影响');
+
+// 缺勤学生：只给未参与说明，不做成绩分析
+const absent = { ...normal, id: 'f3', attendance: '病假', scores: {}, totalScore: 0, rank: 0, correctRate: 0 } as unknown as StudentRecord;
+const out3 = generatePersonalFeedback(absent, { ...fbCfg, feedbackTemplate: tpl } as unknown as LessonConfig, fbStats, '丙');
+check(out3.includes('未参与'), '病假学生生成的是"未参与"说明');
+check(!out3.includes('语法选择：'), '病假学生不做成绩分析（不出现题型分数）');
 
 console.log('');
 if (failures.length) {

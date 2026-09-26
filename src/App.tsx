@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
-import { getCachedSession, signOut } from '@/lib/auth';
+import { getCachedSession, signOut, subscribeSession } from '@/lib/auth';
 import { BUILD_SCOPE } from '@/lib/config';
 import { ensureSelfMembership, myUserId } from '@/lib/members';
 import type { Membership } from '@/lib/members';
@@ -147,6 +147,10 @@ function App() {
   const displaySettings = useDisplaySettings();
   // 「生成设置」对话框（原在反馈生成页，现由学情记录 → 配置题型打开）
   const [showGenerateSettings, setShowGenerateSettings] = useState(false);
+
+  // 会话变更订阅：服务端明确拒绝凭证时会清会话，
+  // 此处立刻把界面切回登录页（否则仍显示已登录并持续报错）
+  useEffect(() => subscribeSession(has => { if (!has) setIsAuthenticated(false); }), []);
 
   // 登录后：自举首个管理员 / 刷新成员身份
   // eslint-disable-next-line react-hooks/set-state-in-effect -- 未登录时需同步落回只读身份；已登录走异步请求后置 setState
@@ -323,9 +327,9 @@ function App() {
         saveRecord(currentClass.id, {
           studentName,
           lessonNumber: currentLessonNumber,
-          attendance: '按时出勤',
-          homeworkStatus: '圆满完成',
-          listeningStatus: '具体分数',
+          // 只建"空记录"：考勤/课堂表现/作业/课后任务一律留空由老师填。
+          // （原实现写入 按时出勤/圆满完成/具体分数 三个 v1 废弃值，
+          //   在下拉里表现为"看得见却选不中"的幽灵值）
           listeningScore: 0,
           scores: {},
           seasons: []
@@ -776,7 +780,9 @@ function App() {
         {/* 云端不可达时的全局提示（与同步状态横幅独立，避免误以为系统坏了） */}
         <div className="mb-5">
           <BackendOfflineBanner
-            onRetry={() => { refreshMembership(); void cloudSync.pull(); }}
+            // 注意：这里必须是"对账"，不能直接 pull ——
+            // 断网期间的本地改动用 pull 会被云端旧快照整包覆盖且不提示（历史缺陷）
+            onRetry={() => { refreshMembership(); void cloudSync.reconcileNow(); }}
           />
         </div>
 
@@ -895,6 +901,7 @@ function App() {
             <ErrorBoundary label="反馈生成">
             <div className="max-w-6xl mx-auto space-y-5">
             <FeedbackGenerator
+                key={currentClassId || 'none'}
               students={currentClass?.students || []}
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}

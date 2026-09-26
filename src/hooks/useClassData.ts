@@ -12,6 +12,7 @@ import { buildPublicityHTML } from '@/lib/publicityExport';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
+import { classSnapshotOfLesson } from '@/lib/lessonStats';
 import {
   SLOT, readTemplateStore, writeTemplateStore, stampTemplate, mergeTemplateStores,
   getStamp, type TemplateStore,
@@ -193,15 +194,17 @@ function computeTotals(
 // 重算某课次排名（按总分降序），返回新数组（不可变，不改动入参对象）。
 // 用 Map 定位代替逐条 findIndex，将 O(n²) 降为 O(n log n)；统一所有写路径的排名口径
 function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRecord[] {
-  const posById = new Map<string, number>();
-  records
-    .filter(r => r.lessonNumber === lessonNumber)
-    .sort((a, b) => b.totalScore - a.totalScore)
-    .forEach((r, i) => posById.set(r.id, i + 1));
+  // 口径统一交给 lib/lessonStats（唯一来源）：
+  //  · 排除请假/缺勤（他们不该占名次，也不该把别人挤后一位）
+  //  · 按正确率降序（总分随各次满分变化，跨课次不可比）
+  //  · 同分并列同名次（与报告/分析弹窗一致）
+  const snap = classSnapshotOfLesson(records, lessonNumber);
   return records.map(r => {
     if (r.lessonNumber !== lessonNumber) return r;
-    const pos = posById.get(r.id);
-    return pos != null && r.rank !== pos ? { ...r, rank: pos } : r;
+    const pos = snap.rankById.get(r.id);
+    // 请假/缺勤无名次：显式置 0，避免表格显示上一轮的旧名次
+    const next = pos ?? 0;
+    return r.rank !== next ? { ...r, rank: next } : r;
   });
 }
 
@@ -936,7 +939,9 @@ export function useClassData() {
         || byName.get(name);
       const fullScore = col.suggestedFullScore > 0 ? col.suggestedFullScore : (existing?.fullScore || 100);
       // 不计入小测总分的列（口语等）→ 落到题型标记上；已存在题型时一并纠正
-      const excludeFromTotal = col.excludeFromTotal || undefined;
+      // 只有"表格列明确命中附加项"时才改标记；表格没有该信息时保留原值，
+      // 避免一次普通导入把口语等附加项重新算进总分
+      const excludeFromTotal = col.excludeFromTotal ?? existing?.excludeFromTotal ?? undefined;
       if (existing && !takenIds.has(existing.id)) {
         takenIds.add(existing.id);
         nextTypes.push({ ...existing, name, fullScore, order: i, excludeFromTotal });
@@ -959,7 +964,9 @@ export function useClassData() {
     const changed = nextTypes.length !== baseCfg.questionTypes.length
       || nextTypes.some((qt, i) => {
         const old = baseCfg.questionTypes[i];
-        return !old || old.id !== qt.id || old.name !== qt.name || (old.fullScore || 0) !== (qt.fullScore || 0);
+        return !old || old.id !== qt.id || old.name !== qt.name
+        || (old.fullScore || 0) !== (qt.fullScore || 0)
+        || (old.excludeFromTotal || false) !== (qt.excludeFromTotal || false);
       });
 
     if (changed) {
@@ -1113,13 +1120,16 @@ export function useClassData() {
           if (!(newRecords[idx].seasons?.length)) newRecords[idx] = { ...newRecords[idx], seasons: [...src.seasons] };
           return;
         }
+        // 白名单重建（不要用 ...src 展开）：`...src` 会把上一课的内容字段一并带过来，
+        // 历史上就漏掉了 classPerformance —— 新课次一建好，该生「课堂表现」直接显示上一课的内容，
+        // 还会流进报告与反馈文案。这里只继承"身份与名单"信息，内容字段一律清空。
         newRecords.push({
-          ...src,
           id: 'rec' + generateId(),
+          studentName: src.studentName,
           lessonNumber: newLessonNumber,
           seasons: [...src.seasons],
           attendance: '',
-          adjustReason: '',
+          classPerformance: '',
           homeworkStatus: '',
           listeningStatus: '',
           listeningScore: 0,
@@ -1129,7 +1139,8 @@ export function useClassData() {
           correctRate: 0,
           rank: 0,
           date: new Date().toISOString().slice(0, 10),
-          note: ''
+          note: '',
+          adjustReason: '',
         });
       });
       return { ...prev, [classId]: { ...cd, records: newRecords } };

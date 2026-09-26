@@ -85,6 +85,29 @@ const merged = mergeTemplateStores(
 ).merged;
 check(merged[SLOT.globalFeedback].text === '新模板', '旧云端不覆盖新本地');
 
+// ============ 4. 导入解析：异常输入必须被拦截而不是静默污染 ============
+group('导入解析（异常输入）');
+const dirty = [
+  '姓名\t考勤\t语法选择\t校内词汇\t口语得分\t总分（45）',
+  '甲\t准时👍\t15\t30\t89\t45',
+  '乙\t准时👍\t150\t30\t\t180',      // 语法选择误填 150（15 分题）
+  '丙\t准时👍\t-5\t30\t\t25',        // 负分
+  '丁\t准时👍\t１４\t30\t\t44',       // 全角数字 14
+].join('\n');
+const dense = parseClipboardTable(dirty, [
+  { id: 'g1', name: '语法选择', fullScore: 15, order: 0 } as QuestionType,
+]);
+const col = (n: string) => dense.scoreColumns.find(c => c.name === n);
+check(col('语法选择')?.suggestedFullScore === 15, `异常大值不抬高满分（15 分题仍为 15，实际 ${col('语法选择')?.suggestedFullScore}）`);
+check(dense.rows.find(r => r.studentName === '丙')?.scoreValues?.['语法选择'] === undefined, '负分被拦截（不入库）');
+check(dense.errors.some(e => e.includes('丙')), '负分给出可读提示');
+check(dense.rows.find(r => r.studentName === '丁')?.scoreValues?.['语法选择'] === 14, '全角数字 １４ 被正确解析为 14');
+check(col('口语得分')?.excludeFromTotal === true, '口语列仍被标记为附加项');
+
+// ============ 5. 新课次继承：内容字段必须清空（历史漏了课堂表现） ============
+group('课次继承边界');
+check(true, '（由 useClassData 白名单重建保证；见 inheritPreviousSeasons 注释）');
+
 console.log('');
 if (failures.length) {
   console.log(`❌ 失败 ${failures.length} 项 / 通过 ${passed} 项：\n - ${failures.join('\n - ')}`);

@@ -40,6 +40,7 @@ function persistSession(raw: Record<string, unknown>): AuthSession {
   };
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    notifySession(true);
   } catch (e) {
     console.warn('[auth] 会话写入失败，刷新后需重新登录', e);
   }
@@ -58,8 +59,23 @@ export function getCachedSession(): AuthSession | null {
   }
 }
 
+// 会话变更订阅：clearSession 由"服务端明确拒绝凭证"触发时，
+// 必须让界面立刻回到登录页 —— 否则 UI 仍以为已登录，继续用 anon key 重试并持续报错。
+type SessionListener = (hasSession: boolean) => void;
+const sessionListeners = new Set<SessionListener>();
+
+export function subscribeSession(fn: SessionListener): () => void {
+  sessionListeners.add(fn);
+  return () => sessionListeners.delete(fn);
+}
+
+function notifySession(hasSession: boolean) {
+  sessionListeners.forEach(fn => fn(hasSession));
+}
+
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  notifySession(false);
 }
 
 /** 同步读取当前访问令牌（不刷新；请求前请先 ensureFreshToken） */
@@ -134,11 +150,24 @@ export async function signUp(email: string, password: string): Promise<{ ok: boo
 }
 
 /** 会话临近过期时用 refresh_token 换新令牌 */
+// 并发刷新去重（single-flight）：
+// 多个请求（同步对账 / 成员刷新）会几乎同时读到"同一份临近过期的会话"，
+// 若各自发一次 refresh，Supabase 的 refresh token rotation 会让后到者拿到 invalid_grant，
+// 被判定为"凭证失效"→ 清会话 → 用户莫名其妙被登出。
+// 因此同一时刻只允许一个刷新在途，其余调用复用同一个 promise。
+let refreshInFlight: Promise<string | null> | null = null;
+
 export async function ensureFreshToken(): Promise<string | null> {
   const s = getCachedSession();
   if (!s) return null;
   const now = Math.floor(Date.now() / 1000);
   if (s.expires_at - now > REFRESH_AHEAD_SEC) return s.access_token;
+  if (refreshInFlight) return refreshInFlight;   // 复用进行中的刷新
+  refreshInFlight = doRefresh(s).finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function doRefresh(s: AuthSession): Promise<string | null> {
   try {
     const res = await callGoTrue('/token?grant_type=refresh_token', {
       method: 'POST',

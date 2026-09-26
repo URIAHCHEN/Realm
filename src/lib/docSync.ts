@@ -106,6 +106,47 @@ const norm = (s: string) => s.replace(/\s+/g, '').replace(/[（）()]/g, '');
 
 // 常用题型满分档位（学校常用卷面）：名称命中时优先采用，
 // 因为"列内最大值"在没人拿满分时会低估（如语篇填词全班最高 2 分，实际满分 5 分）。
+/**
+ * 解析一个分数单元格。
+ * 为什么要统一入口：粘贴来的表格里常见全角数字（８５）、带百分号（85%）、
+ * 甚至字母 O 混入（1O）与负数（-5）。此前直接 parseFloat：
+ *   · 全角 → NaN → 该分值被静默丢掉（用户只看到"导入成功"）
+ *   · 1O  → 被解析成 1（错值）
+ *   · -5  → 直接落库，总分/正确率变负
+ * 现在：全角转半角、剥离千分位与百分号；负数与非数字一律判为非法并回报给用户。
+ */
+export function parseScoreCell(raw: string | undefined): { value?: number; invalid?: boolean } {
+  if (raw == null) return {};
+  let t = String(raw).trim();
+  if (!t) return {};
+  // 全角 → 半角（数字、小数点、负号、逗号、空格）
+  t = t.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+       .replace(/[．。]/g, '.')
+       .replace(/[－—–]/g, '-')
+       .replace(/[，,\s]/g, '')
+       .replace(/%$/, '');
+  if (!t) return {};
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return { invalid: true };
+  const n = parseFloat(t);
+  if (!isFinite(n) || n < 0) return { invalid: true };
+  return { value: n };
+}
+
+/** 稳健上限：用 90 分位代替最大值，避免单个异常大值把整列满分抬高 */
+function robustMax(nums: number[]): number {
+  // 异常值剔除：以中位数为基准，超过 3×中位数 的视为误填（如 15 分题里出现 150）。
+  // 不用"90 分位"——小样本（3~5 行）时 90 分位就等于最大值，拦不住异常值。
+  const nz = nums.filter(n => n > 0);
+  if (!nz.length) return 0;
+  const sorted = [...nz].sort((a, b) => a - b);
+  // 取"下中位数"：偶数样本时若取上中位数，[15,150] 会选中 150，异常值就拦不住了
+  const median = sorted[Math.floor((sorted.length - 1) / 2)];
+  const threshold = Math.max(median * 3, median + 1);
+  const kept = nz.filter(n => n <= threshold);
+  const base = kept.length ? kept : nz;
+  return Math.max(...base);
+}
+
 const CANONICAL_FULL_SCORES: Record<string, number> = {
   '语法选择': 15, '完形填空': 10, '阅读理解': 10, '语篇填词': 5, '完成句子': 10,
   '语法填空': 10, '单项选择': 5,
@@ -265,15 +306,20 @@ export function parseClipboardTable(
       }
     }
     if (listenScoreIdx >= 0) {
-      const num = parseFloat(cells[listenScoreIdx]);
-      if (!isNaN(num)) { row.listeningStatus = '具体分数'; row.listeningScore = num; }
+      const parsed = parseScoreCell(cells[listenScoreIdx]);
+      if (parsed.invalid) errors.push(`第 ${i + 2} 行（${name || '未署名'}）：口语/听力分数「${String(cells[listenScoreIdx]).trim()}」无法识别，已跳过`);
+      else if (parsed.value != null) { row.listeningStatus = '具体分数'; row.listeningScore = parsed.value; }
     }
     row.scoreValues = {};
     qtIdx.forEach(({ qt, idx }) => {
-      const num = parseFloat(cells[idx]);
-      if (!isNaN(num)) {
-        row.scores[qt.id] = num;
-        row.scoreValues![qt.name] = num;
+      const parsed = parseScoreCell(cells[idx]);
+      if (parsed.invalid) {
+        errors.push(`第 ${i + 2} 行（${name || '未署名'}）· ${qt.name}：「${String(cells[idx]).trim()}」不是有效分数，已跳过`);
+        return;
+      }
+      if (parsed.value != null) {
+        row.scores[qt.id] = parsed.value;
+        row.scoreValues![qt.name] = parsed.value;
       }
     });
     // 校验：有总分列时，若题型列齐全则校验和
@@ -307,11 +353,16 @@ export function parseClipboardTable(
     if (usedIdx.has(idx)) return;
     const label = (h || '').trim();
     if (!label || /总分|正确率|排名|薄弱项|备注/.test(label)) return;
-    const nums = dataLines.map(l => parseFloat((splitLine(l)[idx] || '').trim())).filter(n => !isNaN(n));
+    const nums = dataLines
+      .map(l => parseScoreCell(splitLine(l)[idx]).value)
+      .filter((n): n is number => n != null);
     if (nums.length === 0) return;
     const numericRatio = nums.length / Math.max(1, dataLines.length);
-    if (numericRatio >= 0.5) {
-      const maxV = Math.max(...nums);
+    // 口语/朗读这类"并非每次课都登记"的可选列，登记率天然很低（1/4 也正常），
+    // 若沿用 50% 的阈值会被整列丢弃 —— 用户就会发现"口语列没导进来"
+    const optional = isNonQuizColumn(label);
+    if (numericRatio >= 0.5 || (optional && nums.length > 0)) {
+      const maxV = robustMax(nums);
       const suggested = Math.max(1, Math.ceil(maxV));
       const colMax = Math.ceil(maxV * 100) / 100;
       unmatchedColumns.push({ name: label, suggestedFullScore: suggested });
@@ -322,10 +373,10 @@ export function parseClipboardTable(
   // 未匹配列的分值同样写进每行 scoreValues：导入端会按列名补建题型并落分
   unmatchedIdx.forEach(({ name, idx }) => {
     rawRows.forEach(({ row, cells }) => {
-      const num = parseFloat(cells[idx]);
-      if (!isNaN(num)) {
+      const parsed = parseScoreCell(cells[idx]);
+      if (parsed.value != null) {
         if (!row.scoreValues) row.scoreValues = {};
-        row.scoreValues[name] = num;
+        row.scoreValues[name] = parsed.value;
       }
     });
   });
@@ -335,10 +386,11 @@ export function parseClipboardTable(
   const fullScoreUpdates: { qtId: string; name: string; suggestedFullScore: number }[] = [];
   qtIdx.forEach(({ qt, idx }) => {
     const nums = dataLines
-      .map(l => parseFloat((splitLine(l)[idx] || '').trim()))
-      .filter(n => !isNaN(n) && n >= 0);
+      .map(l => parseScoreCell(splitLine(l)[idx]).value)
+      .filter((n): n is number => n != null);
     if (nums.length === 0) return;
-    const suggested = Math.max(1, Math.ceil(Math.max(...nums) * 100) / 100);
+    // 稳健上限：剔除异常大值（如 15 分题里混进 150），避免整列满分被抬高
+    const suggested = Math.max(1, Math.ceil(robustMax(nums) * 100) / 100);
     const current = qt.fullScore || 0;
     if (current <= 0 || Math.abs(current - suggested) > 0.5) {
       fullScoreUpdates.push({ qtId: qt.id, name: qt.name, suggestedFullScore: suggested });
@@ -352,10 +404,12 @@ export function parseClipboardTable(
   ].sort((a, b) => a.idx - b.idx);
 
   const colStats = allColIdx.map(col => {
+    // 统一走 parseScoreCell：全角数字可解析、负数/非法值被剔除
     const nums = dataLines
-      .map(l => parseFloat((splitLine(l)[col.idx] || '').trim()))
-      .filter(n => !isNaN(n) && n >= 0);
-    const colMax = nums.length ? Math.max(...nums) : 0;
+      .map(l => parseScoreCell(splitLine(l)[col.idx]).value)
+      .filter((n): n is number => n != null);
+    // 稳健上限：个别人误填 150 不会把 15 分题的满分抬成 150
+    const colMax = robustMax(nums);
     const cfgQt = col.matchedQtId ? questionTypes.find(q => q.id === col.matchedQtId) : undefined;
     return {
       name: col.name,

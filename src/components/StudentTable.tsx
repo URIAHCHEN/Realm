@@ -156,14 +156,19 @@ export function StudentTable({
   // 否则会把录分入口也藏起来。
   const visibleQuestionTypes = useMemo(() => {
     const all = lessonConfig.questionTypes || [];
-    if (!settings.autoHideEmptyColumns || records.length === 0) return all;
-    const nonEmpty = all.filter(qt => records.some(r => (r.scores?.[qt.id] ?? 0) !== 0));
+    if (!settings.autoHideEmptyColumns) return all;
+    // 只看「本课次」的记录：用全班所有课次会让任意一课有分数就永隐藏不了（切换课次后状态残留）
+    const lessonRecs = records.filter(r => r.lessonNumber === lessonNumber);
+    if (lessonRecs.length === 0) return all;
+    const nonEmpty = all.filter(qt => lessonRecs.some(r => (r.scores?.[qt.id] ?? 0) !== 0));
     return nonEmpty.length > 0 ? nonEmpty : all;
   }, [settings.autoHideEmptyColumns, lessonConfig.questionTypes, records]);
 
   const visibleCustomFields = useMemo(() => {
-    if (!settings.autoHideEmptyColumns || records.length === 0) return customFields;
-    const hasValue = (cfId: string) => records.some(r => {
+    if (!settings.autoHideEmptyColumns) return customFields;
+    const lessonCfRecs = records.filter(r => r.lessonNumber === lessonNumber);
+    if (lessonCfRecs.length === 0) return customFields;
+    const hasValue = (cfId: string) => lessonCfRecs.some(r => {
       const v = r.customValues?.[cfId];
       if (v === undefined || v === null) return false;
       if (typeof v === 'number') return v !== 0;
@@ -463,7 +468,9 @@ export function StudentTable({
 
   const fullScore = getLessonFullScore(lessonConfig);
   // 统计口径：请假/缺勤学员一律不计入班级整体正确率（与平均分口径一致）
-  const statsRateRecords = lessonRecords.filter(r => !isAbsentRecord(r) && r.totalScore > 0);
+  // 只按"是否请假/缺勤"排除：出勤学员的真实 0 分要计入班级正确率，
+  // 否则与同表班均口径不一致（0 分进了班均却没进正确率 → 正确率虚高）
+  const statsRateRecords = lessonRecords.filter(r => !isAbsentRecord(r));
   const classRate = statsRateRecords.length > 0
     ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
     : 0;

@@ -46,7 +46,12 @@ export function generatePersonalFeedback(
   
   // 课堂表现缺失时，删掉该行（避免留下"🙋 课堂表现："这种空标签）
   if (!record.classPerformance || !String(record.classPerformance).trim()) {
-    template = template.replace(/.*【课堂表现】.*\n?/g, '');
+    // 只删除"去掉该占位符后就没有内容"的行；
+    // 原实现用 /.*【课堂表现】.*/ 会把"考勤：【考勤】 课堂表现：【课堂表现】"整行删掉，考勤信息跟着丢
+    template = template
+      .split('\n')
+      .filter(line => !(line.includes('【课堂表现】') && line.replace('【课堂表现】', '').replace(/[\s:：|｜·—\-*]/g, '') === ''))
+      .join('\n');
   }
 
   // 处理薄弱项 - 如果没有薄弱项，删除包含【薄弱项】的行

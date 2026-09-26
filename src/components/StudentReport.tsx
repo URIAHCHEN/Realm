@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -114,6 +114,10 @@ export function StudentReport({
 }: StudentReportProps) {
   const [reportMode, setReportMode] = useState<'personal' | 'class'>('personal');
   const [selectedStudent, setSelectedStudent] = useState<string>(students[0] || '');
+  // 切换班级后，旧班级的学生名可能已不在名单里 —— 否则个人报告恒显示"暂无学习记录"
+  useEffect(() => {
+    if (students.length && !students.includes(selectedStudent)) setSelectedStudent(students[0] || '');
+  }, [students, selectedStudent]);
   const [selectedLesson, setSelectedLesson] = useState<number | 'all'>('all');
   const [trendType, setTrendType] = useState<'line' | 'bar' | 'area'>('bar');
   const [scoreSort, setScoreSort] = useState<'lesson' | 'asc' | 'desc'>('lesson');
@@ -293,7 +297,8 @@ export function StudentReport({
     scoredRecords.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
-        config.questionTypes.forEach(qt => {
+        // 附加项（口语等）不属于小测科目，不参与题型均分/薄弱 Top3
+        config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
           if (!questionTypeScores[qt.id]) {
             questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullScore: qt.fullScore };
           }
@@ -475,7 +480,7 @@ export function StudentReport({
 
   // 导出班级报告为图片
   const exportClassReportImage = async () => {
-    if (!classReportRef.current) return;
+    if (!classReportRef.current) { toast.error('导出失败：报告内容尚未渲染完成，请稍后重试'); return; }
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(classReportRef.current, {
@@ -488,6 +493,7 @@ export function StudentReport({
       link.click();
     } catch (err) {
       console.error('导出图片失败:', err);
+      toast.error('导出图片失败：' + (err instanceof Error ? err.message : String(err)));
     }
   };
 

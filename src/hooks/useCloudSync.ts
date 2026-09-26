@@ -51,6 +51,10 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const snapshotRef = useRef(snapshot);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressPush = useRef(false);
+  /** 导入（拉取/冲突解决）后，等待"落地后的本地快照"来校准 lastPushedHash */
+  const pendingImportHash = useRef(false);
+  /** reconcile 互斥：focus 与 visibilitychange 会几乎同时触发，避免并发对账 */
+  const reconciling = useRef(false);
 
   snapshotRef.current = snapshot;
 
@@ -64,8 +68,14 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     }
     setAction('pushing');
     try {
-      await pushSnapshot(cfg, snapshotRef.current);
-      const meta = { lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(snapshotRef.current) };
+      // 关键：固定"本次真正上传的那份快照"。
+      // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
+      // 用新内容当 lastPushedHash 会让下次对账误判"云端有更新"→ 拉取覆盖刚录的分数。
+      const pushed = snapshotRef.current;
+      await pushSnapshot(cfg, pushed);
+      const pushedHash = hashSnapshot(pushed);
+      // 若期间本地又变了，哈希照实记录"已上传的那份"，本地差异会在下一次自动推送里补上
+      const meta = { lastPushedAt: Date.now(), lastPushedHash: pushedHash };
       saveSyncMeta(meta);
       setLastSyncAt(meta.lastPushedAt);
       setStatus('connected');
@@ -93,7 +103,12 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
         if (!silent) toast.info('云端还没有数据，先上传一份吧');
         return false;
       }
-      suppressPush.current = true;
+      // 导入会做迁移/重算（请假清零、正确率重算、模板自愈、选项迁移），
+      // 落地后的本地快照与云端那份并不等值 —— 因此这里只标记"等待落地哈希"，
+      // 由下面的 effect 在本地下一次渲染时记录真实哈希：
+      //   ① 避免每次拉取后本地永远"看起来脏"→ 假冲突 + 无意义往返；
+      //   ② 也让抑制标记不会吃掉用户随后的一次真实编辑（原实现会）。
+      pendingImportHash.current = true;
       onImport(cloud.snapshot);
       const meta = { lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(cloud.snapshot) };
       saveSyncMeta(meta);
@@ -118,6 +133,10 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
 
   // 启动时对比本地与云端，自动决定同步方向
   const reconcile = useCallback(async (cfg: CloudSyncConfig) => {
+    // 同一时刻只允许一次对账：focus 与 visibilitychange 几乎同刻触发，
+    // 60s 定时也可能撞上；并发对账会基于过期 meta 做决策（重复上传 / 假冲突 / 重复导入）
+    if (reconciling.current) return;
+    reconciling.current = true;
     setStatus('connecting');
     try {
       const cloud = await fetchCloudState(cfg);
@@ -143,6 +162,15 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
         return;
       }
 
+      // 首次对账（本机没有同步记录：新设备、换浏览器、清缓存、或刚点过「断开云同步」）：
+      // 此时 lastPushedHash 为空串，若照常比较会同时判定"本地有改动 + 云端有改动" →
+      // 弹出冲突二选一；而误点「保留本地」会把示例数据推给共享后端、覆盖全团队数据。
+      // 因此首次对账一律以云端为准（拉取），除非云端为空（上面已处理）。
+      if (!meta.lastPushedHash) {
+        await doPull(cfg, true);
+        return;
+      }
+
       const localChanged = localHash !== meta.lastPushedHash;
       const cloudChanged = cloud.hash !== meta.lastPushedHash;
 
@@ -164,6 +192,8 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       setStatus('error');
       statusRef.current = 'error';
       setMessage(toSyncMessage(e));
+    } finally {
+      reconciling.current = false;
     }
   }, [doPush, doPull, canWrite]);
 
@@ -175,12 +205,24 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, sessionKey, canWrite]);
 
+  // 导入落地：用"迁移/重算之后"的真实本地快照校准 lastPushedHash，
+  // 否则本地会被判定为永远脏（假冲突 / 每次拉取后又回推一次）
+  useEffect(() => {
+    if (!pendingImportHash.current || !config) return;
+    pendingImportHash.current = false;
+    const meta = { lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(snapshot) };
+    saveSyncMeta(meta);
+    suppressPush.current = true;
+  }, [snapshot, config]);
+
   // 数据变更：自动同步（防抖，间隔可在设置中调整），仅登录且可写、连接正常时
   useEffect(() => {
     if (!enabled) return;
     if (!canWrite) return;
     if (!config || !config.autoSync) return;
     if (statusRef.current !== 'connected') return;
+    // 抑制仅针对"刚刚由导入落地的那份哈希"，且不依赖 effect 的早退分支去消费，
+    // 避免把用户随后的真实编辑当成导入回响而漏推
     if (suppressPush.current) {
       suppressPush.current = false;
       return;
@@ -238,6 +280,12 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     if (config) return doPull(config);
   }, [config, doPull]);
 
+  // 只做"对账"（比较本地/云端后决定推或拉），不会无条件用云端覆盖本地。
+  // 离线恢复、手动"重新检测"应当走这里，而不是 pull。
+  const reconcileNow = useCallback(() => {
+    if (config) return reconcile(config);
+  }, [config, reconcile]);
+
   const resolveConflictKeepLocal = useCallback(() => {
     if (config) return doPush(config);
   }, [config, doPush]);
@@ -256,6 +304,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     clearConfig: handleClearConfig,
     push,
     pull,
+    reconcileNow,
     resolveConflictKeepLocal,
     resolveConflictKeepCloud,
   };

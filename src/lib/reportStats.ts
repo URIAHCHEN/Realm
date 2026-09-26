@@ -257,3 +257,13 @@ export function computeClassReportStats(
       validCount: validRecords.length
     };
 }
+
+/** 按正确率把班级切成高/低两段（各 27%），人数过少时对半处理 */
+export function splitSegments(rates: number[]): { highCount: number; lowCount: number } {
+  const n = rates.length;
+  if (!n) return { highCount: 0, lowCount: 0 };
+  const highCount = Math.max(1, Math.round(n * 0.27));
+  const lowCount = Math.max(1, Math.round(n * 0.27));
+  if (highCount + lowCount > n) return { highCount: Math.ceil(n / 2), lowCount: Math.floor(n / 2) };
+  return { highCount, lowCount };
+}

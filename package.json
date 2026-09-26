@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "selfcheck": "esbuild scripts/selfcheck.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/selfcheck.mjs --alias:@=./src --define:import.meta.env='{}' --log-level=error && node node_modules/.tmp/selfcheck.mjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

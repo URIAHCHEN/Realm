@@ -1050,6 +1050,7 @@ function App() {
                 : [];
             })()}
             schoolScores={getStudentSchoolScores(analysisStudent)}
+            classRecords={currentClass?.records || []}
             getLessonConfig={getLessonConfig}
           />
         </Suspense>

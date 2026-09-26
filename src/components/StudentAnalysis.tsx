@@ -29,6 +29,7 @@ import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 
 import { attendanceRateOf, isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { studentLessonTrend } from '@/lib/lessonStats';
 
 interface StudentAnalysisProps {
   isOpen: boolean;
@@ -37,6 +38,12 @@ interface StudentAnalysisProps {
   nickname: string;
   allRecords: { classId: string; className: string; records: StudentRecord[] }[];
   schoolScores: SchoolScore[];
+  /**
+   * 全班记录（含其他学员）。用于「班级最高 / 班级平均 / 班级排名 / 班级人数」等班级口径。
+   * 注意：不能用 allRecords —— 那里只有该生自己的记录，拿它算班均会变成"自己跟自己比"，
+   * 排名恒为 1/1（历史 bug）。
+   */
+  classRecords?: StudentRecord[];
   getLessonConfig: (classId: string, lessonNumber: number) => LessonConfig;
 }
 
@@ -150,6 +157,7 @@ export function StudentAnalysis({
   nickname,
   allRecords,
   schoolScores,
+  classRecords,
   getLessonConfig
 }: StudentAnalysisProps) {
   const [selectedClassIndex, setSelectedClassIndex] = useState(0);
@@ -255,26 +263,21 @@ export function StudentAnalysis({
     }
   };
 
-  // 入门测趋势：每次课的正确率 / 班级最高 / 班级平均 / 班级排名（班级口径含全班，请假缺勤不计）
+  // 入门测趋势：口径统一走 lib/lessonStats（班级最高/平均/排名/人数），
+  // 排名格式为「个人名次 / 当次班级人数」。此前用 allRecords（只含该生）当全班记录，
+  // 导致排名恒为 1/1 —— 换用 classRecords 后由深模块统一保证正确。
   const entranceTrend = useMemo(() => {
-    const classRecords = currentClassData?.records || [];
-    return records.map(r => {
-      const sameLesson = classRecords.filter(x => x.lessonNumber === r.lessonNumber && !isAbsentRecord(x));
-      const rates = sameLesson.map(x => x.correctRate);
-      const maxRate = rates.length ? Math.max(...rates) : 0;
-      const avgRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length * 10) / 10 : 0;
-      const sorted = [...sameLesson].sort((a, b) => b.correctRate - a.correctRate);
-      const rank = sorted.findIndex(x => x.id === r.id) + 1;
-      return {
-        lesson: r.lessonNumber,
-        学生正确率: r.correctRate,
-        班级最高: maxRate,
-        班级平均: avgRate,
-        班级排名: rank || r.rank,
-        班级人数: sameLesson.length,
-      };
-    });
-  }, [records, currentClassData]);
+    const pool = classRecords && classRecords.length ? classRecords : (currentClassData?.records || []);
+    return studentLessonTrend(records, pool).map(t => ({
+      lesson: t.lessonNumber,
+      rankText: t.rankText,
+      学生正确率: t.rate,
+      班级最高: t.classMaxRate,
+      班级平均: t.classAvgRate,
+      班级排名: t.rank,
+      班级人数: t.size,
+    }));
+  }, [records, currentClassData, classRecords]);
 
   // 校内成绩
   const schoolData = useMemo(() =>
@@ -427,12 +430,16 @@ export function StudentAnalysis({
 
               {/* 入门测趋势：正确率 / 班级最高 / 班级平均 + 班级排名，可导出为以学生姓名命名的图片 */}
               <div ref={trendCardRef} className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />入门测趋势
-                    <span className="text-xs font-normal text-slate-400">{esc(nickname)} · {currentClassData.className} · 共 {entranceTrend.length} 次</span>
-                  </p>
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={handleExportTrend} disabled={exportingTrend}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 whitespace-nowrap">
+                      <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />入门测趋势
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">
+                      {esc(nickname)} · {currentClassData.className} · 共 {entranceTrend.length} 次
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[var(--r-md)] shrink-0" onClick={handleExportTrend} disabled={exportingTrend}
                     title="导出为 PNG（文件名带学生姓名）">
                     <Download className="w-3.5 h-3.5" />{exportingTrend ? '导出中…' : '导出图片'}
                   </Button>
@@ -443,7 +450,7 @@ export function StudentAnalysis({
                   <table className="w-full text-xs tabular-nums">
                     <thead>
                       <tr className="text-slate-500">
-                        <th className="text-left font-semibold py-1.5 px-2 whitespace-nowrap">指标</th>
+                        <th className="text-left font-semibold py-1.5 px-2 whitespace-nowrap sticky left-0 bg-white/95 z-10">指标</th>
                         {entranceTrend.map(t => (
                           <th key={t.lesson} className="font-semibold py-1.5 px-2 whitespace-nowrap">第{t.lesson}次</th>
                         ))}
@@ -451,22 +458,47 @@ export function StudentAnalysis({
                     </thead>
                     <tbody>
                       <tr className="bg-[rgb(var(--brand-rgb)/0.05)]">
-                        <td className="py-1.5 px-2 font-semibold text-slate-600 whitespace-nowrap">{esc(nickname)}正确率</td>
+                        <td className="py-1.5 px-2 font-semibold text-slate-600 whitespace-nowrap sticky left-0 bg-[rgb(var(--brand-rgb)/0.05)] z-10">{esc(nickname)}正确率</td>
                         {entranceTrend.map(t => (
                           <td key={t.lesson} className={`py-1.5 px-2 text-center font-bold ${t.学生正确率 >= 80 ? 'text-emerald-600' : t.学生正确率 >= 60 ? 'text-amber-600' : 'text-rose-600'}`}>{t.学生正确率}%</td>
                         ))}
                       </tr>
                       <tr>
-                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级最高正确率</td>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap sticky left-0 bg-white z-10">班级最高正确率</td>
                         {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级最高}%</td>)}
                       </tr>
                       <tr>
-                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级平均正确率</td>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap sticky left-0 bg-white z-10">班级平均正确率</td>
                         {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级平均}%</td>)}
                       </tr>
                       <tr>
-                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap">班级排名【前】</td>
-                        {entranceTrend.map(t => <td key={t.lesson} className="py-1.5 px-2 text-center text-slate-600">{t.班级排名}<span className="text-slate-400">/{t.班级人数}</span></td>)}
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap sticky left-0 bg-white z-10">我的排名 / 班级人数</td>
+                        {entranceTrend.map(t => {
+                          const { 班级排名: r, 班级人数: size } = t;
+                          // 名次语义：前三名金银铜；前 1/3 品牌色；后 1/3 琥珀
+                          const tone = r === 1 ? 'text-amber-600' : r === 2 ? 'text-slate-600' : r === 3 ? 'text-orange-700'
+                            : size && r <= Math.ceil(size / 3) ? 'text-[color:var(--brand)]' : size && r > size * 2 / 3 ? 'text-amber-600' : 'text-slate-600';
+                          return (
+                            <td key={t.lesson} className={`py-1.5 px-2 text-center font-semibold tabular-nums ${tone}`}>
+                              {t.rankText}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {/* 班级位置条：本人名次落在班级里的位置（越靠右越前），比数字更直观 */}
+                      <tr>
+                        <td className="py-1.5 px-2 text-slate-500 whitespace-nowrap sticky left-0 bg-white z-10">班级位置</td>
+                        {entranceTrend.map(t => {
+                          const size = t.班级人数;
+                          const pct = size > 1 ? Math.round(((size - t.班级排名) / (size - 1)) * 100) : 100;
+                          return (
+                            <td key={t.lesson} className="py-2 px-2">
+                              <span className="relative block h-1.5 rounded-full bg-slate-100 min-w-[52px]">
+                                <span className="absolute -top-[3px] w-3 h-3 rounded-full bg-[color:var(--brand)] border-2 border-white shadow-sm" style={{ left: `calc(${pct}% - 6px)` }} />
+                              </span>
+                            </td>
+                          );
+                        })}
                       </tr>
                     </tbody>
                   </table>

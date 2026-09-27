@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import {Card, CardContent, } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,9 +12,10 @@ import {
   FileSpreadsheet,
   Image as ImageIcon,
   } from 'lucide-react';
-import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
+import type { StudentRecord, LessonConfig, SchoolScore, OralRatingConfig } from '@/types';
 import { isAbsentRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { buildOralRatings, oralDistribution, oralKey, type OralRating } from '@/lib/oralRating';
 import { } from '@/lib/optionTone';
 import { computeStudentReportStats, computeClassReportStats } from '@/lib/reportStats';
 import { } from '@/components/ui/checkbox';
@@ -27,6 +28,8 @@ interface StudentReportProps {
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
   getNickname: (name: string) => string;
   currentClassName: string;
+  /** 口语等附加项的档位判定配置；缺省用默认档位（见 lib/oralRating） */
+  oralRating?: OralRatingConfig;
 }
 
 
@@ -49,7 +52,8 @@ export function StudentReport({
   schoolScores,
   lessonConfigs,
   getNickname,
-  currentClassName
+  currentClassName,
+  oralRating
 }: StudentReportProps) {
   const [reportMode, setReportMode] = useState<'personal' | 'class'>('personal');
   const [selectedStudent, setSelectedStudent] = useState<string>(students[0] || '');
@@ -95,18 +99,43 @@ export function StudentReport({
     return Array.from(seen.values());
   }, [lessonConfigs]);
 
+  // 口语档位判定：按「各课次自己的班级上下文」算 —— 个人报告跨课次聚合时也不会串档。
+  // records 是全班所有课次的记录，buildOralRatings 内部按课次分组算班均，并自动排除请假/缺勤。
+  const oralRatings = useMemo(() => {
+    const fullScoreById = new Map<string, number>();
+    Object.keys(lessonConfigs).forEach(k => (lessonConfigs[k]?.questionTypes || []).forEach(qt => {
+      if (qt.excludeFromTotal) fullScoreById.set(qt.id, qt.fullScore);
+    }));
+    return buildOralRatings(
+      records,
+      optionalScoreFields.flatMap(f => f.ids),
+      (qtId) => fullScoreById.get(qtId) || 0,
+      oralRating
+    );
+  }, [lessonConfigs, records, optionalScoreFields, oralRating]);
+
   /** 统计某批记录在附加项上的表现：只累加"已登记"的值，未登记不计入 */
-  const summarizeOptional = (field: { name: string; ids: string[] }, recs: StudentRecord[]) => {
+  // 用 useCallback 而非普通函数：它闭包了 oralRatings/oralRating，
+  // 下面两个 useMemo 必须能把它列进依赖 —— 否则老师改了档位配置而记录未变时，
+  // 报告里的档位分布会停在旧结果（与上午修过的「切课次状态残留」同一类缺陷）
+  const summarizeOptional = useCallback((field: { name: string; ids: string[] }, recs: StudentRecord[]) => {
     const values = recs
       .map(r => field.ids.map(id => r.scores?.[id]).find(v => typeof v === 'number'))
       .filter((v): v is number => typeof v === 'number');
+    // 档位分布：只收「拿到了判定」的记录（未登记 / 请假缺勤不在内，不会被算进任何档）
+    const rated = recs
+      .flatMap(r => field.ids.map(id => oralRatings.get(oralKey(r.id, id))))
+      .filter((v): v is OralRating => !!v);
     return {
       name: field.name,
       registered: values.length,
       total: recs.length,
       avg: values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : 0,
+      /** 档位分布（如 很棒哦👍 × 3）；无判定时为全 0，展示层据此隐藏 */
+      distribution: oralDistribution(rated, oralRating),
+      ratedCount: rated.length,
     };
-  };
+  }, [oralRatings, oralRating]);
 
   // 动态选项清单：跨课次收集当前配置里出现过的选项（改文案后统计自动跟随）
   const attendanceOptions = useMemo(() => collectOptions(lessonConfigs, 'attendanceOptions'), [lessonConfigs]);
@@ -169,11 +198,11 @@ export function StudentReport({
   // 口语类统计行：个人报告用（选中学生）/ 班级报告用（全班）
   const optionalStudentRows = useMemo(
     () => optionalScoreFields.map(f => summarizeOptional(f, studentRecords)),
-    [optionalScoreFields, studentRecords]
+    [optionalScoreFields, studentRecords, summarizeOptional]
   );
   const optionalClassRows = useMemo(
     () => optionalScoreFields.map(f => summarizeOptional(f, classReportRecords)),
-    [optionalScoreFields, classReportRecords]
+    [optionalScoreFields, classReportRecords, summarizeOptional]
   );
 
   // 班级组合图数据：每次课「班级平均正确率（柱）+ 最高/最低（线）+ 目标线 + 达标人数」

@@ -1,8 +1,9 @@
 // 公示导出：生成可直接发布/打印/投屏/截图的学情公示 HTML
 // 排版策略：table-layout:fixed 固定列宽 + 全居中 + 等宽数字 + 统一徽章尺寸，保证截图整齐美观
-import type { Class, QuestionType, StudentRecord, CustomField } from '@/types';
+import type { Class, QuestionType, StudentRecord, CustomField, OralRatingConfig } from '@/types';
 import type { ExportStyle } from '@/lib/displaySettings';
 import { isAbsentRecord } from '@/lib/attendance';
+import { buildOralRatings, oralKey, oralToneColor } from '@/lib/oralRating';
 
 interface Palette {
   pageBg: string;
@@ -142,7 +143,9 @@ export function buildPublicityHTML(
   questionTypes: QuestionType[],
   getNickname: (name: string) => string,
   style: ExportStyle = 'gradient',
-  customFields: CustomField[] = []
+  customFields: CustomField[] = [],
+  /** 口语等附加项的档位判定配置；缺省用默认档位 */
+  oralRating?: OralRatingConfig
 ): string {
   const p = PALETTES[style] || PALETTES.gradient;
   // 公示只列出到课学员：请假/缺勤者不出现在名单中（平均分本就不计入）
@@ -167,6 +170,18 @@ export function buildPublicityHTML(
       avgCustomScores[cf.id] = presentRecords.length > 0 ? avg(presentRecords.map(r => Number(r.customValues?.[cf.id]) || 0).filter(s => s > 0)) : 0;
     }
   });
+
+  // 口语等附加项的档位判定：与学情表徽标同一份实现（lib/oralRating），
+  // 保证公示里的评价和老师在表里看到的完全一致。
+  // 传入全部 records —— 请假/缺勤由判定函数内部排除，班均口径与学情表一致。
+  const optionalQts = questionTypes.filter(qt => qt.excludeFromTotal);
+  const fullScoreByQtId = new Map(optionalQts.map(qt => [qt.id, qt.fullScore]));
+  const oralRatings = buildOralRatings(
+    records,
+    optionalQts.map(qt => qt.id),
+    (qtId) => fullScoreByQtId.get(qtId) || 0,
+    oralRating
+  );
 
   // 排名徽章：前三名金银铜渐变高亮（按真实名次着色，非位置）
   const rankBadge = (rank: number) => {
@@ -196,8 +211,21 @@ export function buildPublicityHTML(
       <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.homeworkStatus)}">${esc(homeworkEmoji(r.homeworkStatus))}</td>
       <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.listeningStatus === '具体分数' ? '完成' : r.listeningStatus)}">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
       ${questionTypes.map(qt => {
-        const score = r.scores[qt.id] || 0;
-        return `<td style="${td}">${scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score)}</td>`;
+        const raw = r.scores[qt.id];
+        const isOptional = !!qt.excludeFromTotal;
+        // 附加项（口语等）未登记时显示「-」而不是 0：与学情表的「—」口径一致，
+        // 否则家长会看到"口语 0 分"这种并不存在的事实
+        if (isOptional && typeof raw !== 'number') {
+          return `<td style="${td}"><span style="color:${p.muted};font-size:13px">-</span></td>`;
+        }
+        const score = typeof raw === 'number' ? raw : 0;
+        const badge = scoreBadge(qt.fullScore > 0 ? (score / qt.fullScore) * 100 : 0, score);
+        const rating = isOptional ? oralRatings.get(oralKey(r.id, qt.id)) : undefined;
+        if (!rating) return `<td style="${td}">${badge}</td>`;
+        const c = oralToneColor(rating, oralRating);
+        // 分数在上、档位在下：两行都不换行，固定列宽下不会挤歪
+        const pill = `<span style="display:inline-block;margin-top:3px;padding:1px 6px;border-radius:7px;font-size:11px;font-weight:600;white-space:nowrap;color:${c.text};background:${c.bg};border:1px solid ${c.border}">${esc(rating.label)}</span>`;
+        return `<td style="${td}"><div style="display:flex;flex-direction:column;align-items:center;gap:0">${badge}${pill}</div></td>`;
       }).join('')}
       ${customFields.map(cf => {
         const v = r.customValues?.[cf.id];

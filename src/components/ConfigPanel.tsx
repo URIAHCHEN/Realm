@@ -9,9 +9,11 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable } from 'lucide-react';
-import type { QuestionType, LessonConfig, AppConfig } from '@/types';
+import { Switch } from '@/components/ui/switch';
+import type { QuestionType, LessonConfig, AppConfig, OralBand } from '@/types';
 import { inferCategory } from '@/lib/weakPoints';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
+import { DEFAULT_ORAL_RATING, normalizeOralRating, oralRatingForEditing } from '@/lib/oralRating';
 
 /** 默认选项可编辑列表（新增/删除），用于「默认配置」页 */
 function DefaultOptionList({ title, desc, options, onChange }: {
@@ -313,8 +315,18 @@ export function ConfigPanel({
   };
 
   // 保存应用配置
+  // 口语评价档位：编辑态只补缺字段、不重排（否则改阈值时行会在指针下乱跳）；
+  // 保存时才 normalize（排序 + 剔除空文案 + 空表回退默认）
+  const oralCfg = oralRatingForEditing(localAppConfig.oralRating);
+  const patchOral = (patch: Partial<typeof oralCfg>) =>
+    setLocalAppConfig(p => ({ ...p, oralRating: { ...oralRatingForEditing(p.oralRating), ...patch } }));
+  const patchOralBand = (idx: number, patch: Partial<OralBand>) =>
+    patchOral({ bands: oralCfg.bands.map((b, i) => (i === idx ? { ...b, ...patch } : b)) });
+
   const handleSaveAppConfig = () => {
-    onSaveAppConfig(localAppConfig);
+    // 档位表被清空时回退默认，避免存进去一份"判不出任何档"的配置
+    const oral = normalizeOralRating(localAppConfig.oralRating);
+    onSaveAppConfig({ ...localAppConfig, oralRating: oral });
   };
 
   // 变量选择器组件
@@ -754,6 +766,107 @@ export function ConfigPanel({
                   options={localAppConfig.defaultListeningOptions}
                   onChange={v => setLocalAppConfig(p => ({ ...p, defaultListeningOptions: v }))}
                 />
+              </div>
+            </div>
+
+            <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
+
+            {/* 口语评价档位（全局生效，作用于所有课次的口语等附加项） */}
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <div className="flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-[color:var(--brand)]" />
+                  <Label className="text-base font-semibold text-[color:var(--brand)]">口语评价档位（自动判定）</Label>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-slate-400">{oralCfg.enabled ? '已开启' : '已关闭'}</span>
+                  <Switch checked={oralCfg.enabled} onCheckedChange={v => patchOral({ enabled: v })} />
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                作用于「不计入总分」的附加项（口语得分等）：按得分率自动给出档位徽标，学情表、反馈模板参数
+                <code className="mx-1 px-1 rounded bg-slate-100 text-[11px]">【口语得分评价】</code>
+                、公示导出与学情报告共用同一份判定。先按下面的分数线定档，再按班级相对位置微调一档；
+                <strong className="text-slate-500">未登记与请假/缺勤的学员一律不判定</strong>，不会出现误导评价。
+              </p>
+
+              <div className="space-y-2 mb-3">
+                {oralCfg.bands.map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 w-16 shrink-0 text-right">得分率 ≥</span>
+                    <Input
+                      type="number" min={0} max={100} step={1}
+                      value={b.min}
+                      onChange={e => patchOralBand(i, { min: Number(e.target.value) })}
+                      className="w-20 h-9 text-sm text-center liquid-glass-input"
+                    />
+                    <span className="text-xs text-slate-400 shrink-0">%</span>
+                    <Input
+                      value={b.label}
+                      onChange={e => patchOralBand(i, { label: e.target.value })}
+                      placeholder="档位文案，如 很棒哦👍"
+                      className="flex-1 h-9 text-sm liquid-glass-input"
+                    />
+                    <Button
+                      variant="outline" size="icon"
+                      className="h-9 w-9 shrink-0 liquid-glass-button"
+                      disabled={oralCfg.bands.length <= 1}
+                      onClick={() => patchOral({ bands: oralCfg.bands.filter((_, x) => x !== i) })}
+                      aria-label={`删除档位 ${b.label}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-9 gap-1.5 liquid-glass-button"
+                    onClick={() => patchOral({ bands: [...oralCfg.bands, { min: 0, label: '' }] })}
+                  >
+                    <Plus className="w-4 h-4" /> 添加档位
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-9 liquid-glass-button"
+                    onClick={() => patchOral({
+                      bands: DEFAULT_ORAL_RATING.bands.map(x => ({ ...x })),
+                      relativeShiftPct: DEFAULT_ORAL_RATING.relativeShiftPct,
+                      minRegisteredForRelative: DEFAULT_ORAL_RATING.minRegisteredForRelative,
+                      enabled: true,
+                    })}
+                  >
+                    恢复默认
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-400">保存时会自动按阈值从高到低排序；最低档请填 0（兜底档）。</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label className="text-sm text-slate-600">相对班均微调阈值（百分点）</Label>
+                  <Input
+                    type="number" min={0} max={100} step={1}
+                    value={oralCfg.relativeShiftPct}
+                    onChange={e => patchOral({ relativeShiftPct: Number(e.target.value) })}
+                    className="h-9 text-sm mt-1 liquid-glass-input"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    高于班均这么多个百分点升一档，低于则降一档；填 0 表示只用固定分数线、不做相对微调。
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-slate-600">启用相对微调的最少已登记人数</Label>
+                  <Input
+                    type="number" min={1} max={99} step={1}
+                    value={oralCfg.minRegisteredForRelative}
+                    onChange={e => patchOral({ minRegisteredForRelative: Number(e.target.value) })}
+                    className="h-9 text-sm mt-1 liquid-glass-input"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    登记人数不足时班均没有参考意义，此时只按固定分数线判定。
+                  </p>
+                </div>
               </div>
             </div>
 

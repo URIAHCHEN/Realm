@@ -18,6 +18,7 @@ import {
   getStamp, type TemplateStore,
 } from '@/lib/templateStore';
 import { computeCategoryWeakPoints, type CategoryWeakPoint } from '@/lib/weakPoints';
+import { DEFAULT_ORAL_RATING, normalizeOralRating } from '@/lib/oralRating';
 import { toast } from 'sonner';
 
 // 生成唯一ID
@@ -118,7 +119,9 @@ const defaultAppConfig: AppConfig = {
 【表彰内容】
 
 上面这几位，这节课的功夫是实打实的。没上榜的也别急，下节课接着来。`,
-  defaultQuestionTypes: [...defaultQuestionTypes]
+  defaultQuestionTypes: [...defaultQuestionTypes],
+  // 口语等附加项的档位自动判定（默认开启；档位与阈值可在「系统配置 → 口语评价档位」改）
+  oralRating: { ...DEFAULT_ORAL_RATING, bands: DEFAULT_ORAL_RATING.bands.map(b => ({ ...b })) }
 };
 
 // 获取默认课次配置
@@ -396,7 +399,11 @@ export function useClassData() {
   // 应用配置
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = safeParse<Partial<AppConfig>>('appConfig', {});
-    const base = migrateDefaultOptions({ ...defaultAppConfig, ...saved }, saved);
+    const merged = { ...defaultAppConfig, ...saved };
+    // 口语档位配置单独归一化：云端旧快照/手工改坏可能缺字段或给非法阈值，
+    // 直接 spread 会把坏值带进判定逻辑（档位表为空会导致取不到文案）
+    merged.oralRating = normalizeOralRating(saved.oralRating ?? defaultAppConfig.oralRating);
+    const base = migrateDefaultOptions(merged, saved);
     // 模板自愈：登记表里的最后一次编辑优先（避免被旧配置/新部署的默认值冲掉）
     const savedClasses = safeParse<{ [key: string]: Class } | null>('classData', null);
     return applyTemplateStore(base, savedClasses && typeof savedClasses === 'object' ? savedClasses : {}).appConfig;
@@ -560,7 +567,7 @@ export function useClassData() {
   // 口径：请假/缺勤学员不计入总分与平均分（含各题型班均），0 分不再拉低统计
   const calculateClassStats = useCallback((records: StudentRecord[], questionTypes: QuestionType[]): ClassStats => {
     if (records.length === 0) {
-      return { maxScore: 0, minScore: 0, avgScore: 0, avgScores: {} };
+      return { maxScore: 0, minScore: 0, avgScore: 0, avgScores: {}, registeredCounts: {} };
     }
 
     const present = records.filter(r => !isAbsentRecord(r));
@@ -570,6 +577,8 @@ export function useClassData() {
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
     const avgScores: { [key: string]: number } = {};
+    // 已登记人数：消费方（口语档位相对微调）需要样本量来判断班均是否可信
+    const registeredCounts: { [key: string]: number } = {};
     questionTypes.forEach(qt => {
       if (qt.excludeFromTotal) {
         // 附加项（如口语得分）：并非每次课都登记 → 只对"已登记"的值求平均，
@@ -580,6 +589,7 @@ export function useClassData() {
         avgScores[qt.id] = registered.length > 0
           ? Math.round(registered.reduce((a, b) => a + b, 0) / registered.length * 10) / 10
           : 0;
+        registeredCounts[qt.id] = registered.length;
         return;
       }
       // 仅统计出勤学员；到课学员的 0 分也计入班均（不再用 >0 过滤，避免班均虚高）
@@ -587,9 +597,10 @@ export function useClassData() {
       avgScores[qt.id] = typeScores.length > 0
         ? Math.round(typeScores.reduce((a, b) => a + b, 0) / typeScores.length * 10) / 10
         : 0;
+      registeredCounts[qt.id] = present.filter(r => typeof r.scores[qt.id] === 'number').length;
     });
 
-    return { maxScore, minScore, avgScore, avgScores };
+    return { maxScore, minScore, avgScore, avgScores, registeredCounts };
   }, []);
 
   // 计算学生薄弱项（按板块聚合，得分率口径）
@@ -1504,8 +1515,9 @@ export function useClassData() {
     const records = classData.records.filter(r => r.lessonNumber === lessonNumber && roster.has(r.studentName));
     const getNick = (name: string) => nicknames[classId]?.[name] || name;
 
-    return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style, lessonConfig.customFields || []);
-  }, [classes, nicknames, getLessonConfig]);
+    return buildPublicityHTML(classData, lessonNumber, records, lessonConfig.questionTypes, getNick, style, lessonConfig.customFields || [], appConfig.oralRating);
+    // appConfig.oralRating 必须进依赖：档位配置改了而依赖没带上，公示里的评价会停在旧档位
+  }, [classes, nicknames, getLessonConfig, appConfig.oralRating]);
 
   return {
     appConfig,

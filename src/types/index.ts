@@ -140,6 +140,25 @@ export interface SavedFeedback {
   updatedAt: string;
 }
 
+// 口语（附加项）档位判定配置：判定实现在 lib/oralRating.ts，类型放这里避免循环依赖
+export interface OralBand {
+  /** 得分率百分比下限，达到即入档；最低档填 0 */
+  min: number;
+  /** 简洁带 emoji 的档位文案，如「很棒哦👍」 */
+  label: string;
+}
+
+export interface OralRatingConfig {
+  /** 总开关：关闭后各处一律不显示判定 */
+  enabled: boolean;
+  /** 档位表，按 min 降序；加载时会自动排序并剔除非法项 */
+  bands: OralBand[];
+  /** 相对班均偏移多少「个百分点」触发升/降一档 */
+  relativeShiftPct: number;
+  /** 启用相对微调所需的最少已登记人数（样本太少时班均无意义，只用固定线） */
+  minRegisteredForRelative: number;
+}
+
 // 应用配置
 export interface AppConfig {
   defaultAttendanceOptions: string[];
@@ -152,6 +171,8 @@ export interface AppConfig {
   defaultFeedbackTemplate: string;
   defaultPraiseTemplate: string;
   defaultQuestionTypes: QuestionType[];
+  /** 口语等附加项的档位自动判定配置（缺省时用 DEFAULT_ORAL_RATING） */
+  oralRating?: OralRatingConfig;
   /** 预存反馈素材库（全局按课次） */
   savedFeedbacks?: SavedFeedback[];
 }
@@ -193,6 +214,12 @@ export interface ClassStats {
   minScore: number;
   avgScore: number;
   avgScores: { [questionTypeId: string]: number };
+  /**
+   * 各题型「已登记人数」（出勤学员中 scores 里存在该键的人数）。
+   * 附加项（口语等）并非每课都登记，班均只算已登记值——消费方需要样本量才能
+   * 判断班均是否可信（如口语档位的相对微调要求 ≥3 人，见 lib/oralRating）。
+   */
+  registeredCounts?: { [questionTypeId: string]: number };
 }
 
 // 学生薄弱项

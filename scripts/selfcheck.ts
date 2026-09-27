@@ -8,6 +8,10 @@ import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
+import {
+  rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
+  oralDistribution, oralToneClass, oralToneColor, oralKey, DEFAULT_ORAL_RATING,
+} from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
 
 let passed = 0;
@@ -152,6 +156,117 @@ const absent = { ...normal, id: 'f3', attendance: '病假', scores: {}, totalSco
 const out3 = generatePersonalFeedback(absent, { ...fbCfg, feedbackTemplate: tpl } as unknown as LessonConfig, fbStats, '丙');
 check(out3.includes('未参与'), '病假学生生成的是"未参与"说明');
 check(!out3.includes('语法选择：'), '病假学生不做成绩分析（不出现题型分数）');
+
+// ============ 口语档位自动判定（lib/oralRating） ============
+group('口语档位 · 固定分数线');
+// registered=1 → 样本不足，只走固定线，不受班均干扰
+check(rateOralScore(95, 100, 0, 1, false)?.label === '很棒哦👍', '95/100 → 很棒哦👍');
+check(rateOralScore(85, 100, 0, 1, false)?.label === '不错👏', '85/100 → 不错👏');
+check(rateOralScore(75, 100, 0, 1, false)?.label === '还有空间🌱', '75/100 → 还有空间🌱');
+check(rateOralScore(60, 100, 0, 1, false)?.label === '再加油💪', '60/100 → 再加油💪');
+check(rateOralScore(90, 100, 0, 1, false)?.label === '很棒哦👍', '边界值 90 归入上一档（≥ 判定）');
+// 满分不硬编码 100：口语满分 50 时按得分率判
+check(rateOralScore(45, 50, 0, 1, false)?.label === '很棒哦👍', '满分 50 得 45（90%）→ 很棒哦👍（不硬编码 100）');
+check(rateOralScore(30, 50, 0, 1, false)?.label === '再加油💪', '满分 50 得 30（60%）→ 再加油💪');
+
+group('口语档位 · 班级相对位置微调（一档）');
+check(rateOralScore(85, 100, 70, 5, false)?.label === '很棒哦👍', '85% 高于班均 70% 达 15 点 → 升一档');
+check(rateOralScore(85, 100, 96, 5, false)?.label === '还有空间🌱', '85% 低于班均 96% 达 11 点 → 降一档');
+check(rateOralScore(85, 100, 80, 5, false)?.label === '不错👏', '偏离班均 5 点（<10）→ 不调档');
+check(rateOralScore(85, 100, 70, 2, false)?.label === '不错👏', '已登记仅 2 人（<3）→ 不做相对微调');
+check(rateOralScore(100, 100, 50, 5, false)?.label === '很棒哦👍', '已在最高档时升档不越界');
+check(rateOralScore(10, 100, 90, 5, false)?.label === '再加油💪', '已在最低档时降档不越界');
+check(rateOralScore(85, 100, 70, 5, false, { relativeShiftPct: 0 })?.label === '不错👏', '阈值设 0 → 关闭相对微调');
+
+group('口语档位 · 不判定的情况（避免误导评价）');
+check(rateOralScore(undefined, 100, 80, 5, false) === null, '未登记 → 不判定（不当 0 分处理）');
+check(rateOralScore(0, 100, 80, 5, true) === null, '请假/缺勤即使有分也不判定');
+check(rateOralScore(88, 100, 80, 5, false, { enabled: false }) === null, '开关关闭 → 不判定');
+check(rateOralScore(88, 0, 0, 5, false) === null, '满分为 0 → 不判定（不抛异常）');
+check(rateOralScore(88, -5, 0, 5, false) === null, '满分非法（负数）→ 不判定');
+check(rateOralScore(-3, 100, 80, 5, false)?.pct === 0, '负分夹到 0%，不产生负得分率');
+check(rateOralScore(180, 100, 80, 5, false)?.pct === 100, '超满分夹到 100%，不产生超档');
+
+group('口语档位 · 批量判定按课次分组');
+const oralQt = { id: 'o1', name: '口语得分', fullScore: 100, order: 9, excludeFromTotal: true } as QuestionType;
+const fullOf = (qtId: string) => (qtId === 'o1' ? 100 : 0);
+// 第1课班均 95 → 85 分低于班均 10 点，该降档；第2课班均 66.7 → 85 分该升档。混算会两边都判错
+const mixed = [
+  rec({ id: 'm1', lessonNumber: 1, scores: { o1: 100 } }),
+  rec({ id: 'm2', lessonNumber: 1, scores: { o1: 100 } }),
+  rec({ id: 'm3', lessonNumber: 1, scores: { o1: 85 } }),
+  rec({ id: 'm4', lessonNumber: 2, scores: { o1: 60 } }),
+  rec({ id: 'm5', lessonNumber: 2, scores: { o1: 55 } }),
+  rec({ id: 'm6', lessonNumber: 2, scores: { o1: 85 } }),
+];
+const mixedRatings = buildOralRatings(mixed, ['o1'], fullOf, DEFAULT_ORAL_RATING);
+check(mixedRatings.get(oralKey('m3', 'o1'))?.label === '还有空间🌱', `第1课 85 分（班均 95）→ 降一档（实际 ${mixedRatings.get(oralKey('m3', 'o1'))?.label}）`);
+check(mixedRatings.get(oralKey('m6', 'o1'))?.label === '很棒哦👍', `第2课 85 分（班均 66.7）→ 升一档（实际 ${mixedRatings.get(oralKey('m6', 'o1'))?.label}）`);
+// 请假学员的 0 分不得拉低班均：加一个请假 0 分，班均与判定都应保持不变
+const withLeave = [...mixed, rec({ id: 'm7', lessonNumber: 2, attendance: '请假🏫', scores: { o1: 0 } })];
+const leaveRatings = buildOralRatings(withLeave, ['o1'], fullOf, DEFAULT_ORAL_RATING);
+check(leaveRatings.get(oralKey('m6', 'o1'))?.classAvg === 66.7, `班均不含请假的 0 分（应 66.7，实际 ${leaveRatings.get(oralKey('m6', 'o1'))?.classAvg}）`);
+check(leaveRatings.get(oralKey('m6', 'o1'))?.label === '很棒哦👍', '请假学员 0 分不拉低班均（m6 判定不变）');
+check(leaveRatings.get(oralKey('m7', 'o1')) === undefined, '请假学员自己不出判定');
+check(leaveRatings.get(oralKey('m6', 'o1'))?.registered === 3, `已登记人数不含请假学员（应 3，实际 ${leaveRatings.get(oralKey('m6', 'o1'))?.registered}）`);
+// 未登记的记录不进判定表
+const partial = [rec({ id: 'p1', lessonNumber: 1, scores: { o1: 90 } }), rec({ id: 'p2', lessonNumber: 1, scores: {} })];
+check(buildOralRatings(partial, ['o1'], fullOf, DEFAULT_ORAL_RATING).has(oralKey('p2', 'o1')) === false, '未登记者不进判定表');
+const dist = oralDistribution(Array.from(mixedRatings.values()), DEFAULT_ORAL_RATING);
+check(dist.reduce((s, d) => s + d.count, 0) === 6, '档位分布合计 = 已判定人数（6）');
+check(dist.length === DEFAULT_ORAL_RATING.bands.length, '分布含 0 次的档，便于对比');
+
+group('口语档位 · 配置归一化');
+const unsorted = {
+  enabled: true,
+  bands: [{ min: 0, label: '差' }, { min: 90, label: '优' }, { min: 70, label: '中' }],
+  relativeShiftPct: 10, minRegisteredForRelative: 3,
+};
+check(normalizeOralRating(unsorted).bands.map(b => b.min).join(',') === '90,70,0', '运行态按阈值降序排列');
+check(oralRatingForEditing(unsorted).bands.map(b => b.min).join(',') === '0,90,70', '编辑态保持原顺序（改阈值时行不乱跳）');
+check(normalizeOralRating({ bands: [] }).bands.length === DEFAULT_ORAL_RATING.bands.length, '档位表被清空 → 回退默认（不会判不出档）');
+check(normalizeOralRating(undefined).bands[0].label === '很棒哦👍', '缺配置 → 用默认档位');
+check(normalizeOralRating({ relativeShiftPct: -5 }).relativeShiftPct === 0, '负阈值被夹到 0');
+check(normalizeOralRating({ minRegisteredForRelative: 0 }).minRegisteredForRelative === 1, '最少人数下限为 1');
+const topRating = rateOralScore(95, 100, 0, 1, false)!;
+const bottomRating = rateOralScore(50, 100, 0, 1, false)!;
+check(oralToneClass(topRating).includes('emerald') && oralToneClass(bottomRating).includes('rose'), '配色按档位相对位置：最高档绿、最低档红');
+check(oralToneColor(topRating).text === '#047857' && oralToneColor(bottomRating).text === '#be123c', '公示内联配色与站内配色同规则');
+
+group('口语档位 · 反馈模板参数');
+const oralLessonCfg = {
+  questionTypes: [{ id: 'v1', name: '语法选择', fullScore: 15, order: 1 }, oralQt],
+  attendanceOptions: [], homeworkOptions: [], listeningOptions: [],
+  feedbackTemplate: '', praiseTemplate: '', homeworkText: '',
+} as unknown as LessonConfig;
+const oralVarKeys = buildDynamicVariables(oralLessonCfg).map(v => v.key);
+check(oralVarKeys.includes('【口语得分评价】'), '附加项额外给出【X评价】参数');
+check(!oralVarKeys.includes('【语法选择评价】'), '计入总分的普通题型不给评价参数');
+const oralStats = {
+  maxScore: 15, minScore: 10, avgScore: 12,
+  avgScores: { v1: 12, o1: 70 }, registeredCounts: { v1: 5, o1: 5 },
+} as unknown as ClassStats;
+const oralTpl = '语法：【语法选择】\n口语：【口语得分】\n口语评价：【口语得分评价】';
+const oralOut = generatePersonalFeedback(
+  rec({ id: 'o-r1', scores: { v1: 14, o1: 95 } }),
+  { ...oralLessonCfg, feedbackTemplate: oralTpl } as unknown as LessonConfig, oralStats, '甲'
+);
+check(oralOut.includes('口语评价：很棒哦👍'), '【口语得分评价】替换为判定档位');
+check(oralOut.includes('口语：95'), '得分与评价同时保留');
+// 未登记口语 → 评价行整行移除，绝不留"口语评价："空标签或误导文案
+const oralOut2 = generatePersonalFeedback(
+  rec({ id: 'o-r2', scores: { v1: 10 } }),
+  { ...oralLessonCfg, feedbackTemplate: oralTpl } as unknown as LessonConfig, oralStats, '乙'
+);
+check(!oralOut2.includes('口语评价'), '未登记口语时评价行被整行移除（前缀「口语评价」≠题型名也要能剥掉）');
+check(oralOut2.includes('语法：10'), '其他参数不受影响');
+// 有真实内容的行不能被误删：占位符为空但老师补了话
+const oralTpl3 = '口语评价：【口语得分评价】（多开口读）';
+const oralOut3 = generatePersonalFeedback(
+  rec({ id: 'o-r3', scores: { v1: 10 } }),
+  { ...oralLessonCfg, feedbackTemplate: oralTpl3 } as unknown as LessonConfig, oralStats, '丙'
+);
+check(oralOut3.includes('多开口读'), '占位符为空但行内有老师写的内容 → 保留该行');
 
 console.log('');
 if (failures.length) {

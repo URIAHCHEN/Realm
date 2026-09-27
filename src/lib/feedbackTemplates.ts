@@ -1,7 +1,8 @@
-import type { StudentRecord, ClassStats, LessonConfig } from '@/types';
+import type { StudentRecord, ClassStats, LessonConfig, OralRatingConfig } from '@/types';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { rateOralScore } from '@/lib/oralRating';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -19,6 +20,7 @@ export function generateShortNickname(fullName: string): string {
 /**
  * 动态可选参数：把「本课次表格里的字段」全部变成可用参数。
  *  - 每个题型（含口语得分这类不计入总分的附加项）：【题型名】= 得分，【题型名得分率】= 百分比
+ *  - 附加项（口语等）额外给一个【题型名评价】= 自动判定的档位文案（如「很棒哦👍」）
  *  - 每个自定义列：【列名】= 填写内容
  * 与固定参数同名的字段跳过（避免覆盖语义）。
  */
@@ -37,6 +39,9 @@ export function buildDynamicVariables(cfg: LessonConfig | undefined | null): Tem
     if (!n || FIXED_VAR_NAMES.has(n)) return;
     out.push({ key: `【${n}】`, desc: `${n}：本生得分` });
     out.push({ key: `【${n}得分率】`, desc: `${n}：本生得分率` });
+    if (qt.excludeFromTotal) {
+      out.push({ key: `【${n}评价】`, desc: `${n}：自动判定档位（如 很棒哦👍）` });
+    }
   });
   (cfg.customFields || []).forEach(cf => {
     const n = (cf.name || '').trim();
@@ -46,29 +51,52 @@ export function buildDynamicVariables(cfg: LessonConfig | undefined | null): Tem
   return out;
 }
 
-/** 某行去掉标签（以及老师写的字段名标题）后若再无内容，就整行删掉（避免"口语得分："这种空标签） */
-function dropLineIfLabelOnly(text: string, label: string, value: string, fieldName?: string): string {
+/**
+ * 某行去掉标签（以及老师写的字段名标题）后若再无内容，就整行删掉（避免"口语得分："这种空标签）。
+ * fieldName 支持数组：老师写的前缀未必等于题型名 —— 例如题型叫「口语得分」，
+ * 但行首常写成「口语评价：」或「口语：」，只按题型名剥会剩下"口语评价："这种空壳。
+ */
+function dropLineIfLabelOnly(text: string, label: string, value: string, fieldName?: string | string[]): string {
   if (value !== '') return text;
+  const names = Array.isArray(fieldName) ? fieldName : (fieldName ? [fieldName] : []);
   return text
     .split('\n')
     .filter(line => {
       if (!line.includes(label)) return true;
       let rest = line.replace(label, '');
       // 行形如「口语得分：【口语得分】」：标题里的字段名也要一起剥掉才算空
-      if (fieldName) rest = rest.split(fieldName).join('');
+      names.forEach(n => { if (n) rest = rest.split(n).join(''); });
       return rest.replace(/[\s:：|｜·—\-*（）()、,，]/g, '') !== '';
     })
     .join('\n');
 }
 
 /**
+ * 附加项评价参数（【口语得分评价】）的行首候选写法。
+ * 老师可能写「口语评价：」「口语：」「口语得分档位：」——都得能在无判定时整行删掉，
+ * 否则家长会收到一行只有前缀没有内容的空壳。
+ */
+function ratingFieldNameCandidates(qtName: string): string[] {
+  const short = qtName.replace(/(得分|成绩|分数)$/g, '');
+  return [
+    `${qtName}评价`, `${short}评价`, `${qtName}档位`, `${short}档位`,
+    qtName, short, '评价', '档位', '等级',
+  ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+}
+
+/**
  * 把题型分数写成模板参数，并清掉"未登记 → 只剩标签"的行。
  * 未登记（scores 里没有该键）与真实 0 分区分开：0 分会照实写 0。
+ *
+ * @param ratingByQtId 附加项（口语等）的自动判定档位，键为题型 id。
+ *   未登记 / 请假缺勤时不应有对应项 —— 此时【X评价】按空值处理并删掉只剩标签的行，
+ *   绝不写出「再加油💪」这类误导家长的评价。
  */
 export function applyScoreVariables(
   template: string,
   record: StudentRecord,
-  cfg: LessonConfig | undefined | null
+  cfg: LessonConfig | undefined | null,
+  ratingByQtId?: Record<string, string>
 ): string {
   let out = template;
   (cfg?.questionTypes || []).forEach(qt => {
@@ -86,6 +114,14 @@ export function applyScoreVariables(
     out = dropLineIfLabelOnly(out, rateLabel, rateText, n);
     out = out.replace(new RegExp(escapeRegExp(scoreLabel), 'g'), scoreText);
     out = out.replace(new RegExp(escapeRegExp(rateLabel), 'g'), rateText);
+
+    // 附加项档位评价（如【口语得分评价】→ 很棒哦👍）
+    if (qt.excludeFromTotal) {
+      const ratingLabel = `【${n}评价】`;
+      const ratingText = (ratingByQtId?.[qt.id] || '').trim();
+      out = dropLineIfLabelOnly(out, ratingLabel, ratingText, ratingFieldNameCandidates(n));
+      out = out.replace(new RegExp(escapeRegExp(ratingLabel), 'g'), ratingText);
+    }
   });
   return out;
 }
@@ -95,12 +131,41 @@ function escapeRegExp(v: string): string {
   return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * 附加项（口语等）的档位判定表：题型 id → 档位文案。
+ * 私发反馈与「四个一」共用这一份，保证两条生成路径给出的评价完全一致。
+ * 未登记 / 请假缺勤的记录不会出现在表里（消费方据此删掉只剩标签的行）。
+ */
+export function buildRatingByQtId(
+  record: StudentRecord,
+  lessonConfig: LessonConfig | undefined | null,
+  stats: ClassStats,
+  oralCfg?: OralRatingConfig
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  (lessonConfig?.questionTypes || []).forEach(qt => {
+    if (!qt.excludeFromTotal) return;
+    const r = rateOralScore(
+      record.scores?.[qt.id],
+      qt.fullScore,
+      stats.avgScores[qt.id] || 0,
+      stats.registeredCounts?.[qt.id] || 0,
+      isAbsentRecord(record),
+      oralCfg
+    );
+    if (r) out[qt.id] = r.label;
+  });
+  return out;
+}
+
 export function generatePersonalFeedback(
   record: StudentRecord,
   lessonConfig: LessonConfig,
   stats: ClassStats,
   nickname: string,
-  templateOverride?: string
+  templateOverride?: string,
+  /** 口语等附加项的档位判定配置；缺省用默认档位 */
+  oralCfg?: OralRatingConfig
 ): string {
   if (isAbsentRecord(record)) {
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
@@ -108,6 +173,11 @@ export function generatePersonalFeedback(
   const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
   const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate) || '';
   let template = baseTemplate;
+
+  // 附加项（口语等）的自动档位：与学情表徽标同一份实现，保证「表里看到的」和「发给家长的」一致。
+  // 班均只含已登记值（stats.avgScores 口径），样本量取 registeredCounts —— 人数太少时
+  // rateOralScore 内部会自动只用固定分数线，不做相对微调。
+  const ratingByQtId = buildRatingByQtId(record, lessonConfig, stats, oralCfg);
   
   // 构建成绩详情
   const scoreDetails = lessonConfig.questionTypes.map(qt => {
@@ -160,8 +230,8 @@ export function generatePersonalFeedback(
     template = dropLineIfLabelOnly(template, label, text, cf.name);   // 先判断（占位符仍在）
     template = template.replace(new RegExp(escRe(label), 'g'), text);
   });
-  // 题型（含口语得分等附加项）也作为可用参数
-  template = applyScoreVariables(template, record, lessonConfig);
+  // 题型（含口语得分等附加项）也作为可用参数；附加项额外支持【X评价】档位
+  template = applyScoreVariables(template, record, lessonConfig, ratingByQtId);
 
   // 替换模板变量
   let feedback = template
@@ -303,7 +373,9 @@ export function generateFourInOne(
   templateOverride?: string,
   scenarioKey: 'daily' | 'afterclass' | 'comm' = 'daily',
   /** 是否附「参考教辅」清单（关闭时整行移除） */
-  withMaterials = true
+  withMaterials = true,
+  /** 口语等附加项的档位判定配置；缺省用默认档位 */
+  oralCfg?: OralRatingConfig
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
@@ -386,8 +458,8 @@ export function generateFourInOne(
     })
     .join('\n');
 
-  // 题型（含口语得分等附加项）与自定义列同样可作为参数
-  let fourTpl = applyScoreVariables(tpl, record, lessonConfig);
+  // 题型（含口语得分等附加项）与自定义列同样可作为参数；附加项支持【X评价】档位
+  let fourTpl = applyScoreVariables(tpl, record, lessonConfig, buildRatingByQtId(record, lessonConfig, stats, oralCfg));
   (lessonConfig?.customFields || []).forEach(cf => {
     const v = record.customValues?.[cf.id];
     const text = (v === '' || v == null) ? '' : (cf.kind === 'number' ? `${v}分` : String(v));

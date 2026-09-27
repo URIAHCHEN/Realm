@@ -75,6 +75,24 @@ import {
 } from '@/lib/reportFeedback';
 
 
+/**
+ * 口语等附加项的统计行（个人报告与班级报告共用）。
+ * 抽成具名类型：原先两个 props 接口各写一遍内联结构，加字段时极易只改一处。
+ */
+export interface OptionalFieldRow {
+  name: string;
+  /** 已登记次数（未登记不计入，不当 0 处理） */
+  registered: number;
+  /** 该批记录总条数 */
+  total: number;
+  /** 已登记值的平均分 */
+  avg: number;
+  /** 档位分布（如 很棒哦👍 × 3）；未登记/请假缺勤不出现在任何档 */
+  distribution?: { label: string; count: number }[];
+  /** 拿到判定的记录数；为 0 时不渲染分布 */
+  ratedCount?: number;
+}
+
 /** 语义分级徽章样式（用于概况卡与列表配色） */
 const TONE_BADGE: Record<string, string> = {
   good: 'bg-green-100 text-green-700',
@@ -93,7 +111,7 @@ export interface PersonalReportProps {
   pieData: { name: string; value: number; color: string }[];
   barData: { lesson: string; lessonNum: number; score: number; correctRate: number; fullMark: number }[];
   comboTrend: { lesson: string; 学生正确率: number; 班级平均: number; 班级最高: number; 班级排名: number }[];
-  optionalRows: { name: string; registered: number; total: number; avg: number }[];
+  optionalRows: OptionalFieldRow[];
   radarData: { subject: string; A: number; fullMark: number }[];
   currentClassName: string;
   selectedStudent: string;
@@ -449,11 +467,23 @@ export function PersonalReportView({
                 <div className="pt-2 mt-1 border-t border-black/5 space-y-2">
                   <p className="text-xs text-[color:var(--ink-4)]">口语类（作业成绩，不计入小测总分）</p>
                   {optionalRows.map(st => (
-                    <div key={st.name} className="flex justify-between items-center">
-                      <span className="text-[color:var(--ink-2)]">{st.name}</span>
-                      <Badge className={TONE_BADGE.muted}>
-                        {st.registered > 0 ? `平均 ${st.avg} 分 · 已登记 ${st.registered}/${st.total} 次` : '尚未登记'}
-                      </Badge>
+                    <div key={st.name} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[color:var(--ink-2)]">{st.name}</span>
+                        <Badge className={TONE_BADGE.muted}>
+                          {st.registered > 0 ? `平均 ${st.avg} 分 · 已登记 ${st.registered}/${st.total} 次` : '尚未登记'}
+                        </Badge>
+                      </div>
+                      {/* 档位分布：只列实际出现的档，全 0（无人拿到判定）时整行不渲染 */}
+                      {(st.ratedCount ?? 0) > 0 && (st.distribution || []).some(d => d.count > 0) && (
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          {(st.distribution || []).filter(d => d.count > 0).map(d => (
+                            <span key={d.label} className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-black/5 bg-slate-50 text-[11px] font-medium text-[color:var(--ink-2)] whitespace-nowrap">
+                              {d.label} × {d.count}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -566,7 +596,7 @@ export interface ClassReportProps {
   currentClassName: string;
   selectedLesson: number | 'all';
   classComboTrend: { lesson: string; 班级平均: number; 班级最高: number; 班级最低: number; 达标人数: number; 人数: number }[];
-  optionalRows: { name: string; registered: number; total: number; avg: number }[];
+  optionalRows: OptionalFieldRow[];
   classStats: ClassReportStats | null;
   classReportRecords: StudentRecord[];
   getNickname: (name: string) => string;
@@ -843,6 +873,16 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                       <div key={st.name} className="p-3 rounded-xl text-center bg-blue-50 text-blue-700">
                         <p className="text-2xl font-bold">{st.registered > 0 ? st.avg : '—'}</p>
                         <p className="text-xs">{st.name}均分 · 已登记 {st.registered} 次</p>
+                        {/* 档位分布：一眼看出全班口语的整体档位结构 */}
+                        {(st.ratedCount ?? 0) > 0 && (st.distribution || []).some(d => d.count > 0) && (
+                          <div className="flex flex-wrap gap-1 justify-center mt-2">
+                            {(st.distribution || []).filter(d => d.count > 0).map(d => (
+                              <span key={d.label} className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/70 text-[11px] font-medium whitespace-nowrap">
+                                {d.label} × {d.count}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

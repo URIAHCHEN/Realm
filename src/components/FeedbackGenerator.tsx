@@ -11,7 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
-import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
+import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
 
 /**
  * 生成可直接粘进表格（Excel / 腾讯文档 / 金山）的 TSV：
@@ -37,7 +37,10 @@ interface FeedbackGeneratorProps {
   lessonConfig: LessonConfig;
   lessonNumber: number;
   getNickname: (name: string) => string;
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
+  /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  /** 口语等附加项的档位判定配置（用于【口语评价】模板参数）；缺省用默认档位 */
+  oralRating?: OralRatingConfig;
   libraryLinks?: string[];
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 点击群发列表中的姓名弹出该生学情报告 */
@@ -53,6 +56,7 @@ export function FeedbackGenerator({
   lessonNumber,
   getNickname,
   calculateClassStats,
+  oralRating,
   libraryLinks = [],
   onSaveLessonConfig,
   onViewStudent
@@ -113,9 +117,9 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating);
     }
-    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback);
+    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating);
   };
 
   // 模板草稿改动：若当前学生已有生成内容，实时重算预览
@@ -251,9 +255,9 @@ export function FeedbackGenerator({
     }
     const rows = batchRows.map(r => {
       const rec = recordOf(r.name);
-      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback) : '';
+      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating) : '';
       const fourInOneText = rec
-        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials)
+        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating)
         : '';
       return [getNickname(r.name), privateText, fourInOneText];
     });
@@ -282,8 +286,8 @@ export function FeedbackGenerator({
       const rec = recordOf(r.name);
       const text = rec
         ? (isFour
-          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials)
-          : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback))
+          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating)
+          : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating))
         : '';
       return [getNickname(r.name), text];
     });

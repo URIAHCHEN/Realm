@@ -14,14 +14,15 @@ import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTempl
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { toast } from 'sonner';
-import type { StudentRecord, LessonConfig, QuestionType } from '@/types';
+import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
 
 interface LeaderboardProps {
   records: StudentRecord[];
   lessonConfig: LessonConfig;
   lessonNumber: number;
   getNickname: (name: string) => string;
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
+  /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
 }
 
 type LeaderboardMode = 'top10' | 'champion' | 'progress' | 'listening' | 'homework';

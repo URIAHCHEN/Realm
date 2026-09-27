@@ -18,8 +18,9 @@ import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
 import { optionToneClass } from '@/lib/optionTone';
+import { buildOralRatings, oralKey, oralToneClass, explainRating } from '@/lib/oralRating';
 import { toast } from 'sonner';
-import type { StudentRecord, LessonConfig, SeasonType, QuestionType } from '@/types';
+import type { StudentRecord, LessonConfig, SeasonType, QuestionType, ClassStats, OralRatingConfig } from '@/types';
 
 interface StudentTableProps {
   students: string[];
@@ -27,7 +28,10 @@ interface StudentTableProps {
   lessonConfig: LessonConfig;
   lessonNumber: number;
   getNickname: (name: string) => string;
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => { maxScore: number; minScore: number; avgScore: number; avgScores: { [key: string]: number } };
+  /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  /** 口语等附加项的档位自动判定配置；缺省用默认档位（见 lib/oralRating） */
+  oralRating?: OralRatingConfig;
   onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: StudentRecord[keyof StudentRecord]) => void;
   onCreateRecord: (studentName: string, record: Partial<StudentRecord>) => void;
   onDeleteRecord: (recordId: string) => void;
@@ -132,7 +136,7 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 }
 
 export function StudentTable({
-  students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats,
+  students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
   onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis,
   onOpenConfig,
@@ -262,6 +266,21 @@ export function StudentTable({
     () => calculateClassStats(lessonRecords, lessonConfig.questionTypes),
     [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
   );
+
+  // 口语等附加项的档位自动判定：一次算好「本课次全班 × 各附加项」，行渲染时直接查表。
+  // 判定口径唯一实现见 lib/oralRating —— 固定分数线定基础档，再按班均相对位置微调一档；
+  // 未登记与请假/缺勤一律不判定（残留 0 分被评成「再加油💪」是误导）。
+  const oralRatings = useMemo(() => {
+    const optionalQts = (lessonConfig.questionTypes || []).filter(qt => qt.excludeFromTotal);
+    const fullScoreById = new Map(optionalQts.map(qt => [qt.id, qt.fullScore]));
+    // qtIds 为空时 buildOralRatings 直接返回空表，无需额外分支
+    return buildOralRatings(
+      lessonRecords,
+      optionalQts.map(qt => qt.id),
+      (qtId) => fullScoreById.get(qtId) || 0,
+      oralRating
+    );
+  }, [lessonRecords, lessonConfig.questionTypes, oralRating]);
 
   const recordByKey = useMemo(() => {
     const m = new Map<string, StudentRecord>();
@@ -818,8 +837,13 @@ export function StudentTable({
                             const inputCls = settings.showDataBars
                               ? 'score-input'
                               : `w-14 h-9 text-center text-base rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
+                            // 口语等附加项：分数下方自动给出档位徽标（只读，永远与分数一致）。
+                            // 未登记 / 请假缺勤时 oralRatings 里没有该项 → 不渲染徽标，
+                            // 输入框仍显示「—」占位，绝不出现「再加油💪」这类误导评价。
+                            const rating = isOptional && record ? oralRatings.get(oralKey(record.id, qt.id)) : undefined;
                             return (
                               <TableCell key={qt.id} className="text-base tnum">
+                                <div className="flex flex-col items-center gap-1">
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -836,6 +860,15 @@ export function StudentTable({
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+                                {rating && (
+                                  <span
+                                    className={`inline-flex items-center justify-center max-w-full px-1.5 py-0.5 rounded-md border text-[11px] leading-none font-semibold whitespace-nowrap ${oralToneClass(rating, oralRating)}`}
+                                    title={explainRating(rating, oralRating)}
+                                  >
+                                    {rating.label}
+                                  </span>
+                                )}
+                                </div>
                               </TableCell>
                             );
                           })}

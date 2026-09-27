@@ -852,6 +852,7 @@ function App() {
                   lessonNumber={currentLessonNumber}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                   calculateClassStats={calculateClassStats}
+                  oralRating={appConfig.oralRating}
                   onDeleteLessonRecords={handleDeleteLesson}
                   onUpdateRecord={(recordId, field, value) => currentClass && updateRecordField(currentClass.id, recordId, field, value)}
                   onCreateRecord={(studentName, record) => currentClass && saveRecord(currentClass.id, { ...record, studentName })}
@@ -908,6 +909,7 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+              oralRating={appConfig.oralRating}
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
               onViewStudent={handleViewStudentAnalysis}
@@ -961,6 +963,7 @@ function App() {
                 lessonConfigs={currentClass?.lessonConfigs || {}}
                 getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                 currentClassName={currentClass?.name || ''}
+                oralRating={appConfig.oralRating}
               />
             </Suspense>
           </ErrorBoundary>

@@ -87,6 +87,7 @@ function App() {
   deleteClass,
   addStudentToClass,
   addStudents,
+  removeStudentFromLessonOnward,
   removeStudentFromClass,
   transferStudent,
   restoreStudentToClass,
@@ -183,6 +184,27 @@ function App() {
     const { classId, lessonNumber } = target;
     const classData = classes[classId];
     if (!classData) { toast.error('目标班级不存在'); return; }
+
+    // 导入前的差异盘点（不自动删人，只提示）：
+    //  · 表中有、名单无 → 视为新学员（会在下方被新建）
+    //  · 名单有、表中无 → 视为"本次课未出现"。这类学员很可能已离班，
+    //    提示老师用「从本课次起移除」处理，而不是继续保留/新建空记录
+    {
+      const inTable = new Set(rows.map(r => r.studentName).filter(Boolean));
+      const rosterNames = classData.students || [];
+      const missing = rosterNames.filter(n => !inTable.has(n));
+      const toAdd = [...inTable].filter(n => !rosterNames.includes(n));
+      if (toAdd.length > 0) {
+        toast.info('本次表格有 ' + toAdd.length + ' 位新学员将加入名单：' + toAdd.slice(0, 6).join('、') + (toAdd.length > 6 ? ' 等' : ''));
+      }
+      if (missing.length > 0) {
+        toast.info(
+          '另外有 ' + missing.length + ' 位名单内学员未出现在本次表格：' + missing.slice(0, 6).join('、') + (missing.length > 6 ? ' 等' : '')
+          + '。若他们已离班，请在表格中勾选后点「从本课次起移除」（历史课次记录会保留）。',
+          { duration: 12000 }
+        );
+      }
+    }
 
     const cfg = getLessonConfig(classId, lessonNumber);
     const normTo = (options: string[]) => (v?: string) => {
@@ -871,6 +893,12 @@ function App() {
                   onDeleteRecord={handleDeleteRecord}
                   onClearRecord={handleClearRecord}
                   onDeleteStudentRecords={handleDeleteStudentRecords}
+                  onRemoveStudentsFromLesson={(names: string[], fromLesson: number) => {
+                    if (!currentClass) return;
+                    let n = 0;
+                    names.forEach(nm => { n += removeStudentFromLessonOnward(currentClass.id, nm, fromLesson); });
+                    toast.success('已从第 ' + fromLesson + ' 课起移除 ' + names.length + ' 位学员（共 ' + n + ' 条记录），历史课次记录保留');
+                  }}
                   onAddStudent={handleAddStudent}
                   onRemoveStudent={handleRemoveStudent}
                   onExportData={handleExportData}

@@ -36,6 +36,8 @@ interface StudentTableProps {
   onCreateRecord: (studentName: string, record: Partial<StudentRecord>) => void;
   onDeleteRecord: (recordId: string) => void;
   /** 打开「生成设置」对话框（字段/题型/显示配置） */
+  /** 从第 N 课起移除这些学员（离班处理） */
+  onRemoveStudentsFromLesson?: (names: string[], fromLesson: number) => void;
   onOpenConfig?: () => void;
   /** 一键删除所选学员本课次记录（含撤销） */
   onDeleteStudentRecords?: (studentNames: string[]) => void;
@@ -139,6 +141,7 @@ export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
   onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis,
+  onRemoveStudentsFromLesson,
   onOpenConfig,
 }: StudentTableProps) {
   const [newStudentName, setNewStudentName] = useState('');
@@ -627,6 +630,24 @@ export function StudentTable({
                 )}
                 <Button size="sm" className="h-8 gap-1.5 ios-button" disabled={!canApplyBulk} onClick={handleApplyBulk}>
                   <Check className="w-4 h-4" />应用到选中
+                </Button>
+                {/* 离班处理：名单里有、本次课表里没有的学员，从这里移除（历史课次记录保留） */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50"
+                  disabled={selectedStudents.size === 0}
+                  title="删除所选学员在本课次及之后的所有记录，并从班级名单移除（之前课次的历史保留）"
+                  onClick={() => {
+                    const names = [...selectedStudents];
+                    const msg = '将从「第 ' + lessonNumber + ' 课」起移除 ' + names.length + ' 位学员：\n\n'
+                      + names.join('、') + '\n\n'
+                      + '· 删除他们在本课次及之后课次的记录\n'
+                      + '· 从班级名单移除（之后新增课次不会再自动为 TA 建记录）\n'
+                      + '· 之前课次的历史记录与统计保持不变\n\n确认移除？';
+                    if (window.confirm(msg)) onRemoveStudentsFromLesson?.(names, lessonNumber);
+                  }}>
+                  <UserMinus className="w-4 h-4" />从本课次起移除
                 </Button>
                 {onDeleteStudentRecords && someSelected && (
                   confirmDeleteSelected ? (

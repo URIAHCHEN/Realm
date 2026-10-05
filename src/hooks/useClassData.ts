@@ -725,6 +725,36 @@ export function useClassData() {
   }, []);
 
   // 从班级移除学生（连带删除其记录），并重排受影响课次名次
+  /**
+   * 从「本课次起」移除学员（离班处理）。
+   *
+   * 与 removeStudentFromClass（整人删除、含历史）的区别：
+   *   · 只删除 lessonNumber >= fromLesson 的记录 → 之前课次的历史与统计保持不变
+   *   · 同时把 TA 从班级名单移除 → 之后「继承上一课」不会再为 TA 生成新记录
+   *     （继承逻辑只对名单内学员生效，这是"删除能从后续课次生效"的关键）
+   *
+   * 典型场景：学员只在第 1 课有出勤，第 2 课起导入的表里已经没有 TA ——
+   * 用本操作把 TA 从第 2 课起移除，而不是继续为 TA 保留/新建空记录。
+   */
+  const removeStudentFromLessonOnward = useCallback((classId: string, studentName: string, fromLesson: number): number => {
+    let removed = 0;
+    setClasses(prev => {
+      const cls = prev[classId];
+      if (!cls) return prev;
+      const targets = cls.records.filter(r => r.studentName === studentName && r.lessonNumber >= fromLesson);
+      if (targets.length === 0) return prev;
+      removed = targets.length;
+      const affected = new Set(targets.map(r => r.lessonNumber));
+      let records = cls.records.filter(r => !(r.studentName === studentName && r.lessonNumber >= fromLesson));
+      affected.forEach(l => { records = rerankLesson(records, l); });
+      return {
+        ...prev,
+        [classId]: { ...cls, students: cls.students.filter(x => x !== studentName), records },
+      };
+    });
+    return removed;
+  }, []);
+
   const removeStudentFromClass = useCallback((classId: string, studentName: string) => {
     setClasses(prev => {
       const cls = prev[classId];
@@ -1547,6 +1577,7 @@ export function useClassData() {
     addStudentToClass,
     addStudents,
     removeStudentFromClass,
+    removeStudentFromLessonOnward,
     transferStudent,
     restoreStudentToClass,
     removeStudentFromRoster,

@@ -1,18 +1,21 @@
-# 云端保活：Supabase 免费版项目约 7 天无活跃会被自动暂停，
-# 暂停期间 API 与登录（Auth）全部不可达 → 站点会"打不开也登不进"。
-# 官方口径：上周每天有几次请求即可不被判定为不活跃。
-# 因此这里每天（并支持手动触发）访问一次项目端点，重置计时器。
+# 云端保活：Supabase 免费版项目「7 天无数据库请求」会被暂停。
 #
-# 说明：不需要任何密钥——只有"请求到达了项目"才计入活跃，
-# 因此 /auth/v1/health 返回 200、/rest/v1/ 返回 401 都算有效访问。
-# 若想改成带 anon key 的正式请求，在仓库 Settings → Secrets 里加：
-#   SUPABASE_URL      （可选，默认用下方内置地址）
-#   SUPABASE_ANON_KEY （可选，加上后会带 apikey 头）
+# ⚠️ 2026-10-05 修正（原来这套是无效的，站点仍被警告要暂停）：
+#   原实现访问 /auth/v1/health 与 /rest/v1/ 根路径 —— 两者都「不产生数据库活动」：
+#     · /auth/v1/health 是 GoTrue 健康检查，根本不查库
+#     · /rest/v1/ 根路径被网关直接拒绝（401 Invalid API key），请求没到 Postgres
+#   而原脚本把 401 也算作"可达"，所以每天显示成功，实际什么都没保活。
+#   官方口径：只有【数据库请求】才重置计时器（dashboard 停留、不查库的 API 调用都不算）。
+#
+# 现方案：带 anon key 做一次真实查询 GET /rest/v1/app_state?select=id&limit=1
+#   → PostgREST 会真的执行 SELECT（返回 200 [] 即为成功），才算一次数据库活动。
+# 关于 anon key：它是公开密钥（前端产物里本来就有），写在这里不增加暴露面；
+#   若仓库 Secrets 里配了 SUPABASE_ANON_KEY / SUPABASE_URL，会优先使用 Secret。
 name: 云端保活
 
 on:
   schedule:
-    # 每天 02:23 UTC = 北京 10:23（避开整点的排队高峰，定时更准时）
+    # 每天 02:23 UTC = 北京 10:23（避开整点排队；每周一次就够，这里每天跑更保险）
     - cron: '23 2 * * *'
   workflow_dispatch: {}
 
@@ -21,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: 访问项目端点，重置"不活跃"计时器
+      - name: 真实数据库查询（只有查库才算活跃）
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -29,25 +32,29 @@ jobs:
           set -u
           BASE="${SUPABASE_URL:-https://katproevfecefydjztca.supabase.co}"
           BASE="${BASE%/}"
+          KEY="${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthdHByb2V2ZmVjZWZ5ZGp6dGNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MDQwMjQsImV4cCI6MjEwMzk4MDAyNH0.V0CEzofd5myEabRAEeTdC-DVv1LDoXfT7vgUlqJ4Xtk}"
           echo "保活目标：$BASE"
 
-          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-            HDR=(-H "apikey: ${SUPABASE_ANON_KEY}")
-          else
-            HDR=()
-          fi
-
-          ok=0
-          for path in /auth/v1/health /rest/v1/; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "${HDR[@]}" "$BASE$path" || echo 000)
-            echo "  $path → HTTP $code"
+          fails=0
+          check() {
+            path="$1"
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 25               -H "apikey: $KEY" -H "Authorization: Bearer $KEY" "$BASE$path" || echo 000)
+            echo "  GET $path → HTTP $code"
+            head -c 200 /tmp/body 2>/dev/null; echo
             case "$code" in
-              2*|3*|401|403) ok=$((ok+1)) ;;
+              200|206) ;;
+              *) fails=$((fails+1)) ;;
             esac
-          done
+          }
 
-          if [ "$ok" -eq 0 ]; then
-            echo "::warning::所有保活请求均未到达项目——请检查 Supabase 项目是否已被暂停，或本 workflow 的网络是否受限"
-          else
-            echo "保活完成：$ok 个端点可达（已计入项目活跃）"
+          # 打到表上（会真正执行 SELECT，产生数据库活动）
+          check "/rest/v1/app_state?select=id&limit=1"
+          sleep 2
+          # 再来一次，避免单次抖动；顺带覆盖另一条查询路径
+          check "/rest/v1/app_state?select=*&limit=1"
+
+          if [ "$fails" -gt 0 ]; then
+            echo "::error::保活未取得 2xx —— 可能 anon 读不到该表（RLS 变更）、或项目已被暂停，请检查 Supabase 项目状态"
+            exit 1
           fi
+          echo "✅ 已完成真实数据库查询，Supabase 活跃计时器已重置"

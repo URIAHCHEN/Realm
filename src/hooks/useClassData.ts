@@ -184,7 +184,8 @@ function computeTotals(
   // 原来只清零"请假"，先录分后标缺勤的记录仍会带着分数参与排名，
   // 与 lessonStats / 报告口径（把两者都排除）矛盾。
   const kind = attendanceKind(attendance);
-  if (kind === 'leave' || kind === 'absent') {
+  // 请假 / 缺勤 / 调课：本次课不评估 → 总分与正确率都清零（不参与排名与班均）
+  if (kind === 'leave' || kind === 'absent' || kind === 'transfer') {
     return { totalScore: 0, correctRate: 0 };
   }
   const total =

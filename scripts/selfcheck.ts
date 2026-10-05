@@ -5,7 +5,7 @@
 import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow } from '@/lib/lessonStats';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
-import { attendanceKind } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
@@ -267,6 +267,36 @@ const oralOut3 = generatePersonalFeedback(
   { ...oralLessonCfg, feedbackTemplate: oralTpl3 } as unknown as LessonConfig, oralStats, '丙'
 );
 check(oralOut3.includes('多开口读'), '占位符为空但行内有老师写的内容 → 保留该行');
+
+// ============ 7. 调课/请假：本次课不评估（不进班均、排名、过关） ============
+group('调课/请假口径（本次课不在读）');
+check(attendanceKind('调课👩') === 'transfer', '「调课👩」识别为 transfer');
+check(attendanceKind('调课（周三补）') === 'transfer', '自定义调课文案也能识别');
+check(isAbsentRecord(rec({ attendance: '调课👩' })) === true, '调课＝本次课未在读（不参与评估）');
+check(isAbsentRecord(rec({ attendance: '请假🏫' })) === true, '请假同样不评估');
+
+// 复刻截图情形：6 人正常 + 1 人调课（分数全 0、但被历史逻辑算进班均）
+const tNormal = [
+  rec({ id: 'n1', studentName: '刘诗娴', correctRate: 60, totalScore: 18 }),
+  rec({ id: 'n2', studentName: '李真伊', correctRate: 93.3, totalScore: 28 }),
+  rec({ id: 'n3', studentName: '黎子瑜', correctRate: 73.3, totalScore: 22 }),
+  rec({ id: 'n4', studentName: '温纯正', correctRate: 78.3, totalScore: 23.5 }),
+  rec({ id: 'n5', studentName: '韦雨菲', correctRate: 76.7, totalScore: 23 }),
+  rec({ id: 'n6', studentName: '吴梓霖', correctRate: 85, totalScore: 25.5 }),
+];
+const tRow = rec({ id: 't1', studentName: '梁正瑜', attendance: '调课👩', correctRate: 0, totalScore: 0 });
+const tAll = [...tNormal, tRow];
+const tSnap = classSnapshotOfLesson(tAll, 1);
+check(tSnap.size === 6, `有效人数排除调课学生 = 6（实际 ${tSnap.size}）`);
+check(tSnap.rankById.get('t1') === undefined, '调课学生没有名次');
+const avgFixed = Math.round((tNormal.reduce((a, r) => a + r.totalScore, 0) / tNormal.length) * 10) / 10;
+const avgBefore = Math.round((tAll.reduce((a, r) => a + r.totalScore, 0) / tAll.length) * 10) / 10;
+console.log(`      班均总分：修正后 ${avgFixed} ｜ 修正前（把调课当 0 分算）${avgBefore}  → 差 ${Math.round((avgFixed - avgBefore) * 10) / 10} 分`);
+check(avgFixed > avgBefore, '修正后班均高于修正前（调课的 0 分不再拉低平均）');
+const rateBefore = Math.round((tAll.reduce((a, r) => a + r.correctRate, 0) / tAll.length) * 10) / 10;
+const rateFixed = Math.round((tNormal.reduce((a, r) => a + r.correctRate, 0) / tNormal.length) * 10) / 10;
+console.log(`      班均正确率：修正后 ${rateFixed}% ｜ 修正前 ${rateBefore}%`);
+check(rateFixed > rateBefore, '修正后班均正确率高于修正前');
 
 console.log('');
 if (failures.length) {

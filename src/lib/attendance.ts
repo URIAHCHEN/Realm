@@ -40,7 +40,18 @@ export function attendanceRateOf(attList: (string | undefined | null)[]): number
   return Math.round(present / denom * 100);
 }
 
+/**
+ * 当次课「未在读」：请假 / 缺勤 / **调课**。
+ * 这三类都不参与本次课的任何成绩计算——总分、正确率、排名、过关判定、薄弱项、
+ * 班均/最高/最低、表扬榜、公示导出、反馈分析一律跳过（界面分数行显示 "-"）。
+ *
+ * 为什么把「调课」也算进来：调课的同学是到别的时间段上课，本次课的分数与排名对他没有意义；
+ * 历史实现只排除请假/缺勤，导致调课学生以 0 分参与班均与排名（把平均值拉低）。
+ */
 export function isAbsentRecord(r: StudentRecord): boolean {
   const k = attendanceKind(r.attendance);
-  return k === 'absent' || k === 'leave';
+  return k === 'absent' || k === 'leave' || k === 'transfer';
 }
+
+/** 语义别名：调用方想表达"本次课不评估"时用这个，读起来更准确 */
+export const isNotAssessedThisLesson = isAbsentRecord;

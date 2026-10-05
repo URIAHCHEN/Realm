@@ -41,17 +41,24 @@ export function attendanceRateOf(attList: (string | undefined | null)[]): number
 }
 
 /**
- * 当次课「未在读」：请假 / 缺勤 / **调课**。
- * 这三类都不参与本次课的任何成绩计算——总分、正确率、排名、过关判定、薄弱项、
- * 班均/最高/最低、表扬榜、公示导出、反馈分析一律跳过（界面分数行显示 "-"）。
- *
- * 为什么把「调课」也算进来：调课的同学是到别的时间段上课，本次课的分数与排名对他没有意义；
- * 历史实现只排除请假/缺勤，导致调课学生以 0 分参与班均与排名（把平均值拉低）。
+ * 请假 / 缺勤：本次课完全评估（小测、作业、口头全部不统计，界面整行显示 -）。
  */
 export function isAbsentRecord(r: StudentRecord): boolean {
   const k = attendanceKind(r.attendance);
-  return k === 'absent' || k === 'leave' || k === 'transfer';
+  return k === 'absent' || k === 'leave';
 }
 
-/** 语义别名：调用方想表达"本次课不评估"时用这个，读起来更准确 */
-export const isNotAssessedThisLesson = isAbsentRecord;
+/** 调课：到别的时间段上课；本次课的小测不评估，但考勤/作业/口头照常记录与统计 */
+export function isTransferRecord(r: StudentRecord): boolean {
+  return attendanceKind(r.attendance) === 'transfer';
+}
+
+/**
+ * 小测是否在本次课评估：请假/缺勤/调课都不评估。
+ * 用于总分、正确率、排名、过关判定、薄弱项、小测题型班均。
+ * 注意：作业（课堂练习/课后任务）与口头（口语得分等附加项）不受此限制 ——
+ * 调课学生这些照常记录，也要进对应统计（由各调用点按需选择）。
+ */
+export function isQuizAssessed(r: StudentRecord): boolean {
+  return !isAbsentRecord(r) && !isTransferRecord(r);
+}

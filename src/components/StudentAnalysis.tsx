@@ -27,7 +27,7 @@ import {
   CalendarCheck, BookOpen, Mic, Trophy, Layers, FileText, Target, Download } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 
-import { attendanceRateOf, isAbsentRecord } from '@/lib/attendance';
+import { attendanceRateOf, isQuizAssessed } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { studentLessonTrend } from '@/lib/lessonStats';
 
@@ -193,7 +193,7 @@ export function StudentAnalysis({
   const kpis = useMemo(() => {
     if (records.length === 0) return null;
     // 请假/缺勤课次不计入平均/最低/正确率（与班级口径一致）
-    const present = records.filter(r => !isAbsentRecord(r));
+    const present = records.filter(r => isQuizAssessed(r));
     const scorePool = present.length > 0 ? present : records;
     const scores = scorePool.map(r => r.totalScore);
     const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;

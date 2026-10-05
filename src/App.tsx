@@ -67,52 +67,53 @@ function App() {
 
   // 应用数据
   const {
-    appConfig,
-    classes,
-    currentClassId,
-    currentLessonNumber,
-    currentClass,
-    currentLessonConfig,
-    nicknames,
-    schoolScores,
-    setCurrentClassId,
-    setCurrentLessonNumber,
-    getLessonConfig,
-    getCurrentLessonRecords,
-    getAllLessons,
-    getStudentNickname,
-    calculateClassStats,
-    createClass,
-    updateClass,
-    deleteClass,
-    addStudentToClass,
-    addStudents,
-    removeStudentFromClass,
-    transferStudent,
-    restoreStudentToClass,
-    removeStudentFromRoster,
-    saveLessonConfig,
-    saveRecord,
-    syncQuestionTypesFromImport,
-    updateRecordField,
-    deleteRecord,
-    clearRecordContent,
-    inheritPreviousSeasons,
-    restoreRecord,
-    deleteLesson,
-    restoreLesson,
-    restoreRecords,
-    restoreStudent,
-    updateAppConfig,
-    getStudentSchoolScores,
-    addSchoolScore,
-    importSchoolScoresFromExcel,
-    deleteSchoolScore,
-    restoreSchoolScore,
-    exportData,
-    importData,
-    exportToHTML
-  } = useClassData();
+  appConfig,
+  classes,
+  currentClassId,
+  currentLessonNumber,
+  currentClass,
+  currentLessonConfig,
+  nicknames,
+  schoolScores,
+  setCurrentClassId,
+  setCurrentLessonNumber,
+  getLessonConfig,
+  getCurrentLessonRecords,
+  getAllLessons,
+  getStudentNickname,
+  calculateClassStats,
+  createClass,
+  updateClass,
+  deleteClass,
+  addStudentToClass,
+  addStudents,
+  removeStudentFromClass,
+  transferStudent,
+  restoreStudentToClass,
+  removeStudentFromRoster,
+  saveLessonConfig,
+  saveRecord,
+  syncQuestionTypesFromImport,
+  updateRecordField,
+  deleteRecord,
+  clearRecordContent,
+  inheritPreviousSeasons,
+  restoreRecord,
+  deleteLesson,
+  restoreLesson,
+  restoreRecords,
+  restoreStudent,
+  updateAppConfig,
+  getStudentSchoolScores,
+  addSchoolScore,
+  importSchoolScoresFromExcel,
+  deleteSchoolScore,
+  restoreSchoolScore,
+  exportData,
+  importData,
+  exportToHTML,
+  getStudentAllRecords,
+} = useClassData();
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('records');
@@ -321,8 +322,19 @@ function App() {
     }
 
     // 为每个学生创建记录（如果不存在）
+    // 但不为"当时还没加入"的学员补建更早课次的空记录：
+    // 中途加入的学员按 TA 实际有记录的第一个课次起算（否则会被当成 0 分参与早前课次统计）
+    const firstLessonOf = new Map<string, number>();
+    currentClass.records.forEach(r => {
+      const cur = firstLessonOf.get(r.studentName);
+      if (cur == null || r.lessonNumber < cur) firstLessonOf.set(r.studentName, r.lessonNumber);
+    });
     currentClass.students.forEach(studentName => {
       const existingRecord = currentRecords.find(r => r.studentName === studentName);
+      const joinedAt = firstLessonOf.get(studentName);
+      if (!existingRecord && joinedAt != null && joinedAt > currentLessonNumber) {
+        return;   // 该学员本次课还没加入 → 不补建
+      }
       if (!existingRecord) {
         saveRecord(currentClass.id, {
           studentName,
@@ -1053,6 +1065,9 @@ function App() {
             studentName={analysisStudent}
             nickname={getStudentNickname(analysisStudent, currentClassId || undefined)}
             allRecords={(() => {
+              // 引用该生在所有班级的记录：调课学生能看到原班级的课次与成绩（无同名记录时自然为空）
+              const cross = getStudentAllRecords(analysisStudent);
+              if (cross.length > 0) return cross;
               const recs = currentClass.records.filter(r => r.studentName === analysisStudent);
               // 名单内学员或已转出但有历史记录者，都可查看分析
               return (currentClass.students.includes(analysisStudent) || recs.length > 0)

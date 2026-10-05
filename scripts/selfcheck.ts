@@ -5,7 +5,7 @@
 import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow } from '@/lib/lessonStats';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
-import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
@@ -272,7 +272,9 @@ check(oralOut3.includes('多开口读'), '占位符为空但行内有老师写�
 group('调课/请假口径（本次课不在读）');
 check(attendanceKind('调课👩') === 'transfer', '「调课👩」识别为 transfer');
 check(attendanceKind('调课（周三补）') === 'transfer', '自定义调课文案也能识别');
-check(isAbsentRecord(rec({ attendance: '调课👩' })) === true, '调课＝本次课未在读（不参与评估）');
+check(isTransferRecord(rec({ attendance: '调课👩' })) === true, '调课识别为独立的 transfer 状态');
+check(isQuizAssessed(rec({ attendance: '调课👩' })) === false, '调课：小测不评估（不入排名/班均）');
+check(isAbsentRecord(rec({ attendance: '调课👩' })) === false, '调课 ≠ 请假/缺勤：作业与口头照常统计');
 check(isAbsentRecord(rec({ attendance: '请假🏫' })) === true, '请假同样不评估');
 
 // 复刻截图情形：6 人正常 + 1 人调课（分数全 0、但被历史逻辑算进班均）

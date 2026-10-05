@@ -9,7 +9,7 @@ import type {
   ClassStats,
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
-import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+import { isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
@@ -571,7 +571,7 @@ export function useClassData() {
       return { maxScore: 0, minScore: 0, avgScore: 0, avgScores: {}, registeredCounts: {} };
     }
 
-    const present = records.filter(r => !isAbsentRecord(r));
+    const present = records.filter(r => isQuizAssessed(r));
     const scores = present.map(r => r.totalScore);
     const maxScore = scores.length ? Math.max(...scores) : 0;
     const minScore = scores.length ? Math.min(...scores) : 0;
@@ -584,7 +584,9 @@ export function useClassData() {
       if (qt.excludeFromTotal) {
         // 附加项（如口语得分）：并非每次课都登记 → 只对"已登记"的值求平均，
         // 未登记（key 不存在）不能当作 0，否则班均会被拉低
-        const registered = present
+        // 口径：调课学生的口语照常统计（他们确实上了课，只是小测在原班级），只排除请假/缺勤
+        const registered = records
+          .filter(r => !isAbsentRecord(r))
           .map(r => r.scores[qt.id])
           .filter((v): v is number => typeof v === 'number');
         avgScores[qt.id] = registered.length > 0

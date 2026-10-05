@@ -13,7 +13,7 @@ import {
   Image as ImageIcon,
   } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore, OralRatingConfig } from '@/types';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isQuizAssessed } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildOralRatings, oralDistribution, oralKey, type OralRating } from '@/lib/oralRating';
 import { } from '@/lib/optionTone';
@@ -207,7 +207,7 @@ export function StudentReport({
 
   // 班级组合图数据：每次课「班级平均正确率（柱）+ 最高/最低（线）+ 目标线 + 达标人数」
   const classComboTrend = useMemo(() => {
-    const scored = classReportRecords.filter(r => !isAbsentRecord(r));
+    const scored = classReportRecords.filter(r => isQuizAssessed(r));
     const lessons = Array.from(new Set(scored.map(r => r.lessonNumber))).sort((a, b) => a - b);
     return lessons.map(ln => {
       const rs = scored.filter(r => r.lessonNumber === ln);
@@ -226,7 +226,7 @@ export function StudentReport({
   // 组合图数据：每次课「本生正确率（柱）+ 班级平均/最高（线）+ 目标线」
   // 统一用正确率口径，跨课次可比（各次满分不同，绝对分不可比）
   const comboTrend = useMemo(() => {
-    const classPresent = records.filter(r => !isAbsentRecord(r));
+    const classPresent = records.filter(r => isQuizAssessed(r));
     return studentRecords.map(r => {
       const sameLesson = classPresent.filter(x => x.lessonNumber === r.lessonNumber);
       const rates = sameLesson.map(x => x.correctRate);

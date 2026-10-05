@@ -12,7 +12,7 @@
 //  2. 正确率 = 得分 ÷ 该课次满分（满分见 lib/lessonFullScore，已排除口语等附加项）；
 //  3. 排名按正确率降序；同分同名次（并列取最小名次）。
 import type { StudentRecord } from '@/types';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isQuizAssessed } from '@/lib/attendance';
 
 export interface LessonClassSnapshot {
   lessonNumber: number;
@@ -44,7 +44,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** 某课次的班级快照：有效人数、平均/最高/最低正确率、各人名次 */
 export function classSnapshotOfLesson(records: StudentRecord[], lessonNumber: number): LessonClassSnapshot {
-  const present = records.filter(r => r.lessonNumber === lessonNumber && !isAbsentRecord(r));
+  const present = records.filter(r => r.lessonNumber === lessonNumber && isQuizAssessed(r));
   const rankById = new Map<string, number>();
   if (present.length === 0) {
     return { lessonNumber, size: 0, avgRate: 0, maxRate: 0, minRate: 0, rankById };
@@ -109,11 +109,11 @@ export function formatRank(rank: number, size: number): string {
 
 /** 全班在若干课次上的快照（班级报告组合图用） */
 export function classSnapshots(records: StudentRecord[]): LessonClassSnapshot[] {
-  const lessons = Array.from(new Set(records.filter(r => !isAbsentRecord(r)).map(r => r.lessonNumber))).sort((a, b) => a - b);
+  const lessons = Array.from(new Set(records.filter(r => isQuizAssessed(r)).map(r => r.lessonNumber))).sort((a, b) => a - b);
   return lessons.map(ln => classSnapshotOfLesson(records, ln));
 }
 
 /** 达标人数（正确率 ≥ 阈值），用于班级组合图的辅助信息 */
 export function passCountOfLesson(records: StudentRecord[], lessonNumber: number, threshold = 80): number {
-  return records.filter(r => r.lessonNumber === lessonNumber && !isAbsentRecord(r) && r.correctRate >= threshold).length;
+  return records.filter(r => r.lessonNumber === lessonNumber && isQuizAssessed(r) && r.correctRate >= threshold).length;
 }

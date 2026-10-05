@@ -13,7 +13,7 @@ import { copyToClipboard } from '@/lib/feedbackTemplates';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord, isQuizAssessed, isTransferRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
@@ -495,7 +495,7 @@ export function StudentTable({
   // 统计口径：请假/缺勤学员一律不计入班级整体正确率（与平均分口径一致）
   // 只按"是否请假/缺勤"排除：出勤学员的真实 0 分要计入班级正确率，
   // 否则与同表班均口径不一致（0 分进了班均却没进正确率 → 正确率虚高）
-  const statsRateRecords = lessonRecords.filter(r => !isAbsentRecord(r));
+  const statsRateRecords = lessonRecords.filter(r => isQuizAssessed(r));
   const classRate = statsRateRecords.length > 0
     ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
     : 0;
@@ -695,8 +695,15 @@ export function StudentTable({
                     {orderedStudents.map((studentName) => {
                       const record = getStudentRecord(studentName);
                       // 本次课未在读（请假/缺勤/调课）：分数与判定列显示 "-"，且不参与任何计算
-                      const notAssessed = !!record && isAbsentRecord(record);
-                      const weakPoints = record && !notAssessed ? getWeakPoints(record) : [];
+                      // 三种不显示分数、且不进小测计算的情形（统一渲染 -）：
+                      //  · 请假/缺勤 → 整行都不评
+                      //  · 调课 → 小测不评（成绩以原班级为准），但作业/口头照常
+                      //  · 本课次尚无记录（中途新加入的学员）→ 不能显示成 0 分
+                      const enrolledAbsent = !!record && isAbsentRecord(record);
+                      const transferred = !!record && isTransferRecord(record);
+                      const noRecord = !record;
+                      const quizDash = enrolledAbsent || transferred || noRecord;
+                      const weakPoints = record && !quizDash ? getWeakPoints(record) : [];
                       const totalScore = record?.totalScore || 0;
                       const correctRate = record?.correctRate || 0;
                       // 下拉展示取值：把导入/历史里的非标准文本对齐到配置选项，匹配不到则原样显示
@@ -825,7 +832,10 @@ export function StudentTable({
                           {col('scores') && visibleQuestionTypes.map(qt => {
                             // 附加项（如口语得分）并非每次课都登记：未登记时使用「—」占位，
                             // 不与"真实 0 分"混淆
-                            const rawScore = notAssessed ? undefined : record?.scores?.[qt.id];
+                            const quizOptional = !!qt.excludeFromTotal;
+                            // 附加项（口语）只在请假/缺勤时隐藏；调课与无记录时仍可登记
+                            const hideCell = enrolledAbsent || noRecord || (transferred && !quizOptional);
+                            const rawScore = hideCell ? undefined : record?.scores?.[qt.id];
                             const isOptional = !!qt.excludeFromTotal;
                             const score = typeof rawScore === 'number' ? rawScore : 0;
                             const notRegistered = isOptional && typeof rawScore !== 'number';
@@ -856,7 +866,7 @@ export function StudentTable({
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <ScoreInput value={score} max={qt.fullScore} placeholder={notAssessed ? '-' : isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
+                                        <ScoreInput value={score} max={qt.fullScore} placeholder={hideCell ? '-' : isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
@@ -903,20 +913,20 @@ export function StudentTable({
                               {settings.showDataBars && fullScore > 0 && totalScore > 0 && (
                                 <span className="total-bar" style={{ width: `${Math.min(100, (totalScore / fullScore) * 100)}%` }} />
                               )}
-                              <span className="relative z-[1] font-bold text-lg" style={{ color: notAssessed ? '#cbd5e1' : 'var(--brand)' }}>{notAssessed ? '-' : totalScore}</span>
+                              <span className="relative z-[1] font-bold text-lg" style={{ color: quizDash ? '#cbd5e1' : 'var(--brand)' }}>{quizDash ? '-' : totalScore}</span>
                             </span>
-                            {fullScore > 0 && !notAssessed && <span className="text-sm text-slate-400">/{fullScore}</span>}
+                            {fullScore > 0 && !quizDash && <span className="text-sm text-slate-400">/{fullScore}</span>}
                           </TableCell>
                           {col('correctRate') && (
                           <TableCell className="text-center text-base">
-                            {notAssessed ? <span className="text-slate-300 text-base">-</span> : (
+                            {quizDash ? <span className="text-slate-300 text-base">-</span> : (
                               <Badge variant="secondary" className={`heat-badge rounded-full text-base py-1 px-3 ${settings.showRankHeatmap ? `heat-${heatClass(correctRate)}` : 'bg-slate-100 text-slate-600'}`}>{correctRate}%</Badge>
                             )}
                           </TableCell>
                           )}
                           {col('correctRate') && (
                           <TableCell className="text-center text-base">
-                            {notAssessed ? (
+                            {quizDash ? (
                               <span className="text-slate-300 text-base">-</span>
                             ) : record ? (
                               correctRate >= (lessonConfig.passThreshold ?? 80)
@@ -927,7 +937,7 @@ export function StudentTable({
                           )}
                           {col('weakPoints') && (
                           <TableCell className="text-base tnum">
-                            {notAssessed ? (
+                            {quizDash ? (
                               <span className="text-slate-300 text-base">-</span>
                             ) : weakPoints.length > 0 ? (
                               <div className="flex flex-wrap gap-1">

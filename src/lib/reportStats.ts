@@ -6,7 +6,7 @@
 // 现在：入参明确、返回类型明确（见 reportStats.types.ts 的使用处），
 // 组件只负责装配数据与渲染，统计逻辑可被单独断言。
 import type { StudentRecord, LessonConfig } from '@/types';
-import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
 
 export interface OptionalRow { name: string; registered: number; total: number; avg: number }
@@ -150,7 +150,7 @@ export function computeClassReportStats(
     if (classReportRecords.length === 0) return null;
 
     // 统计口径：请假/缺勤学员不参与任何成绩类统计（平均分/正确率/题型均分与正确率/分数段分布）
-    const scoredRecords = classReportRecords.filter(r => !isAbsentRecord(r));
+    const scoredRecords = classReportRecords.filter(r => isQuizAssessed(r));
     const validRecords = scoredRecords.filter(r => r.totalScore > 0);
     const avgScore = validRecords.length > 0
       ? validRecords.reduce((sum, r) => sum + r.totalScore, 0) / validRecords.length
@@ -217,8 +217,8 @@ export function computeClassReportStats(
     // 作业/课堂练习概况：全部按「语义分级」聚合，不再硬编码 v1 选项文案；
     // 「优秀」并入课后任务表现（老师反馈的优秀率要能反映课堂练习 + 课后任务）
     const hasHomeworkOption = (v?: string) => !!v && v.trim() !== '' && v !== '具体分数';
-    const hwRecords = classReportRecords.filter(r => hasHomeworkOption(r.homeworkStatus));
-    const listeningRecords = classReportRecords.filter(r => hasHomeworkOption(r.listeningStatus));
+    const hwRecords = classReportRecords.filter(r => !isAbsentRecord(r) && hasHomeworkOption(r.homeworkStatus));
+    const listeningRecords = classReportRecords.filter(r => !isAbsentRecord(r) && hasHomeworkOption(r.listeningStatus));
     const qualityPool = [...hwRecords, ...listeningRecords.filter(r => !hwRecords.includes(r))];
     const homeworkSummary = {
       total: classReportRecords.length,

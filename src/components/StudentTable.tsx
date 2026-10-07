@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, UserPlus, UserMinus, Download, AlertTriangle, Copy, Check, Plus, Camera, Settings2, Zap, X, BarChart3, Eraser } from 'lucide-react';
 import { copyToClipboard } from '@/lib/feedbackTemplates';
@@ -498,6 +498,20 @@ export function StudentTable({
   // 统计口径：请假/缺勤学员一律不计入班级整体正确率（与平均分口径一致）
   // 只按"是否请假/缺勤"排除：出勤学员的真实 0 分要计入班级正确率，
   // 否则与同表班均口径不一致（0 分进了班均却没进正确率 → 正确率虚高）
+  /** 名单内、但本课次没有记录的学员（疑似离班；也可能是尚未录入） */
+  const missingNames = useMemo(() => {
+    const lessonNames = new Set(lessonRecords.map(r => r.studentName));
+    return students.filter(n => !lessonNames.has(n));
+  }, [students, lessonRecords]);
+  /** 进入课次时自动弹一次离班提醒（可标记本课次不再提示） */
+  const [leaveHintOpen, setLeaveHintOpen] = useState(false);
+  useEffect(() => {
+    if (missingNames.length === 0) return;
+    let dismissed = false;
+    try { dismissed = sessionStorage.getItem('leaveHintDismissed.' + lessonNumber) === '1'; } catch { /* ignore */ }
+    if (!dismissed) setLeaveHintOpen(true);
+  }, [lessonNumber, missingNames.length]);
+
   const statsRateRecords = lessonRecords.filter(r => isQuizAssessed(r));
   const classRate = statsRateRecords.length > 0
     ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
@@ -673,6 +687,28 @@ export function StudentTable({
             </div>
             <div className="bg-white rounded-xl p-4">
               <div className="h-[600px] border rounded-lg overflow-auto">
+      {/* 离班提醒：本课次没有记录的名单内学员（很可能是已离班） */}
+      {missingNames.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              有 {missingNames.length} 位学员本课次没有记录
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5 truncate">
+              {missingNames.join('、')} —— 若已离班，请勾选后点「从本课次起移除」；若只是未录，请直接补录。
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100"
+            onClick={() => { setSelectedStudents(new Set(missingNames)); }}>
+            选中这些学员
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-amber-700"
+            onClick={() => { try { sessionStorage.setItem('leaveHintDismissed.' + lessonNumber, '1'); } catch { /* ignore */ } setLeaveHintOpen(false); }}>
+            本课次不再提示
+          </Button>
+        </div>
+      )}
                 {/* 直接用原生 table（不套 ui/Table 的 overflow-x 容器），让外层 h-[600px] 成为唯一滚动口，
                     使 thead 吸顶与 .class-stats-row 吸底同时生效且横向滚动列对齐 */}
                 <table className="w-full caption-bottom text-sm border-separate data-table" style={{ borderSpacing: 0 }}>
@@ -736,7 +772,10 @@ export function StudentTable({
                         listeningOpts
                       );
                       return (
-                        <TableRow key={studentName} className={`hover:bg-[rgb(var(--brand-rgb)/0.04)] transition-colors ${selectedStudents.has(studentName) ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}>
+                        <TableRow
+                          key={studentName}
+                          className={`hover:bg-[rgb(var(--brand-rgb)/0.04)] transition-colors ${selectedStudents.has(studentName) ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''} ${noRecord ? 'bg-amber-50/70 hover:bg-amber-100/70' : ''}`}
+                        >
                           <TableCell className="text-center">
                             <Checkbox checked={selectedStudents.has(studentName)} onCheckedChange={() => toggleSelect(studentName)} aria-label={`选择 ${studentName}`} className="translate-y-[2px]" />
                           </TableCell>
@@ -1062,7 +1101,32 @@ export function StudentTable({
           <div className="space-y-4 mt-4">
             <Input placeholder="输入学生姓名" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddStudent()} className="liquid-glass-input" />
             <Button onClick={handleAddStudent} className="w-full liquid-glass-button">添加</Button>
+          
+      <Dialog open={leaveHintOpen} onOpenChange={setLeaveHintOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />本课次有学员没有记录
+            </DialogTitle>
+            <DialogDescription>
+              共有 {missingNames.length} 位学员在名单里，但「第 {lessonNumber} 课」没有任何记录 —— 他们可能已经离班（例如只在早前课次出勤过）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-52 overflow-auto rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+            <p className="text-sm text-amber-900 leading-relaxed">{missingNames.join('、')}</p>
           </div>
+          <p className="text-xs text-[color:var(--ink-4)]">
+            已离班 → 点「选中这些学员」，再点表格上方的「从本课次起移除」（历史课次记录会保留）；只是还没录 → 直接补录即可。
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { try { sessionStorage.setItem('leaveHintDismissed.' + lessonNumber, '1'); } catch { /* ignore */ } setLeaveHintOpen(false); }}>本课次不再提示</Button>
+            <Button size="sm" variant="outline" onClick={() => { setSelectedStudents(new Set(missingNames)); setLeaveHintOpen(false); }}>选中这些学员</Button>
+            <Button size="sm" onClick={() => setLeaveHintOpen(false)}>知道了</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+    </div>
         </DialogContent>
       </Dialog>
     </Card>

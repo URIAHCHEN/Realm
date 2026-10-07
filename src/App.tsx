@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, BookMarked } from 'lucide-react';
+import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, BookMarked, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut, subscribeSession } from '@/lib/auth';
+import { VersionHistoryDialog } from '@/components/VersionHistoryDialog';
+import { recordVersion, diffSnapshots } from '@/lib/versionStore';
 import { BUILD_SCOPE } from '@/lib/config';
 import { ensureSelfMembership, myUserId } from '@/lib/members';
 import type { Membership } from '@/lib/members';
@@ -453,6 +455,8 @@ function App() {
       adjustReason: rec.adjustReason,
     };
     clearRecordContent(classId, recordId);
+    // 清空属于破坏性操作，先记录一个版本（便于回退）
+    setTimeout(() => snapshotVersion('清空记录'), 0);
     toast.success(`已清空 ${getStudentNickname(rec.studentName, classId)} 第${rec.lessonNumber}课的记录内容`, {
       description: '考勤与学习轨迹已保留；误清空可点「撤销」恢复',
       action: {
@@ -606,6 +610,24 @@ function App() {
     await downloadExcel(workbook, filename);
     toast.success('数据已导出为Excel！');
   };
+
+  // ============ 版本历史（修订版本 / 回退） ============
+  const [versionOpen, setVersionOpen] = useState(false);
+  const actor = (getCachedSession()?.email || '本机').split('@')[0];
+  /** 组装当前全量快照（与云同步同一份结构） */
+  const makeSnapshot = useCallback(() => ({
+    appConfig,
+    classes,
+    nicknames,
+    schoolScores,
+    templates: readTemplateStore(),
+  }), [appConfig, classes, nicknames, schoolScores]);
+  /** 记录一个版本（reason 说明触发原因；summary 省略时自动算变动明细） */
+  const snapshotVersion = useCallback((reason: string) => {
+    const snap = makeSnapshot();
+    const entry = recordVersion(snap, { actor, reason });
+    if (entry) toast.success('已记录版本：' + reason, { description: entry.summary.slice(0, 2).join('；'), duration: 4000 });
+  }, [makeSnapshot, actor]);
 
   // 处理导出完整备份（JSON 快照，可被「导入备份」读回，用于恢复与多端迁移）
   const handleExportBackupJson = () => {
@@ -781,6 +803,10 @@ function App() {
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">导出备份</span>
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setVersionOpen(true)} title="查看版本历史 / 回退到某个版本">
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">版本历史</span>
               </Button>
               <Button
                 variant="ghost"
@@ -1087,6 +1113,24 @@ function App() {
       {/* 学生分析模态框（懒加载：仅点开分析时才加载图表依赖） */}
       {analysisStudent && currentClass && (
         <Suspense fallback={<ModuleLoading label="学生分析" />}>
+          <VersionHistoryDialog
+            open={versionOpen}
+            onClose={() => setVersionOpen(false)}
+            currentSnapshot={makeSnapshot()}
+            actor={actor}
+            canRollback={!!membership?.admin}
+            onRecordCurrent={() => snapshotVersion('手动保存版本')}
+            onRollback={(entry) => {
+              if (!membership?.admin) { toast.error('回退需要管理员权限'); return; }
+              const before = makeSnapshot();
+              const detail = diffSnapshots(before, entry.snapshot);
+              importData(entry.snapshot);
+              recordVersion(entry.snapshot, { actor, reason: '回退到 ' + new Date(entry.at).toLocaleString('zh-CN'), summary: ['回退前状态与本次回退共 ' + detail.length + ' 处差异（已存为新版本，可再退回）'] });
+              toast.success('已回退到该版本', { description: '回退动作已记为新版本，可再次回退', duration: 5000 });
+              setVersionOpen(false);
+            }}
+          />
+
           <StudentAnalysis
             isOpen={!!analysisStudent}
             onClose={() => setAnalysisStudent(null)}

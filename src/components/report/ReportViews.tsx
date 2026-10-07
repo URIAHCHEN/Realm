@@ -40,7 +40,8 @@ import {
   Line,
   Area,
   ComposedChart,
-  ReferenceLine
+  ReferenceLine,
+  LabelList,
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -328,15 +329,33 @@ export function PersonalReportView({
         </h2>
         <div className="report-chart-container" style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="lesson" stroke="#6b7280" />
-              <YAxis stroke="#6b7280" />
-              <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-              <Legend />
-              <Bar dataKey="score" name="得分" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              {showCorrectRate && <Bar dataKey="correctRate" name="正确率%" fill="#10b981" radius={[4, 4, 0, 0]} />}
-            </BarChart>
+            <ComposedChart data={barData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.35} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="2 6" stroke="#eef1f5" vertical={false} />
+              <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} unit="%" />}
+              <Tooltip
+                contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px', boxShadow: '0 12px 30px -18px rgba(15,23,42,.4)' }}
+                labelStyle={{ fontWeight: 600 }}
+              />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '目标 80%', fontSize: 11, fill: '#b45309', position: 'insideTopRight' }} />}
+              <Bar yAxisId="l" dataKey="score" name="得分" fill="url(#scoreFill)" radius={[6, 6, 0, 0]} maxBarSize={38}>
+                <LabelList dataKey="score" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} />
+              </Bar>
+              {showCorrectRate && (
+                <Line yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#0ea5e9" strokeWidth={2.5}
+                  dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}>
+                  <LabelList dataKey="correctRate" position="bottom" style={{ fontSize: 10, fill: '#0369a1' }} />
+                </Line>
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -359,13 +378,32 @@ export function PersonalReportView({
                     <Legend />
                   </PieChart>
                 ) : distType === 'bar' ? (
-                  <BarChart data={pieData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis type="number" stroke="#6b7280" />
-                    <YAxis type="category" dataKey="name" width={80} stroke="#6b7280" />
-                    <Tooltip />
-                    <Bar dataKey="value" name="平均分" radius={[0, 4, 4, 0]}>
+                  <BarChart data={pieData} layout="vertical" margin={{ top: 6, right: 56, left: 8, bottom: 6 }} barCategoryGap="22%">
+                    <CartesianGrid strokeDasharray="2 6" stroke="#eef1f5" horizontal={false} />
+                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                    <YAxis type="category" dataKey="name" width={76} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#475569' }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px' }} />
+                    <Bar dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
                       {pieData.map((entry, index) => <Cell key={`bar-cell-${index}`} fill={entry.color} />)}
+                      {/* 数值直标：分数 + 得分率，一屏看清高低与达成度 */}
+                      <LabelList
+                        dataKey="value"
+                        position="right"
+                        content={(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; index?: number; value?: number | string }) => {
+                          const i = props.index ?? 0;
+                          const max = studentStats?.avgQuestionTypeScores.find(q => q.name === pieData[i]?.name)?.fullScore || 0;
+                          const v = Number(props.value || 0);
+                          const rate = max > 0 ? Math.round((v / max) * 100) : 0;
+                          const x = Number(props.x || 0) + Number(props.width || 0) + 6;
+                          const y = Number(props.y || 0) + Number(props.height || 0) / 2 + 4;
+                          return (
+                            <text x={x} y={y} fontSize={11.5} fontWeight={600}>
+                              <tspan fill="#334155">{v}分</tspan>
+                              <tspan fill="#94a3b8" dx="5">{rate}%</tspan>
+                            </text>
+                          );
+                        }}
+                      />
                     </Bar>
                   </BarChart>
                 ) : (
@@ -380,16 +418,28 @@ export function PersonalReportView({
                 )}
               </ResponsiveContainer>
             </div>
-            <div className="space-y-3">
-              {studentStats?.avgQuestionTypeScores.map((qt, index) => (
-                <div key={qt.id} className="flex items-center justify-between p-3 bg-black/[0.04] rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span className="font-medium">{qt.name}</span>
+            <div className="space-y-2.5">
+              {studentStats?.avgQuestionTypeScores.map((qt, index) => {
+                const rate = qt.fullScore > 0 ? Math.round((Number(qt.avgScore) / qt.fullScore) * 100) : 0;
+                const tone = rate >= 85 ? '#10b981' : rate >= 70 ? '#3b82f6' : rate >= 60 ? '#f59e0b' : '#ef4444';
+                return (
+                  <div key={qt.id} className="px-3 py-2.5 rounded-xl bg-black/[0.03]">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-2 text-[13px] font-medium text-[color:var(--ink)] min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span className="truncate">{qt.name}</span>
+                      </span>
+                      <span className="text-[13px] font-bold shrink-0 tnum" style={{ color: tone }}>
+                        {qt.avgScore}<span className="text-[11px] font-normal text-[color:var(--ink-4)]">/{qt.fullScore}</span>
+                        <span className="ml-1.5 text-[11px] font-semibold">{rate}%</span>
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
+                      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, rate)}%`, background: tone }} />
+                    </div>
                   </div>
-                  <span className="font-bold text-[color:var(--brand)]">{qt.avgScore}分</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1056,41 +1106,68 @@ function StudentFeedback({
         学习建议
       </h2>
       
-      <Card className="mb-4 bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-[rgb(var(--brand-rgb)/0.10)] border-[rgb(var(--brand-rgb)/0.22)]">
-        <CardHeader className="pb-2">
+      {/* 合并板块：整体表现 + 各题型分析。
+          原先两块各占一张大卡、题型一列排到底（"简单粗陋"），
+          现在：整体表现压成一行结论，题型改成 2 列紧凑卡（得分徽章 + 得分率进度条 + 一句建议）。 */}
+      <Card className="mb-4 bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-[rgb(var(--brand-rgb)/0.04)] border-[rgb(var(--brand-rgb)/0.22)]">
+        <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[color:var(--brand)]" />
-            整体表现分析
+            表现与题型分析
+            <span className="text-[11px] font-normal text-[color:var(--ink-4)] ml-1">整体结论 + 逐题型诊断</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-[color:var(--ink-2)] leading-relaxed">{overallFeedback}</p>
+        <CardContent className="space-y-4">
+          {/* 整体结论：一行读完 */}
+          <p className="text-sm text-[color:var(--ink-2)] leading-relaxed pl-3 border-l-2"
+            style={{ borderColor: 'rgb(var(--brand-rgb)/0.45)' }}>
+            {overallFeedback}
+          </p>
+
+          {questionTypeFeedbacks.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 pt-1">
+                <BarChart3 className="w-4 h-4 text-[color:var(--ink-2)]" />
+                <span className="text-[13px] font-semibold text-[color:var(--ink)]">各题型</span>
+                <span className="text-[11px] text-[color:var(--ink-4)]">按得分率着色：≥85 优 / ≥70 良 / ≥60 中 / &lt;60 需补</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {questionTypeFeedbacks.map((item, index) => {
+                  const stat = studentStats?.avgQuestionTypeScores.find(q => q.name === item.name);
+                  const avg = stat ? Number(stat.avgScore) : 0;
+                  const full = stat?.fullScore || 0;
+                  const rate = full > 0 ? Math.round((avg / full) * 100) : 0;
+                  const tone = rate >= 85 ? '#10b981' : rate >= 70 ? '#3b82f6' : rate >= 60 ? '#f59e0b' : '#ef4444';
+                  return (
+                    <div key={index} className="rounded-xl bg-white border border-black/[0.06] p-3.5">
+                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: tone }} />
+                          <span className="text-[13px] font-semibold text-[color:var(--ink)] truncate">{item.name}</span>
+                        </span>
+                        {full > 0 && (
+                          <span className="text-[12px] font-bold shrink-0 tnum" style={{ color: tone }}>
+                            {avg}<span className="text-[11px] font-normal text-[color:var(--ink-4)]">/{full}</span>
+                            <span className="ml-1 text-[11px]">{rate}%</span>
+                          </span>
+                        )}
+                      </div>
+                      {full > 0 && (
+                        <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-2">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, rate)}%`, background: tone }} />
+                        </div>
+                      )}
+                      <p className="text-[12.5px] text-[color:var(--ink-2)] leading-relaxed" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {item.feedback}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
-      
-      {questionTypeFeedbacks.length > 0 && (
-        <Card className="mb-4 bg-gradient-to-br from-black/[0.05] to-gray-50 border-black/[0.1]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[color:var(--ink-2)]" />
-              各题型分析
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {questionTypeFeedbacks.map((item, index) => (
-                <div key={index} className="p-3 bg-white rounded-lg border border-black/[0.06]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-[color:var(--brand)]" />
-                    <span className="font-medium text-sm text-[color:var(--ink)]">{item.name}</span>
-                  </div>
-                  <p className="text-sm text-[color:var(--ink-2)] leading-relaxed ml-6">{item.feedback}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">

@@ -114,7 +114,7 @@ export function LessonManager({
             value={newLessonNumber}
             onChange={(e) => setNewLessonNumber(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddLesson()}
-            className="h-9 rounded-xl bg-white/70"
+            className="h-9 w-28 shrink-0 rounded-xl bg-white/70 text-center"
           />
           <Button variant="outline" onClick={handleAddLesson} className="gap-1.5 rounded-xl h-9 shrink-0">
             <Plus className="w-4 h-4" />

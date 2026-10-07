@@ -825,7 +825,7 @@ export function StudentTable({
                           {col('classPerformance') && (
                           <TableCell className="text-base tnum">
                             <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className={`w-40 h-9 text-sm rounded-lg ${optionToneClass(record?.classPerformance)}`} style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.classPerformance)}`} style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}
@@ -947,9 +947,6 @@ export function StudentTable({
                           ))}
                           <TableCell className="text-center text-base">
                             <span className="total-bar-wrap tnum">
-                              {settings.showDataBars && fullScore > 0 && totalScore > 0 && (
-                                <span className="total-bar" style={{ width: `${Math.min(100, (totalScore / fullScore) * 100)}%` }} />
-                              )}
                               <span className="relative z-[1] font-bold text-xl" style={{ color: quizDash ? '#cbd5e1' : 'var(--brand)' }}>{quizDash ? '-' : totalScore}</span>
                             </span>
                             {fullScore > 0 && !quizDash && <span className="text-sm text-slate-400">/{fullScore}</span>}

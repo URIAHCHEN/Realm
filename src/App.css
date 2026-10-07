@@ -1203,10 +1203,25 @@ body {
     0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
+/* 顶栏：iOS 26/27 风"液态玻璃" —— 更厚的模糊 + 饱和度提升 + 内侧高光，
+   去掉硬边框，改用一层极淡的投影把顶栏"托"在内容之上。 */
 .liquid-glass-header {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(40px) saturate(210%);
+  -webkit-backdrop-filter: blur(40px) saturate(210%);
+  border-bottom: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 1px 0 rgba(15, 23, 42, 0.04),
+    0 10px 30px -22px rgba(15, 23, 42, 0.35);
+}
+/* 顶栏内的控件统一走"玻璃胶囊"：更大圆角 + 半透明底 + 内侧高光 */
+.liquid-glass-header button,
+.liquid-glass-header a {
+  border-radius: 999px !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.55) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .liquid-glass-card {
@@ -1291,6 +1306,9 @@ body {
   z-index: 1;
   background: transparent !important;
   font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .score-cell .score-bar {
@@ -1564,3 +1582,70 @@ body{
   background: #fff;
   box-shadow: inset 0 -2px 0 0 var(--brand);
 }
+
+
+/* ==================== 主题版式块（2026-10-07） ====================
+   说明：改主题不只是换颜色 —— 每个 layout 会同时调整圆角尺度、分隔线、标题字体与卡片形态，
+   让"换主题"看起来像换了一套版式。默认（blue/purple/teal/pink/orange）保持现状。 */
+
+/* 墨黑：深色顶栏 + 高对比表头 + 小圆角 */
+[data-theme='ink'] .liquid-glass-header {
+  background: rgba(17, 24, 39, 0.86);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme='ink'] .liquid-glass-header h1 { color: #f9fafb !important; }
+[data-theme='ink'] .liquid-glass-header p { color: rgba(249, 250, 251, 0.62) !important; }
+[data-theme='ink'] .liquid-glass-card { border-radius: 12px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.06); }
+[data-theme='ink'] .data-table thead th {
+  background: #111827 !important;
+  color: #f3f4f6 !important;
+  font-weight: 600;
+}
+[data-theme='ink'] .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -3px 0 0 var(--brand); }
+
+/* 报刊：衬线标题 + 直角 + 细线分隔 + 无阴影 */
+[data-theme='editorial'] h1,
+[data-theme='editorial'] .report-section-title {
+  font-family: "Songti SC", "Times New Roman", Georgia, serif !important;
+  letter-spacing: .01em;
+}
+[data-theme='editorial'] .liquid-glass-header {
+  background: rgba(250, 249, 246, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1.5px solid #1f2937;
+}
+[data-theme='editorial'] .liquid-glass-card {
+  border-radius: 4px;
+  border: 1px solid rgb(31 41 55 / 0.16);
+  box-shadow: none;
+  backdrop-filter: none;
+  background: #fff;
+}
+[data-theme='editorial'] .data-table thead th {
+  background: transparent !important;
+  border-bottom: 1.5px solid #1f2937 !important;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+}
+[data-theme='editorial'] .data-table tbody tr { border-bottom: 1px solid rgb(31 41 55 / 0.10); }
+[data-theme='editorial'] .ios-tab-trigger { border-radius: 0 !important; }
+[data-theme='editorial'] .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -2px 0 0 #1f2937; color: #1f2937; }
+
+/* 糖果：大圆角 + 柔和阴影 + 圆润控件 */
+[data-theme='candy'] .liquid-glass-card { border-radius: 26px; box-shadow: 0 10px 30px -12px rgb(244 114 182 / 0.35); }
+[data-theme='candy'] .liquid-glass-header { border-bottom: none; box-shadow: 0 6px 24px -14px rgb(244 114 182 / 0.5); }
+[data-theme='candy'] .ios-tab-trigger { border-radius: 999px !important; }
+[data-theme='candy'] .ios-tabs-list { border-bottom: none !important; }
+[data-theme='candy'] .ios-tab-trigger[data-state='active'] { background: rgb(var(--brand-rgb) / 0.12); box-shadow: none; }
+[data-theme='candy'] .score-cell .score-input { border-radius: 14px; }
+[data-theme='candy'] .class-stats-row > td, [data-theme='candy'] .class-stats-row > th { border-top: none; }
+
+/* 极简：等宽数字 + 去边框 + 细底线 */
+[data-theme='mono'] .liquid-glass-card { border-radius: 8px; border: none; box-shadow: none; background: #fff; }
+[data-theme='mono'] .liquid-glass-header { border-bottom: 1px solid rgb(15 23 42 / 0.10); }
+[data-theme='mono'] .data-table thead th { background: transparent !important; border-bottom: 1px solid rgb(15 23 42 / 0.12); }
+[data-theme='mono'] .score-cell .score-input { border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+[data-theme='mono'] .ios-tab-trigger { border-radius: 6px 6px 0 0 !important; }
+/* 全站数字统一等宽，强化"数据看板"感 */
+[data-theme='mono'] .tnum, [data-theme='mono'] .tnum input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

@@ -1480,10 +1480,12 @@ body{
   position: sticky;
   bottom: 0;
   z-index: 4;
-  background-color: #eef3fa;
-  background-image: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.10), rgb(var(--brand-rgb) / 0.16));
-  box-shadow: 0 -6px 14px -8px rgb(15 23 42 / 0.20);
-  border-top: 2px solid rgb(var(--brand-rgb) / 0.25);
+  /* 2026-10-07 调整：原来用渐变 + 每格各自上色，视觉上出现"莫名其妙的色块分割"。
+     改为单一浅灰底 + 极淡顶边框，只保留"这是一行汇总"的信息。 */
+  background-color: #f8fafc;
+  background-image: none;
+  box-shadow: 0 -4px 10px -8px rgb(15 23 42 / 0.12);
+  border-top: 1px solid rgb(15 23 42 / 0.08);
 }
 
 

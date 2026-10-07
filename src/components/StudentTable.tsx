@@ -8,11 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, UserPlus, UserMinus, Download, AlertTriangle, Copy, Check, Plus, Camera, Settings2, Zap, X, BarChart3, Eraser } from 'lucide-react';
-import { copyToClipboard } from '@/lib/feedbackTemplates';
+import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, Zap, X, BarChart3, Eraser } from 'lucide-react';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
-import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtWeak, isQtStrong } from '@/lib/weakPoints';
+import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
 import { attendanceKind, isAbsentRecord, isQuizAssessed, isTransferRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
@@ -150,7 +149,6 @@ export function StudentTable({
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   // 「仅显示已选」学习轨迹模式下，临时展开某行以添加季度
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
-  const [copiedStudent, setCopiedStudent] = useState<string | null>(null);
   // 批量操作状态
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [classAttendanceValue, setClassAttendanceValue] = useState('按时出勤');
@@ -442,28 +440,7 @@ export function StudentTable({
   };
 
 
-  const handleCopyFeedback = async (studentName: string) => {
-    const record = getStudentRecord(studentName);
-    if (!record) return;
-    const weakPoints = getWeakPoints(record);
-    const fullScore = getLessonFullScore(lessonConfig);
-    const nickname = getNickname(studentName);
-    const scoreDetails = lessonConfig.questionTypes.map(qt => {
-      const score = record.scores[qt.id] || 0;
-      const avgScore = stats.avgScores[qt.id] || 0;
-      const diff = score - avgScore;
-      const diffText = diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
-      return `• ${qt.name}：${score}/${qt.fullScore}分（班均${avgScore.toFixed(1)}，${diffText}）`;
-    }).join('\n');
-    const weakPointsText = weakPoints.length > 0 ? weakPoints.map(formatCategoryWeakPoint).join('、') : '无明显薄弱项，继续保持！';
-    const cpLine = record.classPerformance ? `🙋 课堂表现：${record.classPerformance}\n` : '';
-    const feedback = `${nickname}家长您好！\n\n📚 第${lessonNumber}课学习反馈：\n\n🏫 考勤：${record.attendance}\n${cpLine}📝 作业：${record.homeworkStatus}\n🎙️ 课后任务：${record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}\n\n📊 入门测成绩：\n${scoreDetails}\n💯 总分：${record.totalScore}/${fullScore}\n📈 班级排名：第${record.rank}名\n📊 正确率：${record.correctRate}%\n\n⚠️ 薄弱项：${weakPointsText}\n\n💪 加油，继续努力！`;
-    const success = await copyToClipboard(feedback);
-    if (success) {
-      setCopiedStudent(studentName);
-      setTimeout(() => setCopiedStudent(null), 2000);
-    }
-  };
+  
 
   // 生成公示图片：离屏渲染学情公示模板 HTML 后截屏，避免截屏实时表格时
   // 0 宽渐变数据条导致 html2canvas createPattern 报错（InvalidStateError）
@@ -742,8 +719,8 @@ export function StudentTable({
                           <button type="button" onClick={() => toggleSort('rate')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('rate'); } }} className="inline-flex items-center gap-0.5 w-full justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]">正确率{sortCaret('rate')}</button>
                         </TableHead>
                       )}
-                      {col('correctRate') && <TableHead className="w-16 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('pass')}</TableHead>}
-                      {col('weakPoints') && <TableHead className="text-[13px] font-semibold tracking-wide text-slate-500">薄弱项</TableHead>}
+                      {col('correctRate') && <TableHead className="w-20 text-center text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('pass')}</TableHead>}
+                      {col('weakPoints') && <TableHead className="min-w-[150px] text-[13px] font-semibold tracking-wide text-slate-500">薄弱项</TableHead>}
                       {col('note') && <TableHead className="w-24 text-[13px] font-semibold tracking-wide text-slate-500">{columnLabel('note')}</TableHead>}
                       {col('actions') && <TableHead className="w-44 text-center text-[13px] font-semibold tracking-wide text-slate-500">操作</TableHead>}
                     </TableRow>
@@ -782,9 +759,9 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             {record?.rank ? (
                               settings.showRankHeatmap && settings.heatmapMode === 'score' ? (
-                                <Badge variant="secondary" className={`heat-badge heat-${heatClass(fullScore > 0 ? (totalScore / fullScore) * 100 : 0)} rounded-full text-base py-1 px-3 font-bold`}>{record.rank}</Badge>
+                                <Badge variant="secondary" className={`heat-badge heat-${heatClass(fullScore > 0 ? (totalScore / fullScore) * 100 : 0)} rounded-md text-[13px] py-0.5 px-2 font-bold`}>{record.rank}</Badge>
                               ) : (
-                                <Badge variant={record.rank <= 3 ? "default" : "secondary"} className={record.rank === 1 ? "badge-rank-1 rounded-full text-base py-1 px-3" : record.rank === 2 ? "badge-rank-2 rounded-full text-base py-1 px-3" : record.rank === 3 ? "badge-rank-3 rounded-full text-base py-1 px-3" : "bg-slate-100 text-slate-600 rounded-full text-base py-1 px-3"}>{record.rank}</Badge>
+                                <Badge variant={record.rank <= 3 ? "default" : "secondary"} className={record.rank === 1 ? "badge-rank-1 rounded-md text-[13px] py-0.5 px-2.5" : record.rank === 2 ? "badge-rank-2 rounded-md text-[13px] py-0.5 px-2.5" : record.rank === 3 ? "badge-rank-3 rounded-md text-[13px] py-0.5 px-2.5" : "bg-slate-100/80 text-slate-500 rounded-md text-[13px] py-0.5 px-2 font-medium"}>{record.rank}</Badge>
                               )
                             ) : <span className="text-slate-300 text-base">-</span>}
                           </TableCell>
@@ -908,7 +885,7 @@ export function StudentTable({
                               : Math.max(4, Math.min(92, avgScore > 0 ? 50 + ((score - avgScore) / avgScore) * 46 : 0));
                             const inputCls = settings.showDataBars
                               ? 'score-input'
-                              : `w-14 h-9 text-center text-base rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
+                              : `w-16 h-9 text-center text-lg font-semibold rounded-lg ${isWeak ? 'border-rose-300 bg-rose-50 text-rose-700' : ''} ${isStrong ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : ''}`;
                             // 口语等附加项：分数下方自动给出档位徽标（只读，永远与分数一致）。
                             // 未登记 / 请假缺勤时 oralRatings 里没有该项 → 不渲染徽标，
                             // 输入框仍显示「—」占位，绝不出现「再加油💪」这类误导评价。
@@ -926,7 +903,7 @@ export function StudentTable({
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <ScoreInput value={score} max={qt.fullScore} placeholder={hideCell ? '-' : isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-14 h-9 text-center text-base rounded-lg`} />
+                                        <ScoreInput value={score} max={qt.fullScore} placeholder={hideCell ? '-' : isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-16 h-9 text-center text-lg font-semibold rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>
@@ -973,14 +950,14 @@ export function StudentTable({
                               {settings.showDataBars && fullScore > 0 && totalScore > 0 && (
                                 <span className="total-bar" style={{ width: `${Math.min(100, (totalScore / fullScore) * 100)}%` }} />
                               )}
-                              <span className="relative z-[1] font-bold text-lg" style={{ color: quizDash ? '#cbd5e1' : 'var(--brand)' }}>{quizDash ? '-' : totalScore}</span>
+                              <span className="relative z-[1] font-bold text-xl" style={{ color: quizDash ? '#cbd5e1' : 'var(--brand)' }}>{quizDash ? '-' : totalScore}</span>
                             </span>
                             {fullScore > 0 && !quizDash && <span className="text-sm text-slate-400">/{fullScore}</span>}
                           </TableCell>
                           {col('correctRate') && (
                           <TableCell className="text-center text-base">
                             {quizDash ? <span className="text-slate-300 text-base">-</span> : (
-                              <Badge variant="secondary" className={`heat-badge rounded-full text-base py-1 px-3 ${settings.showRankHeatmap ? `heat-${heatClass(correctRate)}` : 'bg-slate-100 text-slate-600'}`}>{correctRate}%</Badge>
+                              <Badge variant="secondary" className={`heat-badge rounded-full text-sm py-1 px-3 font-semibold ${settings.showRankHeatmap ? `heat-${heatClass(correctRate)}` : 'bg-slate-100 text-slate-600'}`}>{correctRate}%</Badge>
                             )}
                           </TableCell>
                           )}
@@ -1000,7 +977,7 @@ export function StudentTable({
                             {quizDash ? (
                               <span className="text-slate-300 text-base">-</span>
                             ) : weakPoints.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                                 {weakPoints.slice(0, 2).map((wp, i) => (
                                   <TooltipProvider key={i}>
                                     <Tooltip>
@@ -1009,7 +986,7 @@ export function StudentTable({
                                     </Tooltip>
                                   </TooltipProvider>
                                 ))}
-                                {weakPoints.length > 2 && <Badge variant="outline" className="text-sm py-1 px-2">+{weakPoints.length - 2}</Badge>}
+                                {weakPoints.length > 2 && <span className="text-xs text-slate-400 shrink-0">+{weakPoints.length - 2}</span>}
                               </div>
                             ) : record ? <span className="text-emerald-600 text-base flex items-center gap-1">无明显薄弱项</span> : <span className="text-slate-300 text-base">-</span>}
                           </TableCell>
@@ -1028,12 +1005,11 @@ export function StudentTable({
                           {col('actions') && (
                           <TableCell className="text-base tnum">
                             <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleCopyFeedback(studentName)} disabled={!record} className="h-9 w-9 p-0 hover:bg-[rgb(var(--brand-rgb)/0.08)]" style={{ color: 'var(--brand)' }} aria-label="复制反馈" title="复制反馈">{copiedStudent === studentName ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
                               {onClearRecord && (
-                                <Button variant="ghost" size="sm" onClick={() => record && onClearRecord(record.id)} disabled={!record} className="h-9 w-9 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50" aria-label="清空记录内容" title="清空记录内容（保留考勤/学习轨迹，可撤销）"><Eraser className="w-5 h-5" /></Button>
+                                <Button variant="ghost" size="sm" onClick={() => record && onClearRecord(record.id)} disabled={!record} className="h-8 w-8 p-0 text-slate-400 hover:text-amber-600 hover:bg-amber-50" aria-label="清空记录内容" title="清空记录内容（保留考勤/学习轨迹，可撤销）"><Eraser className="w-4 h-4" /></Button>
                               )}
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-9 w-9 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50" aria-label="删除记录" title="删除记录"><Trash2 className="w-5 h-5" /></Button>
-                              <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-9 w-9 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100" aria-label="移除学生" title="移除学生"><UserMinus className="w-5 h-5" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRecord(studentName)} className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50" aria-label="删除记录" title="删除记录"><Trash2 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => onRemoveStudent(studentName)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700 hover:bg-slate-100" aria-label="移除学生" title="移除学生"><UserMinus className="w-4 h-4" /></Button>
                             </div>
                           </TableCell>
                           )}

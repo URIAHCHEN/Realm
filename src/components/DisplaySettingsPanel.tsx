@@ -49,6 +49,17 @@ function SettingRow({ title, desc, children }: { title: string; desc: string; ch
 
 const SELECT_TRIGGER = 'w-32 h-9 text-sm rounded-[var(--r-md)]';
 
+/** 主题 = 配色 + 版式。这里给出"这套主题会改哪些排版元素"的一句话说明 */
+function layoutHint(id: string): string {
+  switch (id) {
+    case 'ink': return '版式：整页深色 · 高对比表头 · 小圆角';
+    case 'editorial': return '版式：衬线标题 · 直角细线 · 窄栏';
+    case 'candy': return '版式：大圆角 · 粉紫渐变 · 胶囊控件';
+    case 'mono': return '版式：全站等宽 · 无卡片 · 紧凑行高';
+    default: return '版式：默认玻璃卡片（与现有观感一致）';
+  }
+}
+
 export function DisplaySettingsPanel({ display }: { display: Display }) {
   const { settings, update, toggleColumn, reset } = display;
 
@@ -56,20 +67,27 @@ export function DisplaySettingsPanel({ display }: { display: Display }) {
     <div className="space-y-5">
       {/* 平铺两列：主题配色 / 数据可视化 */}
       <div className="grid gap-5 xl:grid-cols-2 items-start">
-        <SectionCard icon={<Palette className="w-4 h-4" />} title="主题配色" desc="影响全站强调色，切换即时生效">
+        <SectionCard icon={<Palette className="w-4 h-4" />} title="主题 · 版式" desc="每套主题不仅换色，还会改变卡片圆角、分隔线、标题字体甚至页面底色 —— 切换即时生效">
           <div className="flex flex-wrap gap-2.5">
             {THEME_PRESETS.map(p => (
               <button
                 key={p.id}
                 onClick={() => update({ themeColor: p.id })}
-                className={`flex items-center gap-2 h-9 rounded-[var(--r-md)] px-3 text-sm font-medium transition-all border ${
+                title={p.name}
+                className={`flex items-start gap-2.5 rounded-[var(--r-md)] px-3 py-2 text-left transition-all border max-w-[220px] ${
                   settings.themeColor === p.id
                     ? 'border-[rgb(var(--brand-rgb)/0.5)] bg-[rgb(var(--brand-rgb)/0.08)] shadow-sm'
                     : 'border-black/8 bg-white/60 hover:bg-white'
                 }`}
               >
-                <span className="w-5 h-5 rounded-full shadow-inner" style={swatchStyle(p.rgb)} />
-                {p.name}
+                <span className="w-5 h-5 mt-0.5 rounded-full shadow-inner shrink-0" style={swatchStyle(p.rgb)} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium truncate">{p.name}</span>
+                  {/* 版式标签：让"这套主题会改变什么排版"在选择前就能看见 */}
+                  <span className="block text-[11px] text-[color:var(--ink-4)] leading-tight">
+                    {layoutHint(p.id as string)}
+                  </span>
+                </span>
               </button>
             ))}
           </div>

@@ -1649,3 +1649,168 @@ body{
 [data-theme='mono'] .ios-tab-trigger { border-radius: 6px 6px 0 0 !important; }
 /* 全站数字统一等宽，强化"数据看板"感 */
 [data-theme='mono'] .tnum, [data-theme='mono'] .tnum input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+
+/* ============ 表格内下拉：箭头按需显现（2026-10-07） ============
+   表格里每格都常驻一个箭头，视觉噪音大且吃掉宽度。
+   改为默认不显示箭头，鼠标接近（hover）或键盘聚焦时才浮现。 */
+.data-table [role="combobox"] > svg,
+.data-table [role="combobox"] svg.size-4 {
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.data-table [role="combobox"]:hover > svg,
+.data-table [role="combobox"]:focus-visible > svg,
+.data-table [role="combobox"][data-state="open"] > svg {
+  opacity: .45;
+}
+/* 箭头隐藏后右侧留白也收回来，避免"看着宽、其实空" */
+.data-table [role="combobox"] { padding-right: 8px; }
+.data-table [role="combobox"]:hover { padding-right: 4px; }
+
+
+/* ============ 全站玻璃语言（2026-10-07） ============
+   把顶栏那套"液态玻璃"推广到全站：卡片、弹窗、输入、表头、Tab 栏统一材质，
+   让页面像一层层浮在背景上的玻璃板，而不是白色方块拼贴。 */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-blur: blur(28px) saturate(190%);
+  --glass-hairline: rgba(15, 23, 42, 0.06);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 10px 30px -22px rgba(15, 23, 42, 0.38);
+  --radius-glass: 22px;
+}
+
+/* 卡片（shadcn Card 与自定义卡统一材质） */
+[data-slot="card"],
+.liquid-glass-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: none;
+  border-radius: var(--radius-glass);
+  box-shadow: var(--glass-shadow);
+}
+
+/* 弹窗 / 抽屉：更厚的玻璃 + 更大圆角 */
+[data-slot="dialog-content"] {
+  border-radius: 26px;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+  border: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 30px 70px -30px rgba(15, 23, 42, 0.45);
+}
+
+/* 表头：半透明玻璃，滚动时内容从下面透出来 */
+.data-table thead th {
+  background: rgba(255, 255, 255, 0.72) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--glass-hairline) !important;
+}
+/* 汇总行同样玻璃化 */
+.class-stats-row > td, .class-stats-row > th {
+  background: rgba(255, 255, 255, 0.86) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* 输入类控件：内凹玻璃 */
+[data-slot="card"] input:not([type="checkbox"]):not([type="radio"]),
+[data-slot="dialog-content"] input:not([type="checkbox"]):not([type="radio"]),
+.liquid-glass-input {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+
+/* ============ 版式强化（2026-10-07 第二轮） ============
+   目标：每一版"截然不同"，不只是颜色 —— 连页面底色、卡片材质、字体族、行高都换。 */
+
+/* —— 墨黑 INK DARK PAGE：整页深色 —— */
+[data-theme='ink'] .ios-glass-bg {
+  background: linear-gradient(180deg, #0b1220 0%, #111827 100%) !important;
+  color: #e5e7eb;
+}
+[data-theme='ink'] [data-slot="card"],
+[data-theme='ink'] .liquid-glass-card {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+[data-theme='ink'] [data-slot="card"] *,
+[data-theme='ink'] .liquid-glass-card * { color: #e5e7eb; }
+[data-theme='ink'] .data-table thead th {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme='ink'] .data-table tbody tr { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+[data-theme='ink'] .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.05) !important; }
+[data-theme='ink'] .class-stats-row > td { background: rgba(17, 24, 39, 0.94) !important; }
+[data-theme='ink'] [data-slot="dialog-content"] { background: rgba(17, 24, 39, 0.92); color: #e5e7eb; }
+[data-theme='ink'] [data-slot="card"] input, [data-theme='ink'] .liquid-glass-input {
+  background: rgba(255, 255, 255, 0.08); color: #e5e7eb; border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* —— 报刊 EDITORIAL NEWSPAPER：窄栏 + 衬线 + 无圆角 + 横线 —— */
+[data-theme='editorial'] .ios-glass-bg {
+  background: #faf9f6 !important;
+}
+[data-theme='editorial'] main, [data-theme='editorial'] .max-w-\[1600px\] { max-width: 1180px !important; }
+[data-theme='editorial'] [data-slot="card"],
+[data-theme='editorial'] .liquid-glass-card {
+  background: #fff !important;
+  border: none;
+  border-radius: 0 !important;
+  box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-top: 2px solid #1f2937;
+  padding-left: 18px; padding-right: 18px;
+}
+[data-theme='editorial'] h1, [data-theme='editorial'] h2, [data-theme='editorial'] h3 {
+  font-family: "Songti SC", "Times New Roman", Georgia, serif !important;
+  font-weight: 700;
+}
+[data-theme='editorial'] .data-table tbody td { font-family: "Songti SC", Georgia, serif; }
+[data-theme='editorial'] .data-table tbody tr:nth-child(even) { background: rgb(31 41 55 / 0.025); }
+
+/* —— 糖果 CANDY：粉紫渐变 + 大圆角 + 彩色描边 —— */
+[data-theme='candy'] .ios-glass-bg {
+  background: linear-gradient(160deg, #fff7fb 0%, #f5f3ff 55%, #eef2ff 100%) !important;
+}
+[data-theme='candy'] [data-slot="card"],
+[data-theme='candy'] .liquid-glass-card {
+  border-radius: 28px !important;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 40px -24px rgba(244, 114, 182, 0.55);
+}
+[data-theme='candy'] h1, [data-theme='candy'] h2, [data-theme='candy'] h3 { letter-spacing: -0.01em; }
+[data-theme='candy'] .data-table thead th { border-radius: 12px 12px 0 0; }
+[data-theme='candy'] [data-slot="card"] input, [data-theme='candy'] .liquid-glass-input { border-radius: 999px; }
+
+/* —— 极简 MONO：全站等宽 + 去卡片 + 细线分区 + 紧凑行 —— */
+[data-theme='mono'] { --glass-bg: transparent; --glass-shadow: none; --radius-glass: 0; }
+[data-theme='mono'] .ios-glass-bg { background: #fff !important; }
+[data-theme='mono'] body, [data-theme='mono'] input, [data-theme='mono'] button, [data-theme='mono'] td, [data-theme='mono'] th {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+[data-theme='mono'] [data-slot="card"],
+[data-theme='mono'] .liquid-glass-card {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-bottom: 1px solid rgb(15 23 42 / 0.10) !important;
+  padding-left: 0; padding-right: 0;
+}
+[data-theme='mono'] .data-table tbody td { padding-top: 4px; padding-bottom: 4px; }
+[data-theme='mono'] .ios-tab-trigger[data-state='active'] { background: transparent; box-shadow: inset 0 -2px 0 0 var(--brand); }

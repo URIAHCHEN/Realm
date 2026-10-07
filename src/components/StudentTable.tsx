@@ -837,7 +837,7 @@ export function StudentTable({
                           {col('homework') && (
                           <TableCell className="text-base tnum">
                             <Select value={homeworkDisplay.value} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className={`w-28 h-9 text-sm rounded-lg ${optionToneClass(record?.homeworkStatus)}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.homeworkStatus)}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {homeworkDisplay.raw && <SelectItem value={homeworkDisplay.raw}>{homeworkDisplay.raw}</SelectItem>}
@@ -850,7 +850,7 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             <div className="flex items-center gap-1">
                               <Select value={listeningDisplay.value} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className={`w-28 h-9 text-sm rounded-lg ${optionToneClass(record?.listeningStatus === '具体分数' ? '完成' : record?.listeningStatus)}`} style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.listeningStatus === '具体分数' ? '完成' : record?.listeningStatus)}`} style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {listeningDisplay.raw && <SelectItem value={listeningDisplay.raw}>{listeningDisplay.raw}</SelectItem>}
@@ -936,7 +936,7 @@ export function StudentTable({
                                   value={String(record?.customValues?.[cf.id] ?? '')}
                                   onValueChange={(v) => handleCustomChange(studentName, cf.id, unwrapClear(v))}
                                 >
-                                  <SelectTrigger className="min-w-20 h-9 text-sm border-slate-200 rounded-lg bg-white" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
+                                  <SelectTrigger className="w-24 h-9 text-sm border-slate-200 rounded-lg bg-white truncate" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
                                   <SelectContent>
                                     {CLEAR_ITEM}
                                     {(cf.options || []).map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}

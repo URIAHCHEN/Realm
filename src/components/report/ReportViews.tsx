@@ -160,11 +160,6 @@ export function PersonalReportView({
 }: PersonalReportProps) {
   const [isExportingImage, setIsExportingImage] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
-  // 雷达图坐标轴上限：取各题型真实满分中的最大值（不再写死 100）
-  const radarMax = useMemo(() => {
-    const maxes = (radarData || []).map(d => d.fullMark).filter(v => Number.isFinite(v) && v > 0);
-    return maxes.length > 0 ? Math.max(...maxes) : 100;
-  }, [radarData]);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
 
   const handleExportPersonalImage = async () => {
@@ -302,7 +297,7 @@ export function PersonalReportView({
             <ComposedChart data={comboTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="lesson" stroke="#6b7280" />
-              <YAxis domain={[0, 100]} unit="%" stroke="#6b7280" />
+              <YAxis domain={[0, 100]} stroke="#6b7280" />
               <Tooltip
                 contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                 formatter={(v: number, n: string) => [n === '班级排名' ? v : `${v}%`, n]}
@@ -339,7 +334,7 @@ export function PersonalReportView({
               <CartesianGrid strokeDasharray="2 6" stroke="#eef1f5" vertical={false} />
               <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
               <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} unit="%" />}
+              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />}
               <Tooltip
                 contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px', boxShadow: '0 12px 30px -18px rgba(15,23,42,.4)' }}
                 labelStyle={{ fontWeight: 600 }}
@@ -410,8 +405,9 @@ export function PersonalReportView({
                   <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
-                    <PolarRadiusAxis angle={30} />
-                    <Radar name="平均分" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.35} />
+                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                    <Radar name="得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                      fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
                     <Legend />
                     <Tooltip />
                   </RadarChart>
@@ -454,10 +450,11 @@ export function PersonalReportView({
           <div className="report-chart-container" style={{ height: 350 }}>
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, radarMax]} />
-                <Radar name="当前水平" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+                <PolarGrid stroke="#e6ebf2" />
+                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#475569' }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                <Radar name="当前水平（得分率）" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                  fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
                 <Legend />
                 <Tooltip />
               </RadarChart>
@@ -831,7 +828,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
               <ComposedChart data={classComboTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="lesson" stroke="#6b7280" />
-                <YAxis domain={[0, 100]} unit="%" stroke="#6b7280" />
+                <YAxis domain={[0, 100]} stroke="#6b7280" />
                 <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} formatter={(v: number, n: string) => [`${v}`, n]} />
                 <Legend />
                 <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '目标 80%', position: 'right', fontSize: 11, fill: '#ef4444' }} />

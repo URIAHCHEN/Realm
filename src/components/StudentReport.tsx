@@ -245,10 +245,23 @@ export function StudentReport({
   // 雷达图数据 - 能力维度（坐标轴上限取各题型真实满分，而非写死 100）
   const radarData = useMemo(() => {
     if (!studentStats) return [];
-    return studentStats.avgQuestionTypeScores.map(qt => ({
-      subject: qt.name,
-      A: qt.avgScore,
-      fullMark: qt.fullScore || 100
+    // 根因修复：原来 A 是**原始分**（如 12/15），而半径上限取各题型满分最大值
+    // （口语 100）→ 小测题型全被压到圆心，雷达图看起来"没有内容"。
+    // 改为统一换算成**得分率 0–100**：各轴可比，半径上限恒为 100。
+    // 同时按题型名去重（历史上出现过同名题型各占一轴）
+    const acc = new Map<string, { sum: number; n: number; full: number }>();
+    studentStats.avgQuestionTypeScores.forEach(qt => {
+      const full = Number(qt.fullScore) || 0;
+      if (full <= 0) return;
+      const cur = acc.get(qt.name) || { sum: 0, n: 0, full };
+      cur.sum += Number(qt.avgScore) || 0;
+      cur.n += 1;
+      acc.set(qt.name, cur);
+    });
+    return [...acc.entries()].map(([subject, v]) => ({
+      subject,
+      A: Math.round((v.sum / v.n / v.full) * 1000) / 10,   // 得分率 %
+      fullMark: 100,
     }));
   }, [studentStats]);
 

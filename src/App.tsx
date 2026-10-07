@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { BarChart3, BookMarked, BookOpen, Cloud, Download, FileText, History, LogOut, Send, ShieldCheck, TrendingUp, Trophy, Upload } from 'lucide-react';
+import { BarChart3, BookMarked, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, TrendingUp, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
@@ -617,6 +617,31 @@ function App() {
 
   // ============ 版本历史（修订版本 / 回退） ============
   const [versionOpen, setVersionOpen] = useState(false);
+  // 暗色模式（Apple 风）：持久化到 localStorage，切换时给 <html> 加 .dark
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('uiDarkMode') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    try { localStorage.setItem('uiDarkMode', darkMode ? '1' : '0'); } catch { /* ignore */ }
+  }, [darkMode]);
+
+  // 滚动淡入：零依赖 IntersectionObserver（尊重 prefers-reduced-motion）
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
+    const attach = () => {
+      document.querySelectorAll('[data-slot="card"]:not(.reveal), .report-section:not(.reveal)').forEach(el => {
+        el.classList.add('reveal'); io.observe(el);
+      });
+    };
+    const t = window.setTimeout(attach, 120);
+    const mo = new MutationObserver(() => { window.clearTimeout(t); window.setTimeout(attach, 150); });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(t); };
+  }, [activeTab]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const actor = (getCachedSession()?.email || '本机').split('@')[0];
   /**
@@ -810,6 +835,10 @@ function App() {
                 <HeaderMenuItem icon={<FileText className="w-4 h-4" />} onClick={handleExportAllData}>导出数据（Excel）</HeaderMenuItem>
                 <HeaderMenuLabel>记录与留痕</HeaderMenuLabel>
                 <HeaderMenuItem icon={<History className="w-4 h-4" />} onClick={() => setVersionOpen(true)}>版本历史 / 回退</HeaderMenuItem>
+                <HeaderMenuLabel>外观</HeaderMenuLabel>
+                <HeaderMenuItem icon={darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />} onClick={() => setDarkMode(!darkMode)}>
+                  {darkMode ? '切换到浅色模式' : '切换到暗色模式'}
+                </HeaderMenuItem>
               </HeaderMenu>
               {membership?.admin ? (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={async () => { await cloudSync.refreshPending(); setReviewOpen(true); }} title="查看其他成员提交的修订并批准/驳回">

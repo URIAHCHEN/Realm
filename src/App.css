@@ -2117,3 +2117,60 @@ html, body { overflow-x: hidden; }
   font-weight: 600 !important;
 }
 .opt-negative svg { color: #e11d48 !important; }
+
+
+/* ==================== 暗色模式（Apple 风，2026-10-08） ====================
+   通过 <html class="dark"> 切换；重写页面底、卡片、表格、输入、导航等主要表面。
+   只覆盖"语义钩子"（data-slot / data-state / 自建类），不对具体工具类做全局改写。 */
+.dark body, .dark .ios-glass-bg {
+  background: linear-gradient(180deg, #0b1016 0%, #111823 100%) !important;
+  color: #e5e7eb;
+}
+.dark [data-slot="card"], .dark .liquid-glass-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+}
+.dark [data-slot="card"] * { color: #e5e7eb; }
+.dark .data-table thead th {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10) !important;
+}
+.dark .data-table tbody tr { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.dark .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.04) !important; }
+.dark .data-table input, .dark .data-table [role="combobox"] {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e5e7eb !important;
+}
+.dark .class-stats-row > td { background: rgba(17, 24, 39, 0.96) !important; color: #cbd5e1 !important; }
+.dark input, .dark textarea { color: #e5e7eb; }
+.dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
+.dark [data-slot="dialog-content"] {
+  background: rgba(17, 24, 39, 0.96) !important;
+  color: #e5e7eb !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+}
+.dark [data-slot="dialog-content"] * { color: #e5e7eb; }
+.dark .ios-tabs-list { border-bottom-color: rgba(255, 255, 255, 0.10) !important; }
+.dark .ios-tab-trigger { color: #94a3b8 !important; }
+.dark .ios-tab-trigger:hover { color: #e2e8f0 !important; background: rgba(255, 255, 255, 0.05) !important; }
+.dark .ios-tab-trigger[data-state='active'] { color: #fff !important; background: rgba(255, 255, 255, 0.10) !important; }
+.dark [data-slot="button"][data-variant="outline"] {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e5e7eb !important;
+}
+.dark .report-container p, .dark .report-container span { color: #d1d5db; }
+.dark .opt-negative { background: rgba(244, 63, 94, 0.16) !important; border-color: rgba(244, 63, 94, 0.45) !important; color: #fda4af !important; }
+
+/* ==================== 滚动淡入（IntersectionObserver 驱动，零依赖） ==================== */
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity .5s cubic-bezier(.22,.61,.36,1), transform .5s cubic-bezier(.22,.61,.36,1); }
+.reveal.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+/* 流体字号（clamp）：大屏不显小、小屏不溢出 */
+.ios-tab-trigger { font-size: clamp(13px, 0.95vw, 15px) !important; }
+.report-container .report-section-title { font-size: clamp(17px, 1.3vw, 20px) !important; }

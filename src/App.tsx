@@ -839,8 +839,8 @@ function App() {
         </div>
       </header>
 
-      {/* 班级选择栏 */}
-      <div className="max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
+      {/* 班级选择栏：外层加 class-band —— 让背景色整宽延伸，卡片不再"悬在半空" */}
+      <div className="class-band max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
         <ClassSelector
           classes={classes}
           currentClassId={currentClassId}

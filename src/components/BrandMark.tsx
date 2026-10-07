@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 
 /** 颜文字池（替代原来的 "Realm" 字样） */
-const KAOMOJI = [
+export const KAOMOJI = [
   "🫓 '͜' 🫓",
   '( ˶ˆ꒳ˆ˵ )',
   'ฅ^•ﻌ•^ฅ',
@@ -23,10 +23,10 @@ const KAOMOJI = [
 ];
 
 /** 图标位 emoji 池 */
-const ICONS = ['🫓', '🍡', '🌸', '🧸', '🍓', '🐣', '🌱', '🍥', '🪷', '🫧', '🎈', '🍀', '🧁', '☕️', '🪄', '🫖'];
+export const ICONS = ['🫓', '🍡', '🌸', '🧸', '🍓', '🐣', '🌱', '🍥', '🪷', '🫧', '🎈', '🍀', '🧁', '☕️', '🪄', '🫖'];
 
 /** 双语金句池（中文 + 英文对照） */
-const QUOTES: { zh: string; en: string }[] = [
+export const QUOTES: { zh: string; en: string }[] = [
   { zh: '今日事，今日毕。', en: "Finish today's work today." },
   { zh: '把每节课都当成作品。', en: 'Treat every lesson as a piece of work.' },
   { zh: '进步是攒出来的。', en: 'Progress is compounded.' },
@@ -43,12 +43,12 @@ const QUOTES: { zh: string; en: string }[] = [
   { zh: '一节课，一点光。', en: 'One lesson, a little more light.' },
 ];
 
-const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+export const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   // 挂载时抽一次：刷新/重新进入换一批
   const { kaomoji, icon, quote } = useMemo(
-    () => ({ kaomoji: pick(KAOMOJI), icon: pick(ICONS), quote: pick(QUOTES) }),
+    () => ({ kaomoji: pickRandom(KAOMOJI), icon: pickRandom(ICONS), quote: pickRandom(QUOTES) }),
     []
   );
 

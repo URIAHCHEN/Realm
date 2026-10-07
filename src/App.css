@@ -1993,3 +1993,25 @@ body{
   justify-content: flex-start !important;
 }
 [role="tablist"] > button { flex: 0 0 auto; }
+
+
+/* 导航 tab：恢复居中（用户 2026-10-07 反馈"居中好看些"），但保持占满整行以便分隔线通长 */
+[role="tablist"] {
+  width: 100% !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+/* 学情报告页内的"个人报告/班级报告"也居中 */
+.report-container [role="tablist"] { justify-content: center !important; }
+
+/* 班级选择区域：背景整宽延伸（用户多次反馈"这个框包括背景色干脆能延伸"）
+   做法：给该区域加一条贯穿视口的浅色带，卡片就不再像"悬在半空的一块"。 */
+.class-band { position: relative; }
+.class-band::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: -50vw; right: -50vw;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.30) 70%, rgba(255, 255, 255, 0) 100%);
+  border-bottom: 1px solid rgb(15 23 42 / 0.05);
+}

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { GraduationCap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { signIn, signUp } from '@/lib/auth';
+import { KAOMOJI, ICONS, QUOTES, pickRandom } from '@/components/BrandMark';
 
 interface LoginPageProps {
   onSuccess: () => void;
@@ -19,6 +20,12 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === 'register';
+
+  // 每次进入随机抽一次（与站内品牌区同一口径：刷新即换）
+  const { kaomoji, icon, quote } = useMemo(
+    () => ({ kaomoji: pickRandom(KAOMOJI), icon: pickRandom(ICONS), quote: pickRandom(QUOTES) }),
+    []
+  );
 
   const switchMode = (m: 'login' | 'register') => {
     if (m === mode) return;
@@ -57,18 +64,20 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
         <div className="absolute -bottom-24 -right-16 w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgba(255,255,255,0.18)' }} />
       </div>
 
-      <div className="relative w-full max-w-[380px] ios-animate-fade-in">
+      <div className="relative w-full max-w-[400px] ios-animate-fade-in">
         {/* 品牌区 */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[22px] bg-white/90 backdrop-blur-xl ring-1 ring-white/60 shadow-[0_12px_40px_rgba(0,0,0,0.18)] flex items-center justify-center">
-            <GraduationCap className="w-9 h-9" style={{ color: 'var(--brand)' }} />
+          <div className="w-[68px] h-[68px] mx-auto mb-4 rounded-[24px] bg-white/92 ring-1 ring-white/60 flex items-center justify-center text-[30px]"
+            style={{ boxShadow: '0 16px 44px rgba(0,0,0,0.20)' }}>
+            {icon}
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Lynn's Realm</h1>
-          <p className="mt-1 text-white/75 text-sm">学情管理 · 让每一次成长有迹可循</p>
+          <h1 className="text-[30px] font-bold text-white tracking-tight whitespace-nowrap">{kaomoji}</h1>
+          <p className="mt-2 text-white/85 text-[14px]">{quote.zh}</p>
+          <p className="mt-0.5 text-white/55 text-[12px] italic">{quote.en}</p>
         </div>
 
         {/* 登录卡片 */}
-        <div className="rounded-[26px] bg-white/85 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.22)] ring-1 ring-white/60 p-6">
+        <div className="rounded-[30px] bg-white/88 ring-1 ring-white/60 p-7" style={{ boxShadow: '0 30px 80px -30px rgba(0,0,0,0.35)' }}>
           {/* 分段切换：登录 / 创建账号 */}
           <div role="tablist" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-black/[0.05] mb-6">
             {(['login', 'register'] as const).map((m) => (

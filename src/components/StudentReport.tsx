@@ -66,7 +66,7 @@ export function StudentReport({
   const [scoreSort, setScoreSort] = useState<'lesson' | 'asc' | 'desc'>('lesson');
   const [showListening, setShowListening] = useState(true);
   const [showCorrectRate, setShowCorrectRate] = useState(true);
-  const [distType, setDistType] = useState<'pie' | 'bar' | 'radar'>('pie');
+  const [distType, setDistType] = useState<'pie' | 'bar' | 'radar'>('bar');
   const classReportRef = useRef<HTMLDivElement>(null);
   const personalReportRef = useRef<HTMLDivElement>(null);
 

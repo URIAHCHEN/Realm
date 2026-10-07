@@ -1985,24 +1985,21 @@ body{
 }
 
 /* 导航栏撑满：再补一层（父级可能用 text-align/inline 居中，这里强制块级占满并左对齐） */
-[role="tablist"] {
+.ios-tabs-list[role="tablist"] {
   width: 100% !important;
   max-width: none !important;
   margin: 0 !important;
-  text-align: left !important;
-  justify-content: flex-start !important;
 }
-[role="tablist"] > button { flex: 0 0 auto; }
+.ios-tabs-list[role="tablist"] > button { flex: 0 0 auto; }
 
 
 /* 导航 tab：恢复居中（用户 2026-10-07 反馈"居中好看些"），但保持占满整行以便分隔线通长 */
-[role="tablist"] {
+.ios-tabs-list[role="tablist"] {
   width: 100% !important;
   justify-content: center !important;
-  text-align: center !important;
 }
 /* 学情报告页内的"个人报告/班级报告"也居中 */
-.report-container [role="tablist"] { justify-content: center !important; }
+.report-container .ios-tabs-list[role="tablist"] { justify-content: center !important; }
 
 /* 班级选择区域：背景整宽延伸（用户多次反馈"这个框包括背景色干脆能延伸"）
    做法：给该区域加一条贯穿视口的浅色带，卡片就不再像"悬在半空的一块"。 */
@@ -2023,7 +2020,7 @@ body{
 .class-band > div > * { min-width: 0; }
 
 /* 导航 tab：居中 + 放大（用户反馈"居中放大些好看"） */
-[role="tablist"] {
+.ios-tabs-list[role="tablist"] {
   justify-content: center !important;
   gap: 6px !important;
   padding: 6px 0 0 !important;
@@ -2038,3 +2035,65 @@ body{
 }
 .ios-tab-trigger svg { width: 19px !important; height: 19px !important; }
 .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -3px 0 0 var(--brand) !important; }
+
+
+/* 非导航的分段控件（如反馈页「常规反馈 / 四个一」）恢复自身外观：
+   上几轮我的全局 [role="tablist"] 规则把它也当成导航改了，导致"好端端改成这样很难看"。 */
+[role="tablist"]:not(.ios-tabs-list) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px !important;
+  padding: 4px !important;
+  background: rgb(15 23 42 / 0.05) !important;
+  border-radius: 12px !important;
+  border-bottom: none !important;
+  width: fit-content !important;
+  margin: 0 auto !important;
+}
+[role="tablist"]:not(.ios-tabs-list) > button {
+  height: 32px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 0 14px !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+[role="tablist"]:not(.ios-tabs-list) > button[data-state='active'] {
+  background: #fff !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.10) !important;
+}
+
+/* 兜底：页面不再出现横向滚动（表格照旧在自己的容器里横向滚动） */
+html, body { overflow-x: hidden; }
+
+/* 报告页字号整体上调（用户："字太小了可读性很差"） */
+.report-container { font-size: 15px; }
+.report-container p { font-size: 15px; line-height: 1.75; }
+.report-container .report-section-title { font-size: 19px !important; }
+.report-container .recharts-cartesian-axis-tick text { font-size: 13px !important; }
+
+
+/* ============ Apple 风按钮质感（2026-10-07） ============
+   用户反馈工具条上的按钮（如「生成图片」）看着粗糙。
+   统一 outline 变体：白底 + 发丝边 + 极轻投影，hover 抬起、active 回弹、focus 有品牌色光环。 */
+button[class*="border"]:not([class*="border-0"]):not([class*="border-rose"]):not([class*="border-amber"]) {
+  background: rgba(255, 255, 255, 0.86) !important;
+  border: 1px solid rgb(15 23 42 / 0.08) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+  transition: background-color .16s ease, box-shadow .16s ease, transform .16s ease, border-color .16s ease;
+}
+button[class*="border"]:not([class*="border-0"]):not([class*="border-rose"]):not([class*="border-amber"]):hover {
+  background: #fff !important;
+  border-color: rgb(15 23 42 / 0.14) !important;
+  box-shadow: 0 6px 16px -10px rgb(15 23 42 / 0.35);
+  transform: translateY(-1px);
+}
+button[class*="border"]:not([class*="border-0"]):active { transform: translateY(0) scale(.985); }
+button:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 4px rgb(var(--brand-rgb) / 0.18) !important;
+}
+/* 数据表里的图标按钮保持无边框（避免整列出现一堆胶囊） */
+.data-table button[class*="border"] { box-shadow: none; transform: none; }

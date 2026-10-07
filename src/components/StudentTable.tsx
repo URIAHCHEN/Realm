@@ -508,8 +508,8 @@ export function StudentTable({
             <Badge variant="secondary" className="text-base bg-[rgb(var(--brand-rgb)/0.12)] text-[color:var(--brand)] border border-[rgb(var(--brand-rgb)/0.2)]">第{lessonNumber}课</Badge>
           </CardTitle>
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={onOpenConfig} variant="outline" size="sm" title="配置题型 / 字段 / 显示样式" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
-              <Settings2 className="w-4 h-4" /><span className="hidden sm:inline">配置题型</span>
+            <Button onClick={onOpenConfig} variant="outline" size="sm" title="课次配置 / 字段 / 显示样式" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+              <Settings2 className="w-4 h-4" /><span className="hidden sm:inline">课次配置</span>
             </Button>
             <Button onClick={handleGenerateImage} variant="outline" size="sm" title="生成公示图片" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Camera className="w-4 h-4" /><span className="hidden sm:inline">生成图片</span>

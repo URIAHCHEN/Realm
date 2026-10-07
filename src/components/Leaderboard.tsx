@@ -12,6 +12,11 @@ import {
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+
+/** 选项文本归一化：去掉 emoji / 空格 / 标点，只留中英文与数字。
+    表扬榜此前用 "=== '超赞完成'" / "=== '具体分数'" 精确比较，
+    而实际选项常带 emoji（如"超赞完成✅"）或自定义文案 → 统计恒为 0。 */
+const normOpt = (s?: string | null) => (s || '').replace(/[^\p{Script=Han}A-Za-z0-9]/gu, '');
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
@@ -246,7 +251,7 @@ export function Leaderboard({
   const listeningRankings: RankingItem[] = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0 && !isAbsentRecord(r))
+      .filter(r => !isAbsentRecord(r) && Number(r.listeningScore) > 0)
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -277,7 +282,7 @@ export function Leaderboard({
   const homeworkExcellent = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => r.homeworkStatus === '超赞完成' && !isAbsentRecord(r))
+      .filter(r => !isAbsentRecord(r) && /超赞|超额|特别棒|优秀|加分|超额完成/.test(normOpt(r.homeworkStatus)))
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -303,7 +308,10 @@ export function Leaderboard({
     const list: { name: string; nickname: string; shortNickname: string }[] = [];
     byStudent.forEach((recs, name) => {
       if (recs.length === 0) return;
-      if (!recs.every(r => attendanceKind(r.attendance) === 'onTime')) return;
+      // 先排除请假/缺勤/调课：否则"有一次请假"就会让全勤榜恒为 0
+      const presentRecs = recs.filter(r => !isAbsentRecord(r));
+      if (presentRecs.length === 0) return;
+      if (!presentRecs.every(r => attendanceKind(r.attendance) === 'onTime')) return;
       list.push({ name, nickname: getNickname(name), shortNickname: generateShortNickname(getNickname(name)) });
     });
     return list;

@@ -920,8 +920,10 @@ function App() {
                 />
               </div>
 
-              {/* 右侧主内容 */}
-              <div className="flex-1">
+              {/* 右侧主内容：min-w-0 是关键 —— 缺它时表格的 min-content 宽度（约 1440px）
+                  会把 flex 行整个撑宽，页面出现横向滚动；横向滑动时上方班级卡比表格窄，
+                  就成了用户反复反馈的"上短下长"。加上后表格在自己容器内滚动，三块宽度对齐。 */}
+              <div className="flex-1 min-w-0">
                 <StudentTable
                   students={rosterForLesson}
                   records={currentClass?.records || []}

@@ -489,6 +489,10 @@ export function StudentTable({
     if (!dismissed) setLeaveHintOpen(true);
   }, [lessonNumber, missingNames.length]);
 
+  /** 负面评价关键词（未完成/请假/迟到/缺勤/未交…）—— 表格里要高亮出来，避免被忽略 */
+  const NEG_OPT_RE = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+  const isNegOpt = (v?: string | null) => !!v && NEG_OPT_RE.test(String(v));
+
   const statsRateRecords = lessonRecords.filter(r => isQuizAssessed(r));
   const classRate = statsRateRecords.length > 0
     ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
@@ -825,7 +829,7 @@ export function StudentTable({
                           {col('classPerformance') && (
                           <TableCell className="text-base tnum">
                             <Select value={classPerfDisplay.value} onValueChange={(value) => handleClassPerformanceChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.classPerformance)}`} style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.classPerformance)} ${isNegOpt(record?.classPerformance) ? 'opt-negative' : ''}`} style={optStyleOf('classPerformance', record?.classPerformance)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {classPerfDisplay.raw && <SelectItem value={classPerfDisplay.raw}>{classPerfDisplay.raw}</SelectItem>}
@@ -837,7 +841,7 @@ export function StudentTable({
                           {col('homework') && (
                           <TableCell className="text-base tnum">
                             <Select value={homeworkDisplay.value} onValueChange={(value) => handleHomeworkChange(studentName, unwrapClear(value))}>
-                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.homeworkStatus)}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.homeworkStatus)} ${isNegOpt(record?.homeworkStatus) ? 'opt-negative' : ''}`} style={optStyleOf('homework', record?.homeworkStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
                                 {CLEAR_ITEM}
                                 {homeworkDisplay.raw && <SelectItem value={homeworkDisplay.raw}>{homeworkDisplay.raw}</SelectItem>}
@@ -850,7 +854,7 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             <div className="flex items-center gap-1">
                               <Select value={listeningDisplay.value} onValueChange={(value) => handleListeningChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.listeningStatus === '具体分数' ? '完成' : record?.listeningStatus)}`} style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(record?.listeningStatus === '具体分数' ? '完成' : record?.listeningStatus)} ${isNegOpt(record?.listeningStatus) ? 'opt-negative' : ''}`} style={optStyleOf('listening', record?.listeningStatus)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {listeningDisplay.raw && <SelectItem value={listeningDisplay.raw}>{listeningDisplay.raw}</SelectItem>}

@@ -873,10 +873,6 @@ function App() {
               <FileText className="w-5 h-5" />
               反馈生成
             </TabsTrigger>
-            <TabsTrigger value="library" className="ios-tab-trigger">
-              <BookMarked className="w-5 h-5" />
-              反馈素材
-            </TabsTrigger>
             <TabsTrigger value="leaderboard" className="ios-tab-trigger">
               <Trophy className="w-5 h-5" />
               表扬榜
@@ -892,6 +888,10 @@ function App() {
             <TabsTrigger value="cloud" className="ios-tab-trigger">
               <Cloud className="w-5 h-5" />
               同步中心
+            </TabsTrigger>
+            <TabsTrigger value="library" className="ios-tab-trigger">
+              <BookMarked className="w-5 h-5" />
+              反馈素材
             </TabsTrigger>
           </TabsList>
 

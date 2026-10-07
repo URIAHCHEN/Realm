@@ -472,6 +472,21 @@ export function generateFourInOne(
     fourTpl = fourTpl.replace(new RegExp('【' + escapeRegExp(cf.name) + '】', 'g'), text);
   });
 
+  // 兜底：关闭"附参考教辅"时，除了摘掉占位符，还要清掉**已被内联进模板的教辅文本**
+  // （用户反馈：取消勾选后复制仍带出教辅 —— 因为模板/草稿里已写死了那段文字）
+  if (!withMaterials) {
+    const matLines = FOUR_IN_ONE_MATERIALS.split('\n').map(l => l.trim()).filter(Boolean);
+    fourTpl = fourTpl
+      .split('\n')
+      .filter(l => {
+        const t = l.trim();
+        if (!t) return true;
+        if (/参考教辅/.test(t)) return false;                       // 标题行（📚 参考教辅…）
+        return !matLines.some(m => t.includes(m.slice(0, Math.min(14, m.length))));
+      })
+      .join('\n');
+  }
+
   return fourTpl
     .replace(/【课次】/g, String(record.lessonNumber))
     .replace(/【昵称】/g, nickname)

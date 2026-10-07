@@ -408,6 +408,18 @@ export function FeedbackGenerator({
                 <ClipboardList className="w-4 h-4" />
                 复制纯文本
               </Button>
+              <div role="tablist" className="inline-flex gap-1 p-1 rounded-[var(--r-md)] bg-black/[0.05]">
+              <button
+              role="tab" aria-selected={feedbackMode === 'normal'}
+              onClick={() => setFeedbackMode('normal')}
+              className={`px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'normal' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              >常规反馈</button>
+              <button
+              role="tab" aria-selected={feedbackMode === 'fourInOne'}
+              onClick={() => setFeedbackMode('fourInOne')}
+              className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'fourInOne' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              ><Sparkles className="w-3.5 h-3.5" />四个一</button>
+              </div>
               <Button variant="ghost" className="rounded-xl gap-1.5 h-9 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
                 <RotateCcw className="w-4 h-4" />
                 重置状态
@@ -417,18 +429,6 @@ export function FeedbackGenerator({
 
           {/* 反馈模式 */}
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div role="tablist" className="inline-flex gap-1 p-1 rounded-[var(--r-md)] bg-black/[0.05]">
-              <button
-                role="tab" aria-selected={feedbackMode === 'normal'}
-                onClick={() => setFeedbackMode('normal')}
-                className={`px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'normal' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
-              >常规反馈</button>
-              <button
-                role="tab" aria-selected={feedbackMode === 'fourInOne'}
-                onClick={() => setFeedbackMode('fourInOne')}
-                className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'fourInOne' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
-              ><Sparkles className="w-3.5 h-3.5" />四个一</button>
-            </div>
             {feedbackMode === 'fourInOne' && (
               <>
                 <Select value={scenario} onValueChange={(v) => setScenario(v as typeof scenario)}>

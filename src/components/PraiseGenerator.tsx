@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { attendanceKind } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,10 +53,15 @@ export function PraiseGenerator({
   );
 
   const quickStats = useMemo(() => {
-    const entrance = lessonRecords.filter(r => r.totalScore > 0).length;
-    const listening = lessonRecords.filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0).length;
-    const homework = lessonRecords.filter(r => r.homeworkStatus === '超赞完成').length;
-    const allPresent = lessonRecords.filter(r => r.attendance === '按时出勤').length;
+    // 口径修正（原来四处都是硬编码字面量，与老师实际的选项文案对不上 → 统计恒为 0）：
+    //  · 课后任务：看是否真的录了分，而不是匹配"具体分数"这个特定选项
+    //  · 作业超赞：关键词匹配（忽略 emoji 与自定义后缀）
+    //  · 按时出勤：走 attendanceKind 语义判定，而不是匹配"按时出勤"这个字面量
+    const norm = (v?: string | null) => (v || '').replace(/[^\p{Script=Han}A-Za-z0-9]/gu, '');
+    const entrance = lessonRecords.filter(r => Number(r.totalScore) > 0).length;
+    const listening = lessonRecords.filter(r => Number(r.listeningScore) > 0).length;
+    const homework = lessonRecords.filter(r => /超赞|超额|特别棒|优秀|加分/.test(norm(r.homeworkStatus))).length;
+    const allPresent = lessonRecords.filter(r => attendanceKind(r.attendance) === 'onTime').length;
     return [
       { label: '可入风云榜', value: entrance },
       { label: '课后任务有分', value: listening },

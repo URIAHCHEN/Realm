@@ -1937,3 +1937,36 @@ body{
 .data-table tbody .season-tag ~ button:not(.season-tag):focus-visible { opacity: 1; }
 /* 轨迹标签本身也略收一点，配合更窄的列 */
 .data-table .season-tag { padding-left: 6px; padding-right: 6px; }
+
+
+/* ============ 学情报告页排版重构（2026-10-07，基于真实截图） ============
+   问题：报告标题居中（与全站左对齐风格冲突）、工具条与导出按钮分散在两端却无对齐关系、
+        卡片内外间距偏大、顶部"个人/班级报告 + 选学生"卡片过高。 */
+/* 1) 报告标题：居中改左对齐、字号收敛（与各 section 标题形成层级而不是抢戏） */
+.report-title {
+  text-align: left !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px !important;
+}
+/* 2) 工具条：左侧筛选控件成组，末尾的「导出图片」推到最右 */
+[data-html2canvas-ignore="true"] .flex-wrap > *:last-child { margin-left: auto; }
+/* 3) 卡片内外间距收紧：section 之间更紧凑、卡片纵向 padding 略减 */
+.report-section { margin-top: 18px !important; }
+[data-slot="card"]:has(.report-title) { padding-top: 18px !important; padding-bottom: 18px !important; }
+/* 4) 顶部那两个"个人报告/班级报告"tab 所在的卡片：压缩高度，减少空旷感 */
+[data-slot="card"]:has([role="tablist"]) {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+[data-slot="card"]:has([role="tablist"]) [role="tablist"] { border-bottom: none !important; }
+/* 5) 报告页 KPI 卡与图表区之间不要拉太开 */
+.report-kpi-grid, .grid.grid-cols-2.md\:grid-cols-4 { row-gap: 12px; }
+
+/* 6) 导航栏撑满（用 role 选择器，避免被 Tailwind 工具类覆盖） */
+[role="tablist"] {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  display: flex !important;
+}

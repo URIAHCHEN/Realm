@@ -1927,11 +1927,13 @@ body{
 
 
 /* 学习轨迹列的「+」：默认隐藏，鼠标进入该行才出现（与下拉箭头同一套交互语言） */
-.data-table tbody .season-tag ~ button {
+/* 注意：学习轨迹标签本身也是 button，必须排除 .season-tag ——
+   否则 `.season-tag ~ button` 会把"第二个标签"也一起隐藏（曾导致的显示缺失） */
+.data-table tbody .season-tag ~ button:not(.season-tag) {
   opacity: 0;
   transition: opacity .15s ease;
 }
-.data-table tbody tr:hover .season-tag ~ button,
-.data-table tbody .season-tag ~ button:focus-visible { opacity: 1; }
+.data-table tbody tr:hover .season-tag ~ button:not(.season-tag),
+.data-table tbody .season-tag ~ button:not(.season-tag):focus-visible { opacity: 1; }
 /* 轨迹标签本身也略收一点，配合更窄的列 */
 .data-table .season-tag { padding-left: 6px; padding-right: 6px; }

@@ -1534,3 +1534,33 @@ body{
   box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.12);
   outline: none;
 }
+
+
+/* ============ 导航轻量化（2026-10-07 第二轮） ============
+   原 Tab 栏容器与选中态都偏重，与表格里的胶囊控件重复表达"选中"。
+   目标：容器退到背景（无边框阴影），选中态用一个白底胶囊 + 极淡阴影表达层级。 */
+.ios-tabs-list {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  gap: 2px;
+  border-bottom: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 0 !important;
+}
+.ios-tab-trigger {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px 10px 0 0 !important;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(100 116 139);
+  background: transparent;
+  transition: color .15s ease, background-color .15s ease;
+}
+.ios-tab-trigger:hover { color: rgb(30 41 59); background: rgb(15 23 42 / 0.03); }
+.ios-tab-trigger[data-state='active'] {
+  color: var(--brand);
+  background: #fff;
+  box-shadow: inset 0 -2px 0 0 var(--brand);
+}

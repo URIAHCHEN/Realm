@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut, subscribeSession } from '@/lib/auth';
+import { BrandMark } from '@/components/BrandMark';
+import { HeaderMenu, HeaderMenuItem, HeaderMenuLabel } from '@/components/HeaderMenu';
 import { VersionHistoryDialog } from '@/components/VersionHistoryDialog';
 import { ReviewQueueDialog } from '@/components/ReviewQueueDialog';
 import { recordVersion, diffSnapshots } from '@/lib/versionStore';
@@ -761,17 +763,7 @@ function App() {
       <header className="liquid-glass-header sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div
-                className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shadow-lg text-2xl sm:text-3xl"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb) / 0.72))' }}
-              >
-                🏫
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-3xl font-bold" style={{ color: 'var(--brand)' }}>Lynn's Realm</h1>
-              </div>
-            </div>
+            <BrandMark />
             <div className="flex items-center gap-3">
               <button
                 onClick={async () => {
@@ -811,28 +803,14 @@ function App() {
                   }`}
                 />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleImportAllData}
-                className="gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">导入备份</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportBackupJson}
-                className="gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">导出备份</span>
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setVersionOpen(true)} title="查看版本历史 / 回退到某个版本">
-                <History className="w-4 h-4" />
-                <span className="hidden sm:inline">版本历史</span>
-              </Button>
+              <HeaderMenu>
+                <HeaderMenuLabel>数据备份</HeaderMenuLabel>
+                <HeaderMenuItem icon={<Upload className="w-4 h-4" />} onClick={handleImportAllData}>导入备份（.json）</HeaderMenuItem>
+                <HeaderMenuItem icon={<Download className="w-4 h-4" />} onClick={handleExportBackupJson}>导出备份（.json）</HeaderMenuItem>
+                <HeaderMenuItem icon={<FileText className="w-4 h-4" />} onClick={handleExportAllData}>导出数据（Excel）</HeaderMenuItem>
+                <HeaderMenuLabel>记录与留痕</HeaderMenuLabel>
+                <HeaderMenuItem icon={<History className="w-4 h-4" />} onClick={() => setVersionOpen(true)}>版本历史 / 回退</HeaderMenuItem>
+              </HeaderMenu>
               {membership?.admin ? (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={async () => { await cloudSync.refreshPending(); setReviewOpen(true); }} title="查看其他成员提交的修订并批准/驳回">
                   <ShieldCheck className="w-4 h-4" />

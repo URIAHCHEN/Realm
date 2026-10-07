@@ -1814,3 +1814,124 @@ body{
 }
 [data-theme='mono'] .data-table tbody td { padding-top: 4px; padding-bottom: 4px; }
 [data-theme='mono'] .ios-tab-trigger[data-state='active'] { background: transparent; box-shadow: inset 0 -2px 0 0 var(--brand); }
+
+
+/* ============ 修复（2026-10-07 第三轮，基于真实截图） ============ */
+
+/* 1) 导航栏"上短下长"：tab 列表此前按内容收缩，比下方内容区窄很多。
+      改为与内容区同宽、左对齐；并修掉选中态变成蓝色实心块的问题。 */
+.ios-tabs-list {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  display: flex !important;
+}
+.ios-tab-trigger[data-state='active'] {
+  background: #fff !important;
+  color: var(--brand) !important;
+  box-shadow: inset 0 -2px 0 0 var(--brand) !important;
+  border-radius: 10px 10px 0 0 !important;
+}
+
+/* 2) 滚动卡顿：大面积 backdrop-filter 是主因（卡片 + 表头 + 汇总行 + 顶栏按钮）。
+      这里只保留"顶栏 + 弹窗"的模糊，其余改为高不透明度纯色 —— 视觉几乎无差，滚动明显更顺。 */
+[data-slot="card"],
+.liquid-glass-card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+.data-table thead th {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: #f7f8fa !important;
+}
+.class-stats-row > td,
+.class-stats-row > th {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: #f8fafc !important;
+}
+.liquid-glass-header button,
+.liquid-glass-header a { backdrop-filter: none !important; }
+/* 表格行避免逐行触发重排/重绘 */
+.data-table tbody tr { contain: layout paint style; }
+
+/* 3) 表格更紧凑：单元格内边距收紧，列间不再松垮 */
+.data-table th, .data-table td { padding-left: 8px !important; padding-right: 8px !important; }
+.data-table tbody td { padding-top: 5px !important; padding-bottom: 5px !important; }
+
+/* 4) 墨色主题重做：改为"深色外壳 + 浅色内容"。
+      原因：上一版把整页做深，但表格体/统计卡仍是浅色 → 白底白字、对比度极差。
+      现在只让顶栏、导航、页头区域深色，内容区保持浅色卡片（可读性优先）。 */
+[data-theme='ink'] .ios-glass-bg {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 120px, #f3f4f6 120px, #eef1f5 100%) !important;
+}
+[data-theme='ink'] [data-slot="card"],
+[data-theme='ink'] .liquid-glass-card {
+  background: #ffffff !important;
+  border: 1px solid rgb(15 23 42 / 0.06) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05) !important;
+}
+[data-theme='ink'] [data-slot="card"] *,
+[data-theme='ink'] .liquid-glass-card * { color: revert; }
+[data-theme='ink'] .ios-tabs-list { background: transparent !important; }
+[data-theme='ink'] .ios-tab-trigger { color: #e2e8f0 !important; }
+[data-theme='ink'] .ios-tab-trigger[data-state='active'] {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  box-shadow: inset 0 -2px 0 0 #fff !important;
+}
+[data-theme='ink'] .data-table thead th {
+  background: #111827 !important;
+  color: #f3f4f6 !important;
+  border-bottom: none !important;
+}
+[data-theme='ink'] .data-table tbody { background: #fff; }
+[data-theme='ink'] .class-stats-row > td { background: #f1f5f9 !important; color: #334155 !important; }
+[data-theme='ink'] [data-slot="dialog-content"] { background: #fff !important; color: #0f172a !important; }
+
+/* 5) 极简主题：统一圆角尺度（原来方一行圆一行），控件全部 6px */
+[data-theme='mono'] * { border-radius: 6px !important; }
+[data-theme='mono'] .rounded-full,
+[data-theme='mono'] [class*="rounded-full"] { border-radius: 6px !important; }
+[data-theme='mono'] .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -2px 0 0 var(--brand) !important; }
+[data-theme='mono'] [data-slot="card"],
+[data-theme='mono'] .liquid-glass-card {
+  background: #fff !important;
+  border: 1px solid rgb(15 23 42 / 0.10) !important;
+  box-shadow: none !important;
+}
+
+/* 6) 报刊主题强化（用户反馈"比较亮眼"，着重优化） */
+[data-theme='editorial'] .ios-glass-bg { background: #f7f5f0 !important; }
+[data-theme='editorial'] h1 { font-family: "Songti SC", Georgia, serif !important; }
+[data-theme='editorial'] .ios-tab-trigger {
+  font-family: "Songti SC", Georgia, serif !important;
+  letter-spacing: .04em;
+  border-radius: 0 !important;
+}
+[data-theme='editorial'] .ios-tabs-list { border-bottom: 2px solid #1f2937 !important; }
+[data-theme='editorial'] [data-slot="card"],
+[data-theme='editorial'] .liquid-glass-card {
+  border: 1px solid rgb(31 41 55 / 0.14) !important;
+  border-top: 3px double #1f2937 !important;
+  border-radius: 0 !important;
+  background: #fffdf8 !important;
+}
+[data-theme='editorial'] .data-table thead th {
+  background: transparent !important;
+  border-bottom: 1.5px solid #1f2937 !important;
+  letter-spacing: .1em;
+}
+
+
+/* 学习轨迹列的「+」：默认隐藏，鼠标进入该行才出现（与下拉箭头同一套交互语言） */
+.data-table tbody .season-tag ~ button {
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.data-table tbody tr:hover .season-tag ~ button,
+.data-table tbody .season-tag ~ button:focus-visible { opacity: 1; }
+/* 轨迹标签本身也略收一点，配合更窄的列 */
+.data-table .season-tag { padding-left: 6px; padding-right: 6px; }

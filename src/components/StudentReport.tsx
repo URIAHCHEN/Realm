@@ -284,10 +284,16 @@ export function StudentReport({
     if (!classReportRef.current) { toast.error('导出失败：报告内容尚未渲染完成，请稍后重试'); return; }
     try {
       const html2canvas = (await import('html2canvas')).default;
+      // 导出前同样需要：展开淡入 + 固定像素宽度（否则会导出空白/图表丢失）
+      document.documentElement.setAttribute('data-exporting', '1');
+      await new Promise(r => setTimeout(r, 700));
+      const __w = Math.max(classReportRef.current.scrollWidth, 1080);
       const canvas = await html2canvas(classReportRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2
+        backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false,
+        width: __w, height: classReportRef.current.scrollHeight,
+        windowWidth: __w, windowHeight: classReportRef.current.scrollHeight, scrollX: 0, scrollY: 0,
       });
+      document.documentElement.removeAttribute('data-exporting');
       const link = document.createElement('a');
       link.download = `${currentClassName}_学情报告_${selectedLesson === 'all' ? '全部课次' : `第${selectedLesson}课`}.png`;
       link.href = canvas.toDataURL('image/png');

@@ -165,17 +165,29 @@ export function PersonalReportView({
   const handleExportPersonalImage = async () => {
     if (!targetRef.current || isExportingImage) return;
     setIsExportingImage(true);
+    const target = targetRef.current;
+    const prevWidth = target.style.width;
     try {
-      await new Promise(r => setTimeout(r, 200));
-      const target = targetRef.current;
+      // 导出前的关键处理（缺一不可，否则会导出大片空白 / 图表丢失）：
+      // ① data-exporting → 把滚动淡入的 opacity:0 全部展开
+      // ② 固定像素宽度 → 克隆文档里 ResponsiveContainer 需要真实宽度，否则图表宽为 0
+      // ③ 清掉高度上限与裁剪 → 否则只截到首屏
+      document.documentElement.setAttribute('data-exporting', '1');
+      const w = Math.max(target.scrollWidth, 1080);
+      target.style.width = w + 'px';
+      await new Promise(r => setTimeout(r, 700));   // 等图表按新宽度重排 + 字体就绪
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
         backgroundColor: '#ffffff',
         scale: 2,
         useCORS: true,
         logging: false,
-        width: target.offsetWidth,
-        height: target.offsetHeight
+        width: w,
+        height: target.scrollHeight,
+        windowWidth: w,
+        windowHeight: target.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
       });
       const link = document.createElement('a');
       link.download = `${getNickname(selectedStudent)}_学情报告.png`;
@@ -186,6 +198,8 @@ export function PersonalReportView({
       console.error(err);
       toast.error('导出失败：' + err);
     } finally {
+      document.documentElement.removeAttribute('data-exporting');
+      target.style.width = prevWidth;
       setIsExportingImage(false);
     }
   };

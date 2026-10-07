@@ -2174,3 +2174,22 @@ html, body { overflow-x: hidden; }
 /* 流体字号（clamp）：大屏不显小、小屏不溢出 */
 .ios-tab-trigger { font-size: clamp(13px, 0.95vw, 15px) !important; }
 .report-container .report-section-title { font-size: clamp(17px, 1.3vw, 20px) !important; }
+
+
+/* ============ 图片导出态（2026-10-08） ============
+   踩坑：滚动淡入给未进入视口的卡片加了 opacity:0，html2canvas 会把它们当成透明 →
+   导出的 PNG 大片空白。导出前给 <html> 打 data-exporting，统一把淡入展开、容器不裁剪。 */
+html[data-exporting] .reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+html[data-exporting] .report-container,
+html[data-exporting] .report-section,
+html[data-exporting] .report-chart-container,
+html[data-exporting] [data-slot="card"] {
+  overflow: visible !important;
+  max-height: none !important;
+  height: auto !important;
+}
+html[data-exporting] * { animation: none !important; }

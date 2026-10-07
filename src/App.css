@@ -1970,3 +1970,26 @@ body{
   justify-content: flex-start !important;
   display: flex !important;
 }
+
+
+/* 报告页头部：标题、副标题、分隔线整体左对齐（此前 header 居中，改标题后副标题与线仍居中） */
+.report-header { text-align: left !important; }
+.report-subtitle { text-align: left !important; }
+.report-container > .report-header { border-bottom: none !important; }
+.report-header::after {
+  content: '';
+  display: block;
+  height: 1px;
+  background: rgb(15 23 42 / 0.07);
+  margin: 10px 0 0;
+}
+
+/* 导航栏撑满：再补一层（父级可能用 text-align/inline 居中，这里强制块级占满并左对齐） */
+[role="tablist"] {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+[role="tablist"] > button { flex: 0 0 auto; }

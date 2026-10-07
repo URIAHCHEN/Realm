@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Download, Upload, BookOpen, TrendingUp, FileText, BarChart3, LogOut, Trophy, Cloud, BookMarked, History } from 'lucide-react';
+import { BarChart3, BookMarked, BookOpen, Cloud, Download, FileText, History, LogOut, Send, ShieldCheck, TrendingUp, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut, subscribeSession } from '@/lib/auth';
 import { VersionHistoryDialog } from '@/components/VersionHistoryDialog';
+import { ReviewQueueDialog } from '@/components/ReviewQueueDialog';
 import { recordVersion, diffSnapshots } from '@/lib/versionStore';
 import { BUILD_SCOPE } from '@/lib/config';
 import { ensureSelfMembership, myUserId } from '@/lib/members';
@@ -145,7 +146,8 @@ function App() {
     onImport: (snap) => importData(snap),
     enabled: isAuthenticated,
     sessionKey,
-    canWrite: isAuthenticated && membership.member
+    canWrite: isAuthenticated && membership.member,
+    isAdmin: !!membership?.admin,
   });
 
   const displaySettings = useDisplaySettings();
@@ -235,7 +237,7 @@ function App() {
     const normListening = normTo(cfg.listeningOptions?.length ? cfg.listeningOptions : DEFAULT_LISTENING_OPTIONS);
 
     const missing = Array.from(new Set(rows.map(r => r.studentName).filter(n => n && !classData.students.includes(n))));
-    if (missing.length > 0) addStudents(classId, missing);
+    if (missing.length > 0) addStudents(classId, missing, lessonNumber);
 
     rows.forEach(row => {
       if (!row.studentName) return;
@@ -355,7 +357,7 @@ function App() {
     });
     currentClass.students.forEach(studentName => {
       const existingRecord = currentRecords.find(r => r.studentName === studentName);
-      const joinedAt = firstLessonOf.get(studentName);
+      const joinedAt = currentClass.studentJoinLesson?.[studentName] ?? firstLessonOf.get(studentName);
       if (!existingRecord && joinedAt != null && joinedAt > currentLessonNumber) {
         return;   // 该学员本次课还没加入 → 不补建
       }
@@ -559,7 +561,7 @@ function App() {
   // 处理导入学生
   const handleImportStudents = (students: string[]) => {
     if (!currentClassId) return;
-    addStudents(currentClassId, students);
+    addStudents(currentClassId, students, currentLessonNumber);
     toast.success(`成功导入${students.length}名学生！`);
   };
 
@@ -613,7 +615,30 @@ function App() {
 
   // ============ 版本历史（修订版本 / 回退） ============
   const [versionOpen, setVersionOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const actor = (getCachedSession()?.email || '本机').split('@')[0];
+  /**
+   * 本课次"应在读"的名单：过滤掉尚未加入的学员（中途插班）。
+   * 判断依据优先用 studentJoinLesson（新增学员时登记），缺失时退回"该生最早的记录课次"。
+   * 作用：① 早于加入课次的课次里不显示该学员（避免被当成 0 分/离班）；
+   *       ② 离班提醒不会把"还没来的新生"误报成离班。
+   */
+  const firstLessonByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    (currentClass?.records || []).forEach(r => {
+      const cur = map.get(r.studentName);
+      if (cur == null || r.lessonNumber < cur) map.set(r.studentName, r.lessonNumber);
+    });
+    return map;
+  }, [currentClass]);
+  const rosterForLesson = useMemo(() => {
+    const list = currentClass?.students || [];
+    const joinMap = currentClass?.studentJoinLesson || {};
+    return list.filter(name => {
+      const start = joinMap[name] ?? firstLessonByStudent.get(name);
+      return start == null || start <= currentLessonNumber;
+    });
+  }, [currentClass, firstLessonByStudent, currentLessonNumber]);
   /** 组装当前全量快照（与云同步同一份结构） */
   const makeSnapshot = useCallback(() => ({
     appConfig,
@@ -808,6 +833,20 @@ function App() {
                 <History className="w-4 h-4" />
                 <span className="hidden sm:inline">版本历史</span>
               </Button>
+              {membership?.admin ? (
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={async () => { await cloudSync.refreshPending(); setReviewOpen(true); }} title="查看其他成员提交的修订并批准/驳回">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">审核队列{cloudSync.pending.length > 0 ? " (" + cloudSync.pending.length + ")" : ""}</span>
+                </Button>
+              ) : (
+                <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => {
+                  const note = window.prompt("提交审核说明（会显示给管理员，可留空）：", "") ?? "";
+                  void cloudSync.submitForReview(note || undefined);
+                }} title="把当前这一版提交管理员审核；批准前不会写入线上数据">
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">提交审核</span>
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -906,7 +945,7 @@ function App() {
               {/* 右侧主内容 */}
               <div className="flex-1">
                 <StudentTable
-                  students={currentClass?.students || []}
+                  students={rosterForLesson}
                   records={currentClass?.records || []}
                   lessonConfig={currentLessonConfig}
                   lessonNumber={currentLessonNumber}
@@ -1110,10 +1149,17 @@ function App() {
         />
       )}
 
-      {/* 学生分析模态框（懒加载：仅点开分析时才加载图表依赖） */}
-      {analysisStudent && currentClass && (
-        <Suspense fallback={<ModuleLoading label="学生分析" />}>
-          <VersionHistoryDialog
+      <ReviewQueueDialog
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        pending={cloudSync.pending}
+        currentSnapshot={makeSnapshot()}
+        canReview={!!membership?.admin}
+        onApprove={(item) => { void cloudSync.approvePending(item).then(() => snapshotVersion('审核通过：' + item.by)); }}
+        onReject={(item) => { void cloudSync.rejectPending(item); }}
+      />
+
+      <VersionHistoryDialog
             open={versionOpen}
             onClose={() => setVersionOpen(false)}
             currentSnapshot={makeSnapshot()}
@@ -1129,7 +1175,11 @@ function App() {
               toast.success('已回退到该版本', { description: '回退动作已记为新版本，可再次回退', duration: 5000 });
               setVersionOpen(false);
             }}
-          />
+      />
+
+      {/* 学生分析模态框（懒加载：仅点开分析时才加载图表依赖） */}
+      {analysisStudent && currentClass && (
+        <Suspense fallback={<ModuleLoading label="学生分析" />}>
 
           <StudentAnalysis
             isOpen={!!analysisStudent}

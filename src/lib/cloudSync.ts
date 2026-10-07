@@ -15,6 +15,8 @@ export interface SyncSnapshot {
   schoolScores: { [studentName: string]: SchoolScore[] };
   /** 模板登记表：模板按槽位带时间戳同步，避免整包覆盖导致"部署后模板丢失" */
   templates?: TemplateStore;
+  /** 待审核版本（协作审核流）：非管理员提交的整版修订，批准前不写入线上数据 */
+  pendingVersions?: import('@/lib/pendingReview').PendingVersion[];
 }
 
 export interface CloudSyncConfig {

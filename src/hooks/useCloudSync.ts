@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getCachedSession } from '@/lib/auth';
+import { makePendingVersion, mergePending, removePending } from '@/lib/pendingReview';
 import {
   type CloudSyncConfig,
   type CloudSyncStatus,
@@ -28,6 +30,8 @@ function toSyncMessage(e: unknown): string {
 }
 
 interface UseCloudSyncOptions {
+  /** 是否管理员：非管理员不做自动推送，改动需「提交审核」 */
+  isAdmin?: boolean;
   snapshot: SyncSnapshot;
   onImport: (snapshot: SyncSnapshot) => void;
   /** 是否已登录：RLS 收紧后需携带用户 JWT，未登录时不做对账/自动推送 */
@@ -40,12 +44,15 @@ interface UseCloudSyncOptions {
 
 export type SyncAction = 'idle' | 'pushing' | 'pulling';
 
-export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite = true }: UseCloudSyncOptions) {
+export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite = true, isAdmin = true }: UseCloudSyncOptions) {
   const [config, setConfig] = useState<CloudSyncConfig | null>(() => loadSyncConfig());
   const [status, setStatus] = useState<CloudSyncStatus>('unconfigured');
   const [action, setAction] = useState<SyncAction>('idle');
   const [lastSyncAt, setLastSyncAt] = useState<number>(0);
   const [message, setMessage] = useState<string>('');
+
+  /** 当前操作者标识（审核队列署名用） */
+  const ACTOR_OR_SELF = () => (getCachedSession()?.email || '本机').split('@')[0];
 
   const statusRef = useRef<CloudSyncStatus>('unconfigured');
   const snapshotRef = useRef(snapshot);
@@ -221,6 +228,11 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     if (!canWrite) return;
     if (!config || !config.autoSync) return;
     if (statusRef.current !== 'connected') return;
+    // 审核流：非管理员的改动不自动写入线上数据，需在页面上「提交审核」
+    if (isAdmin === false) {
+      setMessage('有改动待提交审核（不会自动上传）');
+      return;
+    }
     // 抑制仅针对"刚刚由导入落地的那份哈希"，且不依赖 effect 的早退分支去消费，
     // 避免把用户随后的真实编辑当成导入回响而漏推
     if (suppressPush.current) {
@@ -282,6 +294,62 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
 
   // 只做"对账"（比较本地/云端后决定推或拉），不会无条件用云端覆盖本地。
   // 离线恢复、手动"重新检测"应当走这里，而不是 pull。
+  /** 最近一次从云端拿到的待审列表 */
+  const [pending, setPending] = useState<import('@/lib/pendingReview').PendingVersion[]>([]);
+
+  /** 非管理员：把当前这一版提交审核（只写待审列表，不动线上数据） */
+  const submitForReview = useCallback(async (note?: string) => {
+    if (!config) return;
+    setAction('pushing');
+    try {
+      const cloud = await fetchCloudState(config);
+      const baseSnap = cloud.snapshot;
+      if (!baseSnap) { toast.error('云端还没有基础数据，请先让管理员上传一版'); return; }
+      const item = makePendingVersion(snapshotRef.current, ACTOR_OR_SELF(), note);
+      const merged = mergePending(baseSnap.pendingVersions, item);
+      await pushSnapshot(config, { ...baseSnap, pendingVersions: merged });
+      setPending(merged);
+      setStatus('connected'); statusRef.current = 'connected';
+      setMessage('已提交审核，等待管理员批准');
+      toast.success('已提交审核', { description: '管理员批准后才会写入线上数据', duration: 5000 });
+    } catch (e) {
+      setStatus('error'); statusRef.current = 'error';
+      const m2 = toSyncMessage(e); setMessage(m2); toast.error('提交失败：' + m2);
+    } finally { setAction('idle'); }
+  }, [config]);
+
+  /** 管理员刷新待审列表 */
+  const refreshPending = useCallback(async () => {
+    if (!config) return [];
+    try {
+      const cloud = await fetchCloudState(config);
+      const list = cloud.snapshot?.pendingVersions || [];
+      setPending(list);
+      return list;
+    } catch { return []; }
+  }, [config]);
+
+  /** 管理员批准：该版本成为线上数据（保留其余待审条目） */
+  const approvePending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
+    if (!config) return;
+    const rest = removePending(pending, item.id);
+    await pushSnapshot(config, { ...item.snapshot, pendingVersions: rest });
+    onImport(item.snapshot);
+    setPending(rest);
+    saveSyncMeta({ lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(item.snapshot) });
+    setMessage('已批准 ' + item.by + ' 的修订并写入线上数据');
+  }, [config, pending, onImport]);
+
+  /** 管理员驳回：仅把该条目从队列移除（线上数据不变） */
+  const rejectPending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
+    if (!config) return;
+    const rest = removePending(pending, item.id);
+    const cloud = await fetchCloudState(config);
+    await pushSnapshot(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest });
+    setPending(rest);
+    setMessage('已驳回 ' + item.by + ' 的修订');
+  }, [config, pending]);
+
   const reconcileNow = useCallback(() => {
     if (config) return reconcile(config);
   }, [config, reconcile]);
@@ -305,6 +373,11 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     push,
     pull,
     reconcileNow,
+    pending,
+    submitForReview,
+    refreshPending,
+    approvePending,
+    rejectPending,
     resolveConflictKeepLocal,
     resolveConflictKeepCloud,
   };

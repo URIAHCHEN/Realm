@@ -697,7 +697,7 @@ export function useClassData() {
   }, []);
 
   // 批量添加学生
-  const addStudents = useCallback((classId: string, studentNames: string[]) => {
+  const addStudents = useCallback((classId: string, studentNames: string[], joinLesson?: number) => {
     setClasses(prev => {
       const classData = prev[classId];
       // 防御：班级不存在时忽略，避免 undefined.students 崩溃
@@ -705,11 +705,16 @@ export function useClassData() {
       const known = new Set(classData.students);
       const newStudents = studentNames.filter(name => name && !known.has(name));
 
+      // 记录新学员的加入课次：后续判断"该课次不该有 TA"完全依赖这个值，
+      // 不再靠"最早记录"反推（新学员可能还没有任何记录）
+      const joinMap = { ...(classData.studentJoinLesson || {}) };
+      if (joinLesson != null) newStudents.forEach(n => { joinMap[n] = joinLesson; });
       return {
         ...prev,
         [classId]: {
           ...classData,
-          students: [...classData.students, ...newStudents]
+          students: [...classData.students, ...newStudents],
+          studentJoinLesson: joinMap,
         }
       };
     });

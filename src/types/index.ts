@@ -124,6 +124,12 @@ export interface Class {
   students: string[];
   records: StudentRecord[];
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
+  /**
+   * 学员加入课次（可选）：{ 学员名: 课次号 }。
+   * 用于「中途插班」的判断——早于加入课次的课次里不应出现该学员，
+   * 也不应为他补建记录（否则会以 0 分污染早前课次的统计）。
+   */
+  studentJoinLesson?: { [studentName: string]: number };
 }
 
 // 预存反馈素材（全局按课次组织；素材以链接形式存储）

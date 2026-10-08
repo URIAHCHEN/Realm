@@ -56,6 +56,13 @@ export function TeachingAdvice({ data }: { data: AdviseInput }) {
               班均 {avgCorrectRate}%，优秀率 {excellentRate}%。
               {excellentRate >= 40 ? '拔尖面够宽，重点转向"会而不对"的细节扣分。' : '拔尖人数偏少，需要给前段学生加一组压轴训练。'}
             </p>
+            {validCount - highCount - lowCount > 0 && (
+              <p>
+                <span className="font-semibold">中分段（{validCount - highCount - lowCount} 人）：</span>
+                基础大体在，失分集中在得分率偏低的题型上
+                {worst ? <>——<b>{worst.name}</b>（得分率 {worst.correctRate}%）是这批人最现实的提分口，拿下一截，整体均分就能被带动。</> : '。'}
+              </p>
+            )}
             <p>
               <span className="font-semibold">低分段（后 27%，{lowCount} 人）：</span>
               及格率 {passRate}%。

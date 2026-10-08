@@ -20,7 +20,7 @@ import { BackendOfflineBanner } from '@/components/BackendOfflineBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 const FeedbackLibrary = lazy(() => import('@/components/FeedbackLibrary').then(m => ({ default: m.FeedbackLibrary })));
 import { ClassSelector } from '@/components/ClassSelector';
-import { ClassInfoCard } from '@/components/ClassInfoCard';
+import { ClassInfoBand, ClassRosterCard } from '@/components/ClassInfoCard';
 import { TransferStudentDialog } from '@/components/TransferStudentDialog';
 import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
@@ -924,35 +924,27 @@ function App() {
             </TabsTrigger>
           </TabsList>
 
-          {/* 学情记录 Tab */}
+          {/* 学情记录 Tab：班级信息条（上）→ 课次管理 → 全宽学情记录表 → 学员名单卡（下） */}
           <TabsContent value="records" className="space-y-6">
             <ErrorBoundary label="学情记录">
-            <div className="flex gap-6">
-              {/* 左侧边栏 */}
-              <div className="w-72 flex-shrink-0 space-y-4">
-                <ClassInfoCard
-                  classData={currentClass}
-                  onManageStudents={() => setIsImportModalOpen(true)}
-                  onTransferStudent={() => setIsTransferModalOpen(true)}
-                  transferredOut={transferredOutStudents}
-                  onRestoreStudent={handleRestoreTransferred}
-                  onViewStudent={handleViewStudentAnalysis}
-                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-                  lessonNumber={currentLessonNumber}
-                />
-                <LessonManager
-                  currentLessonNumber={currentLessonNumber}
-                  allLessons={allLessons}
-                  onSelectLesson={setCurrentLessonNumber}
-                  onAddLesson={handleAddLesson}
-                  onSaveCurrentLesson={handleSaveCurrentLesson}
-                />
-              </div>
+            <div className="space-y-4 min-w-0">
+              <ClassInfoBand
+                classData={currentClass}
+                onManageStudents={() => setIsImportModalOpen(true)}
+                onTransferStudent={() => setIsTransferModalOpen(true)}
+                getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                lessonNumber={currentLessonNumber}
+              />
+              <LessonManager
+                currentLessonNumber={currentLessonNumber}
+                allLessons={allLessons}
+                onSelectLesson={setCurrentLessonNumber}
+                onAddLesson={handleAddLesson}
+                onSaveCurrentLesson={handleSaveCurrentLesson}
+              />
 
-              {/* 右侧主内容：min-w-0 是关键 —— 缺它时表格的 min-content 宽度（约 1440px）
-                  会把 flex 行整个撑宽，页面出现横向滚动；横向滑动时上方班级卡比表格窄，
-                  就成了用户反复反馈的"上短下长"。加上后表格在自己容器内滚动，三块宽度对齐。 */}
-              <div className="flex-1 min-w-0">
+              {/* 全宽学情记录表：min-w-0 防止表格 min-content 宽度撑出横向滚动 */}
+              <div className="min-w-0">
                 <StudentTable
                   students={rosterForLesson}
                   records={currentClass?.records || []}
@@ -982,6 +974,14 @@ function App() {
                   onOpenConfig={() => setShowGenerateSettings(true)}
                 />
               </div>
+
+              <ClassRosterCard
+                classData={currentClass}
+                transferredOut={transferredOutStudents}
+                onRestoreStudent={handleRestoreTransferred}
+                onViewStudent={handleViewStudentAnalysis}
+                getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+              />
             </div>
           </ErrorBoundary>
           </TabsContent>

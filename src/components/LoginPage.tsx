@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lock, Mail, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Sparkles, Cloud } from 'lucide-react';
 import { signIn, signUp } from '@/lib/auth';
-import { KAOMOJI, ICONS, QUOTES, pickRandom } from '@/components/BrandMark';
+import { KAOMOJI, ICONS, QUOTES, pickRandom } from '@/components/brandMarkContent';
 
 interface LoginPageProps {
   onSuccess: () => void;

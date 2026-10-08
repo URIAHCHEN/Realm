@@ -324,6 +324,74 @@ function App() {
     return Array.from(map.values()).sort((a, b) => b.lastLesson - a.lastLesson);
   }, [currentClass]);
 
+  // ============ 版本历史（修订版本 / 回退） ============
+  // 说明：这些 hooks 必须在 `if (!isAuthenticated) return <LoginPage/>` 之前调用，
+  // 否则登录/未登录两种渲染路径的 hook 顺序不一致，会违反 React Hooks 规则。
+  const [versionOpen, setVersionOpen] = useState(false);
+  // 暗色模式（Apple 风）：持久化到 localStorage，切换时给 <html> 加 .dark
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('uiDarkMode') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    try { localStorage.setItem('uiDarkMode', darkMode ? '1' : '0'); } catch { /* ignore */ }
+  }, [darkMode]);
+
+  // 滚动淡入：零依赖 IntersectionObserver（尊重 prefers-reduced-motion）
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
+    const attach = () => {
+      document.querySelectorAll('[data-slot="card"]:not(.reveal), .report-section:not(.reveal)').forEach(el => {
+        el.classList.add('reveal'); io.observe(el);
+      });
+    };
+    const t = window.setTimeout(attach, 120);
+    const mo = new MutationObserver(() => { window.clearTimeout(t); window.setTimeout(attach, 150); });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(t); };
+  }, [activeTab]);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const actor = (getCachedSession()?.email || '本机').split('@')[0];
+  /**
+   * 本课次"应在读"的名单：过滤掉尚未加入的学员（中途插班）。
+   * 判断依据优先用 studentJoinLesson（新增学员时登记），缺失时退回"该生最早的记录课次"。
+   * 作用：① 早于加入课次的课次里不显示该学员（避免被当成 0 分/离班）；
+   *       ② 离班提醒不会把"还没来的新生"误报成离班。
+   */
+  const firstLessonByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    (currentClass?.records || []).forEach(r => {
+      const cur = map.get(r.studentName);
+      if (cur == null || r.lessonNumber < cur) map.set(r.studentName, r.lessonNumber);
+    });
+    return map;
+  }, [currentClass]);
+  const rosterForLesson = useMemo(() => {
+    const list = currentClass?.students || [];
+    const joinMap = currentClass?.studentJoinLesson || {};
+    return list.filter(name => {
+      const start = joinMap[name] ?? firstLessonByStudent.get(name);
+      return start == null || start <= currentLessonNumber;
+    });
+  }, [currentClass, firstLessonByStudent, currentLessonNumber]);
+  /** 组装当前全量快照（与云同步同一份结构） */
+  const makeSnapshot = useCallback(() => ({
+    appConfig,
+    classes,
+    nicknames,
+    schoolScores,
+    templates: readTemplateStore(),
+  }), [appConfig, classes, nicknames, schoolScores]);
+  /** 记录一个版本（reason 说明触发原因；summary 省略时自动算变动明细） */
+  const snapshotVersion = useCallback((reason: string) => {
+    const snap = makeSnapshot();
+    const entry = recordVersion(snap, { actor, reason });
+    if (entry) toast.success('已记录版本：' + reason, { description: entry.summary.slice(0, 2).join('；'), duration: 4000 });
+  }, [makeSnapshot, actor]);
+
   // 未登录显示登录页面
   if (!isAuthenticated) {
     return (
@@ -614,72 +682,6 @@ function App() {
     await downloadExcel(workbook, filename);
     toast.success('数据已导出为Excel！');
   };
-
-  // ============ 版本历史（修订版本 / 回退） ============
-  const [versionOpen, setVersionOpen] = useState(false);
-  // 暗色模式（Apple 风）：持久化到 localStorage，切换时给 <html> 加 .dark
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    try { return localStorage.getItem('uiDarkMode') === '1'; } catch { return false; }
-  });
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-    try { localStorage.setItem('uiDarkMode', darkMode ? '1' : '0'); } catch { /* ignore */ }
-  }, [darkMode]);
-
-  // 滚动淡入：零依赖 IntersectionObserver（尊重 prefers-reduced-motion）
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
-    const attach = () => {
-      document.querySelectorAll('[data-slot="card"]:not(.reveal), .report-section:not(.reveal)').forEach(el => {
-        el.classList.add('reveal'); io.observe(el);
-      });
-    };
-    const t = window.setTimeout(attach, 120);
-    const mo = new MutationObserver(() => { window.clearTimeout(t); window.setTimeout(attach, 150); });
-    mo.observe(document.body, { childList: true, subtree: true });
-    return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(t); };
-  }, [activeTab]);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const actor = (getCachedSession()?.email || '本机').split('@')[0];
-  /**
-   * 本课次"应在读"的名单：过滤掉尚未加入的学员（中途插班）。
-   * 判断依据优先用 studentJoinLesson（新增学员时登记），缺失时退回"该生最早的记录课次"。
-   * 作用：① 早于加入课次的课次里不显示该学员（避免被当成 0 分/离班）；
-   *       ② 离班提醒不会把"还没来的新生"误报成离班。
-   */
-  const firstLessonByStudent = useMemo(() => {
-    const map = new Map<string, number>();
-    (currentClass?.records || []).forEach(r => {
-      const cur = map.get(r.studentName);
-      if (cur == null || r.lessonNumber < cur) map.set(r.studentName, r.lessonNumber);
-    });
-    return map;
-  }, [currentClass]);
-  const rosterForLesson = useMemo(() => {
-    const list = currentClass?.students || [];
-    const joinMap = currentClass?.studentJoinLesson || {};
-    return list.filter(name => {
-      const start = joinMap[name] ?? firstLessonByStudent.get(name);
-      return start == null || start <= currentLessonNumber;
-    });
-  }, [currentClass, firstLessonByStudent, currentLessonNumber]);
-  /** 组装当前全量快照（与云同步同一份结构） */
-  const makeSnapshot = useCallback(() => ({
-    appConfig,
-    classes,
-    nicknames,
-    schoolScores,
-    templates: readTemplateStore(),
-  }), [appConfig, classes, nicknames, schoolScores]);
-  /** 记录一个版本（reason 说明触发原因；summary 省略时自动算变动明细） */
-  const snapshotVersion = useCallback((reason: string) => {
-    const snap = makeSnapshot();
-    const entry = recordVersion(snap, { actor, reason });
-    if (entry) toast.success('已记录版本：' + reason, { description: entry.summary.slice(0, 2).join('；'), duration: 4000 });
-  }, [makeSnapshot, actor]);
 
   // 处理导出完整备份（JSON 快照，可被「导入备份」读回，用于恢复与多端迁移）
   const handleExportBackupJson = () => {

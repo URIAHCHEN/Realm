@@ -248,7 +248,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [snapshot, config, doPush, enabled, canWrite]);
+  }, [snapshot, config, doPush, enabled, canWrite, isAdmin]);
 
   // 多端收敛：窗口获焦/可见 或 每 60s，轻量再对账（复用冲突检测，不改变写入语义）
   useEffect(() => {

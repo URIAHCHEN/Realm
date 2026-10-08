@@ -513,7 +513,9 @@ export function generatePraise(
   /** 指定模板内容（多模板管理时传入所选模板），缺省用 lessonConfig.praiseTemplate */
   templateOverride?: string
 ): string {
-  const template = templateOverride ?? lessonConfig.praiseTemplate;
+  // 兜底：旧备份 / 部分云同步可能缺 praiseTemplate，不能让它 undefined.replace 崩掉
+  const FALLBACK_PRAISE_TEMPLATE = `🏆 第【课次】课【表彰类型】\n\n【表彰内容】\n\n上面这几位，这节课的功夫是实打实的。没上榜的也别急，下节课接着来。`;
+  const template = templateOverride ?? lessonConfig.praiseTemplate ?? FALLBACK_PRAISE_TEMPLATE;
   
   let praiseContent = '';
   
@@ -543,10 +545,12 @@ export function generatePraise(
   }
   
   if (praiseType === 'listening' || praiseType === 'comprehensive') {
-    // 课后任务排名
+    // 课后任务排名（口径 2026-10-08 再修）：老师没有"听力打卡/具体分数"这个选项，
+    // 之前 `listeningStatus === '具体分数'` 硬编码必然匹配不到 → 名单恒空。
+    // 现在按"课后任务分数（若有）"排名：有分才入榜，降序取前五。
     const listeningRanked = records
-      .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0 && !isAbsentRecord(r))
-      .sort((a, b) => b.listeningScore - a.listeningScore)
+      .filter(r => Number(r.listeningScore) > 0 && !isAbsentRecord(r))
+      .sort((a, b) => Number(b.listeningScore) - Number(a.listeningScore))
       .slice(0, 5);
     
     if (listeningRanked.length > 0) {

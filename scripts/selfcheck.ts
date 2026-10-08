@@ -6,7 +6,7 @@ import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
-import { buildDynamicVariables, generatePersonalFeedback } from '@/lib/feedbackTemplates';
+import { buildDynamicVariables, generatePersonalFeedback, generatePraise } from '@/lib/feedbackTemplates';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -299,6 +299,28 @@ const rateBefore = Math.round((tAll.reduce((a, r) => a + r.correctRate, 0) / tAl
 const rateFixed = Math.round((tNormal.reduce((a, r) => a + r.correctRate, 0) / tNormal.length) * 10) / 10;
 console.log(`      班均正确率：修正后 ${rateFixed}% ｜ 修正前 ${rateBefore}%`);
 check(rateFixed > rateBefore, '修正后班均正确率高于修正前');
+
+// ============ 课后任务表扬榜口径（2026-10-08：按分数若有排名，不依赖"具体分数"字面量） ============
+group('课后任务表扬榜口径');
+const pRec = (over: Partial<StudentRecord>): StudentRecord => ({
+  id: 'p', studentName: 'P', lessonNumber: 3, seasons: [], attendance: '准时👍',
+  homeworkStatus: '', listeningStatus: '', listeningScore: 0, scores: {}, customValues: {},
+  totalScore: 0, correctRate: 0, rank: 0, date: '2026-10-03', ...over,
+});
+// 老师实际填法：定性选项（很棒哦👏）或纯分数，**没有**"具体分数"这个字面量
+const praiseRecs = [
+  pRec({ id: 'p1', studentName: '甲', listeningStatus: '很棒哦👏', listeningScore: 9 }),
+  pRec({ id: 'p2', studentName: '乙', listeningStatus: '完成✅', listeningScore: 7 }),
+  pRec({ id: 'p3', studentName: '丙', listeningStatus: '很棒哦👏', listeningScore: 0 }), // 无分 → 不入榜
+  pRec({ id: 'p4', studentName: '丁', listeningStatus: '', listeningScore: 5 }),          // 纯分数、无状态 → 入榜
+  pRec({ id: 'p5', studentName: '戊', attendance: '请假🏫', listeningScore: 8 }),          // 请假 → 不入榜
+];
+const praiseCfg = { questionTypes: [] } as unknown as LessonConfig;
+const praiseOut = generatePraise(3, praiseRecs, praiseCfg, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'listening');
+check(praiseOut.includes('甲') && praiseOut.includes('乙') && praiseOut.includes('丁'), '有课后任务分数（定性选项或纯分数）即入榜');
+check(!praiseOut.includes('丙'), '无分数（仅定性状态）不入榜');
+check(!praiseOut.includes('戊'), '请假学员不入榜');
+check(praiseOut.indexOf('甲') < praiseOut.indexOf('乙') && praiseOut.indexOf('乙') < praiseOut.indexOf('丁'), '按分数降序排列（9>7>5）');
 
 console.log('');
 if (failures.length) {

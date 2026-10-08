@@ -2263,3 +2263,39 @@ html[data-exporting] * { animation: none !important; }
 .report-container .report-chart-container { padding: 4px 6px 8px; }
 /* KPI 卡：数字更突出、说明更轻 */
 .report-container .grid [data-slot="card-content"] { padding-top: 2px !important; }
+
+/* ============ 表扬榜视觉迭代（2026-10-08 · 肉眼可见、模块位置/优先级不变） ============
+   ① 统计瓷贴：错峰上浮入场 + hover 轻抬（只动 transform/opacity，尊重 reduced-motion）
+   ② 表彰输出：暖纸质感（ivory 底 + 细格线），让"要发到班群的文稿"有纸张感
+   ③ 卡片标题：品牌 accent 下划短线，强化区块起点 */
+@keyframes praiseTileIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.praise-stat-tile { animation: praiseTileIn 0.4s var(--ease-out-quart) both; }
+
+.praise-paper {
+  background:
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(15, 23, 42, 0.045) 27px 28px),
+    linear-gradient(180deg, #fffdf8 0%, #fdfaf3 100%);
+  border-color: rgba(180, 140, 60, 0.22);
+  color: #3f3a2e;
+  font-size: 14px;
+  line-height: 28px; /* 与格线对齐，书写感 */
+}
+.praise-paper:focus { border-color: rgb(var(--brand-rgb) / 0.4); }
+
+.praise-card-header { position: relative; }
+.praise-card-header::after {
+  content: '';
+  position: absolute;
+  left: 24px; bottom: 6px;
+  width: 44px; height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb) / 0.15));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .praise-stat-tile { animation: none; }
+  .praise-stat-tile:hover { transform: none; }
+}

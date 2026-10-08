@@ -2242,3 +2242,24 @@ html[data-exporting] * { animation: none !important; }
   [role="tabpanel"] { animation: none !important; }
   [data-slot="button"]:active { transform: none !important; }
 }
+
+
+/* ============ 报告页剩余板块视觉统一（2026-10-08） ============
+   考勤统计 / 出勤统计 / 缺勤名单等卡片此前是"裸 Card"，
+   与已重构的板块（左竖线标题 + 紧凑间距）不一致。统一到同一套语言： */
+.report-container [data-slot="card"] {
+  border-radius: 18px !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04) !important;
+}
+.report-container [data-slot="card-header"] { padding-bottom: 6px !important; }
+.report-container [data-slot="card-title"] {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 图表容器与卡片边缘的对齐 */
+.report-container .report-chart-container { padding: 4px 6px 8px; }
+/* KPI 卡：数字更突出、说明更轻 */
+.report-container .grid [data-slot="card-content"] { padding-top: 2px !important; }

@@ -18,7 +18,7 @@ import { MembersPanel } from '@/components/MembersPanel';
 import { SyncStatusBanner } from '@/components/SyncStatusBanner';
 import { BackendOfflineBanner } from '@/components/BackendOfflineBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { FeedbackLibrary } from '@/components/FeedbackLibrary';
+const FeedbackLibrary = lazy(() => import('@/components/FeedbackLibrary').then(m => ({ default: m.FeedbackLibrary })));
 import { ClassSelector } from '@/components/ClassSelector';
 import { ClassInfoCard } from '@/components/ClassInfoCard';
 import { TransferStudentDialog } from '@/components/TransferStudentDialog';
@@ -26,12 +26,12 @@ import { LessonManager } from '@/components/LessonManager';
 import { StudentTable } from '@/components/StudentTable';
 import { matchOption } from '@/lib/optionMatch';
 import { readTemplateStore } from '@/lib/templateStore';
-import { FeedbackGenerator } from '@/components/FeedbackGenerator';
+const FeedbackGenerator = lazy(() => import('@/components/FeedbackGenerator').then(m => ({ default: m.FeedbackGenerator })));
 import { PraiseGenerator } from '@/components/PraiseGenerator';
 import { PraiseTemplateEditor } from '@/components/PraiseTemplateEditor';
 import { StudentImportModal } from '@/components/StudentImportModal';
 import { GenerateSettingsDialog } from '@/components/GenerateSettingsDialog';
-import { Leaderboard } from '@/components/Leaderboard';
+const Leaderboard = lazy(() => import('@/components/Leaderboard').then(m => ({ default: m.Leaderboard })));
 
 // 以下三个模块依赖 recharts（图表库）/ xlsx（Excel）/ html2canvas（截图），
 // 体积合计约 1MB，且只在对应 Tab 打开或执行导出时才需要。
@@ -988,6 +988,8 @@ function App() {
 
           {/* 表扬榜 Tab：榜单 + 班群表彰生成 + 表彰模板编辑/预览 */}
           <TabsContent value="leaderboard" className="space-y-6">
+
+            <Suspense fallback={<ModuleLoading label="表扬榜" />}>
             <ErrorBoundary label="表扬榜">
             <Leaderboard
               records={currentClass?.records || []}
@@ -1009,10 +1011,14 @@ function App() {
               onSaveLessonConfig={handleSaveLessonConfig}
             />
           </ErrorBoundary>
+          
+            </Suspense>
           </TabsContent>
 
           {/* 反馈生成 Tab */}
           <TabsContent value="feedback">
+
+            <Suspense fallback={<ModuleLoading label="反馈生成" />}>
             <ErrorBoundary label="反馈生成">
             <div className="max-w-6xl mx-auto space-y-5">
             <FeedbackGenerator
@@ -1035,10 +1041,14 @@ function App() {
 
             </div>
           </ErrorBoundary>
+          
+            </Suspense>
           </TabsContent>
 
           {/* 反馈素材 Tab */}
           <TabsContent value="library" className="space-y-6">
+
+            <Suspense fallback={<ModuleLoading label="反馈素材" />}>
             <ErrorBoundary label="反馈素材">
             <FeedbackLibrary
               items={appConfig.savedFeedbacks || []}
@@ -1046,10 +1056,14 @@ function App() {
               currentLesson={currentLessonNumber}
             />
           </ErrorBoundary>
+          
+            </Suspense>
           </TabsContent>
 
           {/* 校内成绩 Tab（懒加载：仅切到本 Tab 时才加载图表与 Excel 依赖） */}
           <TabsContent value="school">
+
+            <Suspense fallback={<ModuleLoading label="校内成绩" />}>
             <ErrorBoundary label="校内成绩">
             <Suspense fallback={<ModuleLoading label="校内成绩" />}>
               <SchoolScorePanel
@@ -1064,6 +1078,8 @@ function App() {
               />
             </Suspense>
           </ErrorBoundary>
+          
+            </Suspense>
           </TabsContent>
 
           {/* 学情报告 Tab（懒加载：仅切到本 Tab 时才加载图表与截图依赖） */}

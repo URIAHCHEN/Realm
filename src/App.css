@@ -16,7 +16,7 @@
 }
 
 body {
-  transition: background 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.45s var(--ease);
 }
 
 /* 毛玻璃背景（跟随主题色） */
@@ -48,7 +48,7 @@ body {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 0.5px solid rgba(0, 0, 0, 0.06);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 5px;
   box-shadow: 
     0 2px 12px rgba(0, 0, 0, 0.05),
@@ -64,8 +64,8 @@ body {
   font-size: 14px;
   font-weight: 500;
   color: #1c1c1e;
-  border-radius: 12px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--r-md);
+  transition: all 0.25s var(--ease);
   position: relative;
   overflow: hidden;
   white-space: nowrap;
@@ -106,10 +106,10 @@ body {
 .ios-input {
   background: rgba(255, 255, 255, 0.8);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   padding: 12px 16px;
   font-size: 16px;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
   backdrop-filter: blur(8px);
 }
 
@@ -122,7 +122,7 @@ body {
 
 /* iOS 18 卡片悬停效果 */
 .ios-card-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s var(--ease);
 }
 
 .ios-card-hover:hover {
@@ -173,10 +173,10 @@ body {
 .ios-select {
   background: rgba(255, 255, 255, 0.8);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   padding: 10px 14px;
   font-size: 15px;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
 }
 
 .ios-select:focus {
@@ -234,11 +234,11 @@ body {
 }
 
 .ios-animate-fade-in {
-  animation: ios-fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: ios-fade-in 0.35s var(--ease) forwards;
 }
 
 .ios-animate-scale-in {
-  animation: ios-scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: ios-scale-in 0.3s var(--ease) forwards;
 }
 
 /* 季节标签 - iOS 风格 */
@@ -252,7 +252,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s var(--ease);
   border: 0.5px solid transparent;
 }
 
@@ -347,7 +347,7 @@ body {
 .theater-stat-card {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px) saturate(180%);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 16px;
   border: 0.5px solid rgba(255, 255, 255, 0.6);
   box-shadow: 
@@ -389,11 +389,11 @@ body {
 .theater-button {
   background: var(--brand);
   color: white;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   font-weight: 600;
   padding: 10px 24px;
   box-shadow: 0 2px 12px rgb(var(--brand-rgb) / 0.3);
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
 }
 
 .theater-button:hover {
@@ -406,7 +406,7 @@ body {
 .theater-tabs {
   background: rgba(30, 58, 95, 0.9);
   backdrop-filter: blur(16px);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 4px;
   border: 0.5px solid rgba(255, 255, 255, 0.1);
 }
@@ -414,8 +414,8 @@ body {
 .theater-tab {
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: var(--r-md);
+  transition: all var(--dur-ui) ease;
 }
 
 .theater-tab:hover {
@@ -456,7 +456,7 @@ body {
       rgba(0, 0, 0, 0.06) 60px
     );
   pointer-events: none;
-  border-radius: 20px;
+  border-radius: var(--r-xl);
 }
 
 .purple-stage {
@@ -709,7 +709,7 @@ body {
 /* 排名列表 */
 .rank-list {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 16px;
   backdrop-filter: blur(8px);
 }
@@ -720,7 +720,7 @@ body {
   gap: 12px;
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   margin-bottom: 8px;
   border: 0.5px solid rgb(var(--brand-rgb) / 0.2);
 }
@@ -783,14 +783,14 @@ body {
 
 .listening-card {
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 20px;
   display: flex;
   align-items: center;
   gap: 12px;
   border: 0.5px solid rgb(var(--brand-rgb) / 0.2);
   position: relative;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
 }
 
 .listening-card:hover {
@@ -868,7 +868,7 @@ body {
 .honor-section {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px);
-  border-radius: 20px;
+  border-radius: var(--r-xl);
   overflow: hidden;
   border: 0.5px solid rgba(255, 255, 255, 0.6);
   box-shadow: 
@@ -914,7 +914,7 @@ body {
   border-radius: 100px;
   font-weight: 600;
   font-size: 16px;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
 }
 
 .honor-badge:hover {
@@ -954,10 +954,10 @@ body {
   gap: 16px;
   padding: 20px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   border: 0.5px solid rgb(var(--brand-rgb) / 0.2);
   position: relative;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
 }
 
 .progress-card:hover {
@@ -1110,7 +1110,7 @@ body {
 
 .report-info-item {
   background: rgb(var(--brand-rgb) / 0.08);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 20px;
   text-align: center;
   border: 0.5px solid rgb(var(--brand-rgb) / 0.15);
@@ -1130,7 +1130,7 @@ body {
 
 .report-chart-container {
   background: rgba(248, 249, 250, 0.8);
-  border-radius: 20px;
+  border-radius: var(--r-xl);
   padding: 24px;
   margin-bottom: 24px;
   border: 0.5px solid rgba(0, 0, 0, 0.04);
@@ -1170,7 +1170,7 @@ body {
   gap: 12px;
   padding: 12px 16px;
   background: white;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   border: 0.5px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 8px;
 }
@@ -1197,7 +1197,7 @@ body {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(20px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.6);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.04),
     0 8px 24px rgba(0, 0, 0, 0.06);
@@ -1218,7 +1218,7 @@ body {
 /* 顶栏内的控件统一走"玻璃胶囊"：更大圆角 + 半透明底 + 内侧高光 */
 .liquid-glass-header button,
 .liquid-glass-header a {
-  border-radius: 999px !important;
+  border-radius: var(--r-full) !important;
   backdrop-filter: blur(20px) saturate(180%);
   border-color: rgba(255, 255, 255, 0.55) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -1228,7 +1228,7 @@ body {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.6);
-  border-radius: 20px;
+  border-radius: var(--r-xl);
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.04),
     0 8px 24px rgba(0, 0, 0, 0.06);
@@ -1237,8 +1237,8 @@ body {
 .liquid-glass-input {
   background: rgba(255, 255, 255, 0.8);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: var(--r-md);
+  transition: all var(--dur-ui) ease;
 }
 
 .liquid-glass-input:focus {
@@ -1250,9 +1250,9 @@ body {
 .liquid-glass-button {
   background: var(--brand);
   color: white;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all var(--dur-ui) ease;
   box-shadow: 0 2px 8px rgb(var(--brand-rgb) / 0.25);
 }
 
@@ -1276,7 +1276,7 @@ body {
 /* 卡片入场动效（页面/标签切换时柔和浮现） */
 [data-slot="tabs-content"],
 [data-radix-tabs-content] {
-  animation: ios-fade-in 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: ios-fade-in 0.32s var(--ease);
 }
 
 
@@ -1595,7 +1595,7 @@ body{
 }
 [data-theme='ink'] .liquid-glass-header h1 { color: #f9fafb !important; }
 [data-theme='ink'] .liquid-glass-header p { color: rgba(249, 250, 251, 0.62) !important; }
-[data-theme='ink'] .liquid-glass-card { border-radius: 12px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.06); }
+[data-theme='ink'] .liquid-glass-card { border-radius: var(--r-md); box-shadow: 0 1px 2px rgb(15 23 42 / 0.06); }
 [data-theme='ink'] .data-table thead th {
   background: #111827 !important;
   color: #f3f4f6 !important;
@@ -1635,14 +1635,14 @@ body{
 /* 糖果：大圆角 + 柔和阴影 + 圆润控件 */
 [data-theme='candy'] .liquid-glass-card { border-radius: 26px; box-shadow: 0 10px 30px -12px rgb(244 114 182 / 0.35); }
 [data-theme='candy'] .liquid-glass-header { border-bottom: none; box-shadow: 0 6px 24px -14px rgb(244 114 182 / 0.5); }
-[data-theme='candy'] .ios-tab-trigger { border-radius: 999px !important; }
+[data-theme='candy'] .ios-tab-trigger { border-radius: var(--r-full) !important; }
 [data-theme='candy'] .ios-tabs-list { border-bottom: none !important; }
 [data-theme='candy'] .ios-tab-trigger[data-state='active'] { background: rgb(var(--brand-rgb) / 0.12); box-shadow: none; }
 [data-theme='candy'] .score-cell .score-input { border-radius: 14px; }
 [data-theme='candy'] .class-stats-row > td, [data-theme='candy'] .class-stats-row > th { border-top: none; }
 
 /* 极简：等宽数字 + 去边框 + 细底线 */
-[data-theme='mono'] .liquid-glass-card { border-radius: 8px; border: none; box-shadow: none; background: #fff; }
+[data-theme='mono'] .liquid-glass-card { border-radius: var(--r-sm); border: none; box-shadow: none; background: #fff; }
 [data-theme='mono'] .liquid-glass-header { border-bottom: 1px solid rgb(15 23 42 / 0.10); }
 [data-theme='mono'] .data-table thead th { background: transparent !important; border-bottom: 1px solid rgb(15 23 42 / 0.12); }
 [data-theme='mono'] .score-cell .score-input { border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -1723,7 +1723,7 @@ body{
 .liquid-glass-input {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
@@ -1740,7 +1740,7 @@ body{
 [data-theme='ink'] .liquid-glass-card {
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   box-shadow: none;
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
@@ -1788,13 +1788,13 @@ body{
 }
 [data-theme='candy'] [data-slot="card"],
 [data-theme='candy'] .liquid-glass-card {
-  border-radius: 28px !important;
+  border-radius: var(--r-2xl) !important;
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 40px -24px rgba(244, 114, 182, 0.55);
 }
 [data-theme='candy'] h1, [data-theme='candy'] h2, [data-theme='candy'] h3 { letter-spacing: -0.01em; }
-[data-theme='candy'] .data-table thead th { border-radius: 12px 12px 0 0; }
-[data-theme='candy'] [data-slot="card"] input, [data-theme='candy'] .liquid-glass-input { border-radius: 999px; }
+[data-theme='candy'] .data-table thead th { border-radius: var(--r-md) 12px 0 0; }
+[data-theme='candy'] [data-slot="card"] input, [data-theme='candy'] .liquid-glass-input { border-radius: var(--r-full); }
 
 /* —— 极简 MONO：全站等宽 + 去卡片 + 细线分区 + 紧凑行 —— */
 [data-theme='mono'] { --glass-bg: transparent; --glass-shadow: none; --radius-glass: 0; }
@@ -1870,7 +1870,7 @@ body{
 [data-theme='ink'] .liquid-glass-card {
   background: #ffffff !important;
   border: 1px solid rgb(15 23 42 / 0.06) !important;
-  border-radius: 12px !important;
+  border-radius: var(--r-md) !important;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.05) !important;
 }
 [data-theme='ink'] [data-slot="card"] *,
@@ -2031,7 +2031,7 @@ body{
   font-size: 15px !important;
   font-weight: 600 !important;
   gap: 8px;
-  border-radius: 12px 12px 0 0 !important;
+  border-radius: var(--r-md) 12px 0 0 !important;
 }
 .ios-tab-trigger svg { width: 19px !important; height: 19px !important; }
 .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -3px 0 0 var(--brand) !important; }
@@ -2045,7 +2045,7 @@ body{
   gap: 4px !important;
   padding: 4px !important;
   background: rgb(15 23 42 / 0.05) !important;
-  border-radius: 12px !important;
+  border-radius: var(--r-md) !important;
   border-bottom: none !important;
   width: fit-content !important;
   margin: 0 auto !important;
@@ -2083,7 +2083,7 @@ html, body { overflow-x: hidden; }
 [data-slot="button"][data-variant="outline"] {
   background: rgba(255, 255, 255, 0.9) !important;
   border: 1px solid rgb(15 23 42 / 0.08) !important;
-  border-radius: 999px !important;
+  border-radius: var(--r-full) !important;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
   transition: background-color .16s ease, box-shadow .16s ease, transform .16s ease, border-color .16s ease;
 }

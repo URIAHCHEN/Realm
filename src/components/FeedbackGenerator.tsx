@@ -231,13 +231,14 @@ export function FeedbackGenerator({
   };
 
   // 群发预览：仅含有记录且非请假/缺勤的学员；内容按当前模板（课次配置/默认/界面修改后的草稿）实时生成
+  // 注意：withMaterials 必须进依赖 —— 否则取消勾选「附参考教辅」后群发预览仍带旧文本（历史缺陷）
   const batchRows = useMemo(() => {
     return students
       .map(name => ({ name, record: recordOf(name) }))
       .filter(x => x.record && !isAbsentRecord(x.record))
       .map(x => ({ name: x.name, text: generateFor(x.name) ?? '' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, lessonConfig]);
+  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, withMaterials, lessonConfig]);
 
   // 自动排除缺勤/请假的学员，并在复制后明确提示，避免漏发
   const absentNames = useMemo(

@@ -906,10 +906,6 @@ function App() {
               <Trophy className="w-5 h-5" />
               表扬榜
             </TabsTrigger>
-            <TabsTrigger value="school" className="ios-tab-trigger">
-              <TrendingUp className="w-5 h-5" />
-              校内成绩
-            </TabsTrigger>
             <TabsTrigger value="report" className="ios-tab-trigger">
               <BarChart3 className="w-5 h-5" />
               学情报告
@@ -917,6 +913,10 @@ function App() {
             <TabsTrigger value="cloud" className="ios-tab-trigger">
               <Cloud className="w-5 h-5" />
               同步中心
+            </TabsTrigger>
+            <TabsTrigger value="school" className="ios-tab-trigger">
+              <TrendingUp className="w-5 h-5" />
+              校内成绩
             </TabsTrigger>
             <TabsTrigger value="library" className="ios-tab-trigger">
               <BookMarked className="w-5 h-5" />

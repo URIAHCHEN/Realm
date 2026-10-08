@@ -307,20 +307,36 @@ const pRec = (over: Partial<StudentRecord>): StudentRecord => ({
   homeworkStatus: '', listeningStatus: '', listeningScore: 0, scores: {}, customValues: {},
   totalScore: 0, correctRate: 0, rank: 0, date: '2026-10-03', ...over,
 });
-// 老师实际填法：定性选项（很棒哦👏）或纯分数，**没有**"具体分数"这个字面量
+// 老师实际填法：定性选项（很棒哦👏）或纯分数，**没有**"具体分数"这个字面量；
+// 也常常只填定性状态不填数值分（真实数据即如此）→ 无数值分时回退到正向状态入榜
 const praiseRecs = [
   pRec({ id: 'p1', studentName: '甲', listeningStatus: '很棒哦👏', listeningScore: 9 }),
   pRec({ id: 'p2', studentName: '乙', listeningStatus: '完成✅', listeningScore: 7 }),
-  pRec({ id: 'p3', studentName: '丙', listeningStatus: '很棒哦👏', listeningScore: 0 }), // 无分 → 不入榜
+  pRec({ id: 'p3', studentName: '丙', listeningStatus: '很棒哦👏', listeningScore: 0 }), // 仅定性状态 → 回退入榜
   pRec({ id: 'p4', studentName: '丁', listeningStatus: '', listeningScore: 5 }),          // 纯分数、无状态 → 入榜
   pRec({ id: 'p5', studentName: '戊', attendance: '请假🏫', listeningScore: 8 }),          // 请假 → 不入榜
+  pRec({ id: 'p6', studentName: '庚', listeningStatus: '', listeningScore: 0 }),          // 什么都没登记 → 不入榜
+  pRec({ id: 'p7', studentName: '辛', listeningStatus: '未完成', listeningScore: 0 }),     // 负面状态 → 不入榜
 ];
 const praiseCfg = { questionTypes: [] } as unknown as LessonConfig;
 const praiseOut = generatePraise(3, praiseRecs, praiseCfg, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'listening');
 check(praiseOut.includes('甲') && praiseOut.includes('乙') && praiseOut.includes('丁'), '有课后任务分数（定性选项或纯分数）即入榜');
-check(!praiseOut.includes('丙'), '无分数（仅定性状态）不入榜');
+check(praiseOut.includes('丙'), '仅定性状态（无数值分）回退入榜');
+check(praiseOut.includes('丙：很棒哦') && !praiseOut.includes('丙：0分'), '回退入榜显示状态文案而非 0分');
 check(!praiseOut.includes('戊'), '请假学员不入榜');
-check(praiseOut.indexOf('甲') < praiseOut.indexOf('乙') && praiseOut.indexOf('乙') < praiseOut.indexOf('丁'), '按分数降序排列（9>7>5）');
+check(!praiseOut.includes('庚'), '未登记课后任务不入榜');
+check(!praiseOut.includes('辛'), '负面状态（未完成）不入榜');
+check(praiseOut.indexOf('甲') < praiseOut.indexOf('乙') && praiseOut.indexOf('乙') < praiseOut.indexOf('丁'), '有分者按分数降序（9>7>5）');
+check(praiseOut.indexOf('丁') < praiseOut.indexOf('丙'), '无分者排在有分者之后');
+// 真实场景复现：全班只有定性状态、无数值分 → 名单不能为空
+const statusOnly = [
+  pRec({ id: 's1', studentName: 'A', listeningStatus: '很棒哦👏', totalScore: 9 }),
+  pRec({ id: 's2', studentName: 'B', listeningStatus: '完成✅', totalScore: 8 }),
+  pRec({ id: 's3', studentName: 'C', listeningStatus: '完成✅', totalScore: 7 }),
+];
+const statusOnlyOut = generatePraise(3, statusOnly, praiseCfg, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'listening');
+check(statusOnlyOut.includes('A') && statusOnlyOut.includes('B') && statusOnlyOut.includes('C'), '全班仅定性状态无数值分 → 名单非空（按总分兜底排序）');
+check(statusOnlyOut.indexOf('A') < statusOnlyOut.indexOf('B') && statusOnlyOut.indexOf('B') < statusOnlyOut.indexOf('C'), '无数值分时按总分降序兜底');
 
 console.log('');
 if (failures.length) {

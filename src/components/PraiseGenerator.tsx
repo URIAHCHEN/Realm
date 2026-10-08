@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Copy, Check, Sparkles, Headphones, ClipboardCheck, CalendarCheck } from 'lucide-react';
+import { Trophy, Copy, Check, Sparkles } from 'lucide-react';
 import { generatePraise, copyToClipboard } from '@/lib/feedbackTemplates';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
 
@@ -25,14 +25,6 @@ const PRAISE_META: Record<PraiseType, { label: string; desc: string }> = {
   listening: { label: '课后任务表扬榜', desc: '课后任务分数前五名' },
   comprehensive: { label: '综合表彰', desc: '风云榜+达人+作业+全勤+稳步前进' },
 };
-
-// 统计瓷贴的视觉语义（顺序与 quickStats 一致）：图标 + accent 色，让四块一眼可分
-const STAT_STYLE = [
-  { icon: Trophy, accent: 'var(--brand)' },        // 可入风云榜
-  { icon: Headphones, accent: '#8b5cf6' },          // 课后任务登记
-  { icon: ClipboardCheck, accent: '#10b981' },      // 作业完成
-  { icon: CalendarCheck, accent: '#f59e0b' },       // 按时出勤
-];
 
 export function PraiseGenerator({
   records,
@@ -122,24 +114,18 @@ export function PraiseGenerator({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 表彰数据概览：图标 + 语义 accent + 玻璃瓷贴，错峰入场（位置/优先级不变） */}
+        {/* 表彰数据概览：单色主题瓷贴（跟随当前版式主色调 --brand，不做多色） */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-          {quickStats.map((s, i) => {
-            const meta = STAT_STYLE[i] || STAT_STYLE[0];
-            const Icon = meta.icon;
-            return (
-              <div
-                key={s.label}
-                className="praise-stat-tile relative overflow-hidden rounded-xl border border-white/60 bg-white/70 backdrop-blur-md px-3.5 py-3 text-center transition-transform duration-200 hover:-translate-y-0.5"
-                style={{ animationDelay: `${i * 60}ms`, boxShadow: 'var(--sh-sm)' }}
-              >
-                <span className="absolute left-0 top-0 h-full w-[3px]" style={{ background: meta.accent }} aria-hidden />
-                <Icon className="w-4 h-4 mx-auto mb-1 opacity-70" style={{ color: meta.accent }} aria-hidden />
-                <p className="text-2xl font-bold tabular-nums leading-none" style={{ color: meta.accent }}>{s.value}</p>
-                <p className="mt-1 text-[11px] text-[color:var(--ink-4)]">{s.label}</p>
-              </div>
-            );
-          })}
+          {quickStats.map((s, i) => (
+            <div
+              key={s.label}
+              className="praise-stat-tile rounded-xl bg-black/[0.05] px-3.5 py-2.5 text-center"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--brand)' }}>{s.value}</p>
+              <p className="text-[11px] text-[color:var(--ink-4)]">{s.label}</p>
+            </div>
+          ))}
         </div>
 
         <div className="flex flex-col md:flex-row gap-2">
@@ -187,7 +173,7 @@ export function PraiseGenerator({
             <Textarea
               value={praise}
               onChange={(e) => setPraise(e.target.value)}
-              className="praise-paper min-h-[300px] text-sm leading-relaxed ios-input"
+              className="min-h-[300px] text-sm leading-relaxed ios-input"
             />
             <Button
               onClick={handleCopy}

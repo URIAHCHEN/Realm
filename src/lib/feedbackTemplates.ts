@@ -545,12 +545,16 @@ export function generatePraise(
   }
   
   if (praiseType === 'listening' || praiseType === 'comprehensive') {
-    // 课后任务排名（口径 2026-10-08 再修）：老师没有"听力打卡/具体分数"这个选项，
-    // 之前 `listeningStatus === '具体分数'` 硬编码必然匹配不到 → 名单恒空。
-    // 现在按"课后任务分数（若有）"排名：有分才入榜，降序取前五。
+    // 课后任务排名（口径 2026-10-08 三修）：老师既没有"听力打卡/具体分数"字面量，
+    // 也常常只填定性状态不填数值分（很棒哦👏 / 完成✅）；前两版要求数值分>0 → 真实数据仍空。
+    // 现在：有数值分按分排；无数值分回退到"课后任务登记为正向状态"的学员，
+    // 同分（含都无分）按总分降序兜底，保证有登记就有名单。
+    const NEG = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+    const scoreOf = (r: StudentRecord) => Number(r.listeningScore) || 0;
+    const positiveStatus = (r: StudentRecord) => !!r.listeningStatus && !NEG.test(String(r.listeningStatus));
     const listeningRanked = records
-      .filter(r => Number(r.listeningScore) > 0 && !isAbsentRecord(r))
-      .sort((a, b) => Number(b.listeningScore) - Number(a.listeningScore))
+      .filter(r => !isAbsentRecord(r) && (scoreOf(r) > 0 || positiveStatus(r)))
+      .sort((a, b) => (scoreOf(b) - scoreOf(a)) || (Number(b.totalScore) - Number(a.totalScore)))
       .slice(0, 5);
     
     if (listeningRanked.length > 0) {
@@ -558,7 +562,8 @@ export function generatePraise(
       const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌'];
       listeningRanked.forEach((r, i) => {
         const nickname = getNickname(r.studentName);
-        praiseContent += `${rankIcons[i]} ${nickname}：${r.listeningScore}分\n`;
+        const tail = scoreOf(r) > 0 ? `${scoreOf(r)}分` : String(r.listeningStatus || '完成');
+        praiseContent += `${rankIcons[i]} ${nickname}：${tail}\n`;
       });
       praiseContent += '\n';
     }

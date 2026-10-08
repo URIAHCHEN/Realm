@@ -2274,17 +2274,6 @@ html[data-exporting] * { animation: none !important; }
 }
 .praise-stat-tile { animation: praiseTileIn 0.4s var(--ease-out-quart) both; }
 
-.praise-paper {
-  background:
-    repeating-linear-gradient(180deg, transparent 0 27px, rgba(15, 23, 42, 0.045) 27px 28px),
-    linear-gradient(180deg, #fffdf8 0%, #fdfaf3 100%);
-  border-color: rgba(180, 140, 60, 0.22);
-  color: #3f3a2e;
-  font-size: 14px;
-  line-height: 28px; /* 与格线对齐，书写感 */
-}
-.praise-paper:focus { border-color: rgb(var(--brand-rgb) / 0.4); }
-
 .praise-card-header { position: relative; }
 .praise-card-header::after {
   content: '';

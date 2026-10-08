@@ -58,14 +58,25 @@ export function PraiseGenerator({
     //  · 作业超赞：关键词匹配（忽略 emoji 与自定义后缀）
     //  · 按时出勤：走 attendanceKind 语义判定，而不是匹配"按时出勤"这个字面量
     const norm = (v?: string | null) => (v || '').replace(/[^\p{Script=Han}A-Za-z0-9]/gu, '');
+    // 负面关键词：用于把"未完成/请假"这类从正向统计里剔除
+    const NEG = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+    // 口径再修（2026-10-08）：老师的 课后任务/作业 用的是**定性选项**（很棒哦👏 / 完成✅），
+    // 既没有数值分、也没有"超赞"这类文案 —— 之前的判定必然恒为 0。
+    // 现在按"是否登记为正向状态"统计，与老师实际填表方式一致。
     const entrance = lessonRecords.filter(r => Number(r.totalScore) > 0).length;
-    const listening = lessonRecords.filter(r => Number(r.listeningScore) > 0).length;
-    const homework = lessonRecords.filter(r => /超赞|超额|特别棒|优秀|加分/.test(norm(r.homeworkStatus))).length;
+    const listening = lessonRecords.filter(r =>
+      Number(r.listeningScore) > 0 || (!!r.listeningStatus && !NEG.test(String(r.listeningStatus)))
+    ).length;
+    const homework = lessonRecords.filter(r => {
+      const v = norm(r.homeworkStatus);
+      if (!v || NEG.test(v)) return false;
+      return /完成|超赞|超额|优秀|很棒|已交|交齐/.test(v);
+    }).length;
     const allPresent = lessonRecords.filter(r => attendanceKind(r.attendance) === 'onTime').length;
     return [
       { label: '可入风云榜', value: entrance },
-      { label: '课后任务有分', value: listening },
-      { label: '作业超赞', value: homework },
+      { label: '课后任务登记', value: listening },
+      { label: '作业完成', value: homework },
       { label: '按时出勤', value: allPresent },
     ];
   }, [lessonRecords]);

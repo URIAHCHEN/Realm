@@ -2193,3 +2193,52 @@ html[data-exporting] [data-slot="card"] {
   height: auto !important;
 }
 html[data-exporting] * { animation: none !important; }
+
+
+/* ==================== 动效细化（2026-10-08，按 animations.dev 规范） ====================
+   原则：① 入场用 ease-out、150–300ms；② 只动 transform/opacity；③ 手快的元素不做动画；
+   ④ 全部尊重 prefers-reduced-motion；⑤ hover 动效只在精确指针设备上启用。 */
+:root {
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --dur-micro: 130ms;
+  --dur-ui: 200ms;
+}
+/* 卡片入场：从 scale(.985) 轻微上浮 —— 不要从 scale(0) 或大位移开始 */
+.reveal {
+  opacity: 0;
+  transform: translateY(8px) scale(0.992);
+  transition: opacity 240ms var(--ease-out-quart), transform 240ms var(--ease-out-quart);
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* 按钮按下回弹（100–150ms 微交互） */
+@media (hover: hover) and (pointer: fine) {
+  [data-slot="button"]:active { transform: scale(0.975); transition-duration: var(--dur-micro); }
+}
+/* 下拉/弹窗：进入 scale(.96)→1（不要 0），并让 transform-origin 落在触发点附近 */
+[data-slot="select-content"], [data-slot="dropdown-menu-content"] {
+  transform-origin: top center;
+}
+[data-slot="select-content"][data-state="open"] { animation: popIn var(--dur-ui) var(--ease-out-expo); }
+@keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(-2px); } to { opacity: 1; transform: none; } }
+/* 弹窗遮罩与内容同一节奏（paired elements rule） */
+[data-slot="dialog-overlay"] { animation: fadeIn var(--dur-ui) ease-out; }
+[data-slot="dialog-content"] { animation: dialogIn 240ms var(--ease-out-expo); }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes dialogIn { from { opacity: 0; transform: scale(0.965) } to { opacity: 1; transform: none } }
+/* Tab 内容切换：轻微淡入，不做位移动画（高频操作） */
+[role="tabpanel"] { animation: fadeIn 180ms ease-out; }
+/* 行 hover：颜色过渡用 ease（非对称曲线更优雅） */
+.data-table tbody tr { transition: background-color var(--dur-micro) ease; }
+/* 表格行「+」与下拉箭头保持轻过渡 */
+.season-tag, [role="combobox"] svg { transition: opacity 150ms ease, background-color 150ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  [data-slot="select-content"][data-state="open"],
+  [data-slot="dialog-content"],
+  [data-slot="dialog-overlay"],
+  [role="tabpanel"] { animation: none !important; }
+  [data-slot="button"]:active { transform: none !important; }
+}

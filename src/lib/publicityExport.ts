@@ -26,10 +26,10 @@ const PALETTES: Record<ExportStyle, Palette> = {
   gradient: {
     pageBg: 'linear-gradient(180deg, #f3f6fa 0%, #eef2f8 100%)',
     cardBg: '#ffffff',
-    bannerBg: 'linear-gradient(135deg, #3b7ff0 0%, #1e5fd6 100%)',
+    bannerBg: 'linear-gradient(135deg, #2f6fe4 0%, #1750c4 100%)',
     bannerText: '#ffffff',
-    headBg: '#2b6be4',
-    headText: '#ffffff',
+    headBg: '#f2f5f9',
+    headText: '#475569',
     text: '#111827',
     muted: '#6b7280',
     accent: '#1e5fd6',
@@ -70,7 +70,6 @@ const PALETTES: Record<ExportStyle, Palette> = {
   },
 };
 
-import { optionToneStyle } from '@/lib/optionTone';
 
 const heat = (pct: number) => pct >= 85 ? '#16a34a' : pct >= 70 ? '#2563eb' : pct >= 55 ? '#d97706' : '#dc2626';
 export { heat };
@@ -131,9 +130,13 @@ function esc(v: unknown): string {
 
 // 统一规格的分数徽章：固定宽度保证所有列整齐
 function scoreBadge(pct: number, score: string | number, color?: string): string {
-  // 语义色 + 极浅同色底（不再用半透明蓝铺满，避免整张图发灰发紫）
+  // 2026-10-08 重做：原来每个分数都套"同色浅底胶囊"，整张图发灰、层次糊。
+  // 现在只给数字着色；仅"达标有问题"的档位（<70%）加极浅底色，让弱项自己跳出来。
   const tone = color || heat(pct);
-  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:52px;padding:3px 8px;border-radius:8px;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px;color:${tone};background:${tone}14;border:1px solid ${tone}26">${score}</span>`;
+  const weak = pct < 70;
+  const bg = weak ? `background:${tone}0f;border:1px solid ${tone}26;border-radius:7px;` : '';
+  const pad = weak ? 'padding:3px 7px;' : '';
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:44px;${pad}${bg}font-variant-numeric:tabular-nums;font-weight:700;font-size:13.5px;color:${tone}">${score}</span>`;
 }
 
 export function buildPublicityHTML(
@@ -196,7 +199,13 @@ export function buildPublicityHTML(
   };
 
   // 统一单元格样式：全居中、固定行高、底部细分隔线；溢出裁剪，保证固定列宽不错位
-  const td = 'padding:10px 8px;border-bottom:1px solid ' + p.rowBorder + ';text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;';
+  const td = 'padding:9px 8px;border-bottom:1px solid ' + p.rowBorder + ';text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;';
+  // 负面状态（未完成/请假/缺勤/迟到…）统一标红加粗 —— 一张表里最该被看见的就是这些
+  const NEG = /未完成|未交|未做|未带|没带|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+  const stateCell = (text: string) => {
+    const bad = NEG.test(text);
+    return `font-size:13px;${bad ? 'color:#dc2626;font-weight:700;' : 'color:' + p.text + ';'}`;
+  };
 
   const rows = sorted.map((r, i) => {
     const ratePct = r.correctRate || 0;
@@ -207,9 +216,9 @@ export function buildPublicityHTML(
       <td style="${td}">${rankBadge(rankVal)}</td>
       <td style="${td}font-weight:600">${esc(getNickname(r.studentName))}</td>
       <td style="${td}white-space:nowrap">${seasonChips(r.seasons || [])}</td>
-      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.attendance)}">${esc(attendanceEmoji(r.attendance))}</td>
-      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.homeworkStatus)}">${esc(homeworkEmoji(r.homeworkStatus))}</td>
-      <td style="${td}white-space:nowrap;font-size:13px;${optionToneStyle(r.listeningStatus === '具体分数' ? '完成' : r.listeningStatus)}">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
+      <td style="${td}white-space:nowrap;${stateCell(r.attendance || '')}">${esc(attendanceEmoji(r.attendance))}</td>
+      <td style="${td}white-space:nowrap;${stateCell(r.homeworkStatus || '')}">${esc(homeworkEmoji(r.homeworkStatus))}</td>
+      <td style="${td}white-space:nowrap;${stateCell(r.listeningStatus === '具体分数' ? '完成' : (r.listeningStatus || ''))}">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
       ${questionTypes.map(qt => {
         const raw = r.scores[qt.id];
         const isOptional = !!qt.excludeFromTotal;
@@ -238,23 +247,24 @@ export function buildPublicityHTML(
   }).join('');
 
   // 底部班级平均分行
-  const avgRow = `<tr style="background:${style === 'dark' ? 'rgba(255,255,255,0.06)' : '#f6f8fb'};font-weight:700">
-      <td style="${td}" colspan="2">班级平均</td>
+  const avgRow = `<tr style="background:${style === 'dark' ? 'rgba(255,255,255,0.06)' : '#f7f9fc'};font-weight:700;border-top:2px solid ${p.rowBorder}">
+      <td style="${td}text-align:left;padding-left:14px" colspan="2">班级平均</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
       <td style="${td}">-</td>
-      ${questionTypes.map(qt => `<td style="${td}">${scoreBadge(100, avgQtScores[qt.id] || 0, '#2563eb')}</td>`).join('')}
+      ${questionTypes.map(qt => `<td style="${td}">${scoreBadge(100, avgQtScores[qt.id] || 0, p.muted)}</td>`).join('')}
       ${customFields.map(cf => `<td style="${td}">${cf.kind === 'number' ? (avgCustomScores[cf.id] || 0) : '-'}</td>`).join('')}
       <td style="${td}"><span style="color:${style === 'dark' ? p.text : '#1e5fd6'}">${avgTotal}</span><span style="font-weight:500;font-size:11px;color:${p.muted}">/${fullScore}</span></td>
       <td style="${td}color:${avgRate < 80 ? '#dc2626' : '#16a34a'}">${avgRate}%</td>
     </tr>`;
 
   // 固定列宽：保证任何数据量下列对齐一致
-  const baseCols = [56, 86, 100, 96, 96, 104];
-  const qtCols = questionTypes.map(() => 84);
+  const baseCols = [52, 90, 96, 92, 92, 96];
+  // 附加项（口语等）比小测题型多一行档位徽章 → 列宽给足，避免挤压换行
+  const qtCols = questionTypes.map(qt => (qt.excludeFromTotal ? 100 : 78));
   const customCols = customFields.map(() => 90);
-  const tailCols = [100, 76];
+  const tailCols = [98, 82];
   const colWidths = [...baseCols, ...qtCols, ...customCols, ...tailCols];
   const colgroup = `<colgroup>${colWidths.map(w => `<col style="width:${w}px" />`).join('')}</colgroup>`;
   // 容器宽度 = 列宽和 + 左右 padding
@@ -278,7 +288,7 @@ export function buildPublicityHTML(
   .banner .meta { display:inline-block; margin-top:10px; padding:3px 12px; border-radius:999px; font-size:11.5px; letter-spacing:0.3px; background:${style === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.22)'}; opacity:0.9; }
   .content { padding: 18px 18px 16px; overflow-x: auto; }
   table { width: ${tableWidth}px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
-  th { background: ${p.headBg}; color: ${p.headText}; padding: 11px 6px; font-weight: 700; white-space: nowrap; font-size: 12.5px; letter-spacing: 0.3px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+  th { background: ${p.headBg}; color: ${p.headText}; padding: 12px 6px; font-weight: 600; white-space: nowrap; font-size: 12.5px; letter-spacing: 0.3px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
   thead th:first-child { border-radius: 10px 0 0 0; }
   thead th:last-child { border-radius: 0 10px 0 0; }
   tbody tr { transition: none; }

@@ -244,7 +244,7 @@ export function StudentTable({
       if (!bulkQtId) { toast.error('请先选择要设置的题型'); return; }
       const raw = parseFloat(bulkValue);
       if (!Number.isFinite(raw)) { toast.error('请输入有效分数'); return; }
-      const qt = lessonConfig.questionTypes.find(q => q.id === bulkQtId);
+      const qt = (lessonConfig.questionTypes || []).find(q => q.id === bulkQtId);
       const cap = qt?.fullScore;
       // 与单格输入一致：钳制到 [0, 题型满分]，避免负数/超满分混入统计
       const val = Math.round(Math.max(0, cap != null ? Math.min(cap, raw) : raw) * 100) / 100;
@@ -300,7 +300,7 @@ export function StudentTable({
   const getWeakPoints = (record: StudentRecord) =>
     computeCategoryWeakPoints(
       record,
-      lessonConfig.questionTypes.filter(qt => !qt.excludeFromTotal),
+      (lessonConfig.questionTypes || []).filter(qt => !qt.excludeFromTotal),
       stats.avgScores
     );
 
@@ -561,7 +561,7 @@ export function StudentTable({
                 </span>
                 <Select value={classAttendanceValue} onValueChange={setClassAttendanceValue}>
                   <SelectTrigger className="w-32 h-8 text-sm bg-white/80"><SelectValue /></SelectTrigger>
-                  <SelectContent>{lessonConfig.attendanceOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  <SelectContent>{attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
                 <Button size="sm" className="h-8 gap-1.5 ios-button" onClick={handleApplyClassAttendance}>
                   <Check className="w-4 h-4" />一键标记全班
@@ -592,13 +592,13 @@ export function StudentTable({
                 {bulkField === 'attendance' && (
                   <Select value={bulkValue} onValueChange={setBulkValue}>
                     <SelectTrigger className="w-32 h-8 text-sm bg-white/80"><SelectValue placeholder="选择状态" /></SelectTrigger>
-                    <SelectContent>{lessonConfig.attendanceOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                    <SelectContent>{attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>
                 )}
                 {bulkField === 'homework' && (
                   <Select value={bulkValue} onValueChange={setBulkValue}>
                     <SelectTrigger className="w-32 h-8 text-sm bg-white/80"><SelectValue placeholder="选择状态" /></SelectTrigger>
-                    <SelectContent>{lessonConfig.homeworkOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                    <SelectContent>{homeworkOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>
                 )}
                 {bulkField === 'listeningStatus' && (
@@ -618,7 +618,7 @@ export function StudentTable({
                   <>
                     <Select value={bulkQtId} onValueChange={setBulkQtId}>
                       <SelectTrigger className="w-36 h-8 text-sm bg-white/80"><SelectValue placeholder="选择题型" /></SelectTrigger>
-                      <SelectContent>{lessonConfig.questionTypes.map(qt => <SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{(lessonConfig.questionTypes || []).map(qt => <SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>)}</SelectContent>
                     </Select>
                     <Input type="number" min={0} placeholder="分数" value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} className="w-24 h-8 text-sm" />
                   </>

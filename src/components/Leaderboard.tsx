@@ -27,6 +27,16 @@ interface LeaderboardProps {
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
 }
 
+/** 剧场空状态（4 处同形、仅图标与文案不同 → 抽组件消除重复 JSX） */
+function TheaterEmptyState({ icon: Icon, text }: { icon: typeof Trophy; text: string }) {
+  return (
+    <div className="empty-state">
+      <Icon className="w-20 h-20 text-yellow-300/50 mb-4" />
+      <p className="text-white/70 text-lg">{text}</p>
+    </div>
+  );
+}
+
 type LeaderboardMode = 'top10' | 'champion' | 'progress' | 'listening' | 'homework';
 type LessonRange = 'current' | 'all' | 'custom';
 type ExportFormat = 'text' | 'csv' | 'json';
@@ -566,10 +576,7 @@ export function Leaderboard({
               )}
             </>
           ) : (
-            <div className="empty-state">
-              <Trophy className="w-20 h-20 text-yellow-300/50 mb-4" />
-              <p className="text-white/70 text-lg">暂无入门测数据</p>
-            </div>
+            <TheaterEmptyState icon={Trophy} text="暂无入门测数据" />
           )}
         </div>
       );
@@ -600,10 +607,7 @@ export function Leaderboard({
               <p className="mt-8 text-white/90 text-xl font-medium">独占鳌头，实至名归！</p>
             </div>
           ) : (
-            <div className="empty-state">
-              <Crown className="w-20 h-20 text-yellow-300/50 mb-4" />
-              <p className="text-white/70 text-lg">暂无数据</p>
-            </div>
+            <TheaterEmptyState icon={Crown} text="暂无数据" />
           )}
         </div>
       );
@@ -645,10 +649,7 @@ export function Leaderboard({
               ))}
             </div>
           ) : (
-            <div className="empty-state">
-              <TrendingUp className="w-20 h-20 text-yellow-300/50 mb-4" />
-              <p className="text-white/70 text-lg">暂无足够数据（至少需要2个课次记录）</p>
-            </div>
+            <TheaterEmptyState icon={TrendingUp} text="暂无足够数据（至少需要2个课次记录）" />
           )}
         </div>
       );
@@ -684,10 +685,7 @@ export function Leaderboard({
               ))}
             </div>
           ) : (
-            <div className="empty-state">
-              <Mic className="w-20 h-20 text-yellow-300/50 mb-4" />
-              <p className="text-white/70 text-lg">暂无课后任务数据</p>
-            </div>
+            <TheaterEmptyState icon={Mic} text="暂无课后任务数据" />
           )}
         </div>
       );

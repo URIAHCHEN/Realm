@@ -63,7 +63,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, } from '@/types';
-import { } from '@/lib/attendance';
+import { isQuizAssessed } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -662,22 +662,41 @@ export interface ClassReportProps {
   classReportRecords: StudentRecord[];
   getNickname: (name: string) => string;
   customFields: import('@/types').CustomField[];
+  lessonConfigs: { [lessonNumber: string]: LessonConfig };
 }
 
-export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields }: ClassReportProps) {
+export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields, lessonConfigs }: ClassReportProps) {
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
+  // 口径：按正确率（各课次满分不同，绝对分不可比）+ 仅统计已评估小测的记录
   const lowScoreStudents = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
-    classReportRecords.filter(r => r.totalScore > 0).forEach(r => {
+    classReportRecords.filter(r => r.totalScore > 0 && isQuizAssessed(r)).forEach(r => {
       const existing = latestByStudent.get(r.studentName);
       if (!existing || r.lessonNumber > existing.lessonNumber) {
         latestByStudent.set(r.studentName, r);
       }
     });
     return Array.from(latestByStudent.values())
-      .sort((a, b) => a.totalScore - b.totalScore)
+      .sort((a, b) => a.correctRate - b.correctRate)
       .slice(0, 5);
   }, [classReportRecords]);
+
+  // 教学建议 3-2-1 的分段/过关/优秀口径：统一用 isQuizAssessed 池 + 各课次 passThreshold
+  // （修复：原 filter(r => !r.attendance || true) 恒真把请假/缺勤 0 分灌进分段；
+  //   过关阈值原硬编码 60，与学情表 passThreshold ?? 80 永远对不上）
+  const adviceMetrics = useMemo(() => {
+    const assessed = classReportRecords.filter(isQuizAssessed);
+    const seg = splitSegments(assessed.map(r => r.correctRate));
+    const denom = Math.max(1, assessed.length);
+    const passCount = assessed.filter(r => r.correctRate >= (lessonConfigs[r.lessonNumber]?.passThreshold ?? 80)).length;
+    const excellentCount = assessed.filter(r => r.correctRate >= 85).length;
+    return {
+      highCount: seg.highCount,
+      lowCount: seg.lowCount,
+      passRate: Math.round((passCount / denom) * 100),
+      excellentRate: Math.round((excellentCount / denom) * 100),
+    };
+  }, [classReportRecords, lessonConfigs]);
 
   if (!classStats || classReportRecords.length === 0) {
     return (
@@ -964,10 +983,10 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             .filter(qt => qt.count > 0)
             .sort((a, b) => a.correctRate - b.correctRate)
             .map(qt => ({ name: qt.name, correctRate: qt.correctRate, count: qt.count })),
-          highCount: splitSegments(classReportRecords.filter(r => !r.attendance || true).map(r => r.correctRate)).highCount,
-          lowCount: splitSegments(classReportRecords.map(r => r.correctRate)).lowCount,
-          passRate: classStats.avgCorrectRate >= 0 ? Math.round((classReportRecords.filter(r => r.correctRate >= 60).length / Math.max(1, classReportRecords.length)) * 100) : 0,
-          excellentRate: Math.round((classReportRecords.filter(r => r.correctRate >= 85).length / Math.max(1, classReportRecords.length)) * 100),
+          highCount: adviceMetrics.highCount,
+          lowCount: adviceMetrics.lowCount,
+          passRate: adviceMetrics.passRate,
+          excellentRate: adviceMetrics.excellentRate,
         }}
       />
 

@@ -151,7 +151,7 @@ export function StudentTable({
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   // 批量操作状态
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
-  const [classAttendanceValue, setClassAttendanceValue] = useState('按时出勤');
+  const [classAttendanceValue, setClassAttendanceValue] = useState('');
   const [bulkField, setBulkField] = useState<'attendance' | 'homework' | 'listeningStatus' | 'listeningScore' | 'score'>('attendance');
   const [bulkValue, setBulkValue] = useState('');
   const [bulkQtId, setBulkQtId] = useState('');
@@ -365,6 +365,12 @@ export function StudentTable({
     () => (lessonConfig.attendanceOptions?.length ? lessonConfig.attendanceOptions : DEFAULT_ATTENDANCE_OPTIONS),
     [lessonConfig.attendanceOptions]
   );
+  // 全班一键考勤初值不硬编码 v1 废弃文案（'按时出勤'）→ 不在当前选项集时兜底重置为首项
+  useEffect(() => {
+    if (attendanceOpts.length && !attendanceOpts.includes(classAttendanceValue)) {
+      setClassAttendanceValue(attendanceOpts[0]);
+    }
+  }, [attendanceOpts, classAttendanceValue]);
   const classPerfOpts = useMemo(
     () => (lessonConfig.classPerformanceOptions?.length ? lessonConfig.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS),
     [lessonConfig.classPerformanceOptions]
@@ -1043,6 +1049,8 @@ export function StudentTable({
                           </TableCell>
                         );
                       })}
+                      {/* 自定义列占位：与表头(717)/行体(928)列序对齐，缺失会导致统计行错位 */}
+                      {visibleCustomFields.map(cf => <TableCell key={cf.id} className="bg-white"></TableCell>)}
                       <TableCell className="text-center text-sm">
                         <span className="inline-flex items-center justify-center px-2 py-1 rounded-md font-bold text-emerald-700 bg-emerald-50/80 border border-emerald-200">
                           {stats.avgScore.toFixed(1)}

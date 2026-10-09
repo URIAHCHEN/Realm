@@ -453,6 +453,7 @@ export function StudentReport({
             classReportRecords={classReportRecords}
             getNickname={getNickname}
             customFields={allCustomFields}
+            lessonConfigs={lessonConfigs}
           />
         </div>
       )}

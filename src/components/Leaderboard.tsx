@@ -12,11 +12,8 @@ import {
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+import { optionToneLevel } from '@/lib/optionTone';
 
-/** 选项文本归一化：去掉 emoji / 空格 / 标点，只留中英文与数字。
-    表扬榜此前用 "=== '超赞完成'" / "=== '具体分数'" 精确比较，
-    而实际选项常带 emoji（如"超赞完成✅"）或自定义文案 → 统计恒为 0。 */
-const normOpt = (s?: string | null) => (s || '').replace(/[^\p{Script=Han}A-Za-z0-9]/gu, '');
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
@@ -259,30 +256,34 @@ export function Leaderboard({
         }
       });
 
-    return Array.from(latestByStudent.values())
+    const top = Array.from(latestByStudent.values())
       .sort((a, b) => b.listeningScore - a.listeningScore)
-      .slice(0, 5)
-      .map((r, i, arr) => {
-        // 并列同名次（同分不再硬排先后）
-        const rank = i > 0 && arr[i - 1].listeningScore === r.listeningScore ? 0 : i + 1;
-        return {
-          id: r.id,
-          studentName: r.studentName,
-          nickname: getNickname(r.studentName),
-          shortNickname: generateShortNickname(getNickname(r.studentName)),
-          totalScore: r.listeningScore,
-          correctRate: r.correctRate,
-          rank: rank || (i > 0 ? 0 : 1),
-          listeningScore: r.listeningScore,
-        };
-      });
+      .slice(0, 5);
+    // 并列同名次：同分复用前一名次（修复原 `rank || (i>0?0:1)` 并列恒 0 并写进导出的 bug）
+    let lastScore: number | null = null;
+    let lastRank = 0;
+    return top.map((r, i) => {
+      const rank = lastScore !== null && r.listeningScore === lastScore ? lastRank : i + 1;
+      lastScore = r.listeningScore;
+      lastRank = rank;
+      return {
+        id: r.id,
+        studentName: r.studentName,
+        nickname: getNickname(r.studentName),
+        shortNickname: generateShortNickname(getNickname(r.studentName)),
+        totalScore: r.listeningScore,
+        correctRate: r.correctRate,
+        rank,
+        listeningScore: r.listeningScore,
+      };
+    });
   }, [rangeRecords, getNickname]);
 
   // 作业优秀学生
   const homeworkExcellent = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => !isAbsentRecord(r) && /超赞|超额|特别棒|优秀|加分|超额完成/.test(normOpt(r.homeworkStatus)))
+      .filter(r => !isAbsentRecord(r) && optionToneLevel(r.homeworkStatus) === 'good')
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {

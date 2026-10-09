@@ -452,19 +452,19 @@ export function SchoolScorePanel({
                     <div className="text-sm text-rose-700">导入失败</div>
                   </div>
                 </div>
-                {importResult.unmatched.length > 0 && (
+                {(importResult.unmatched || []).length > 0 && (
                   <div className="bg-amber-50 p-4 rounded-xl">
                     <div className="flex items-center gap-2 text-amber-700 font-medium mb-2">
                       <AlertCircle className="w-4 h-4" />
-                      未匹配学生（{importResult.unmatched.length}人）
+                      未匹配学生（{(importResult.unmatched || []).length}人）
                     </div>
                     <div className="text-sm text-amber-800">
-                      {importResult.unmatched.join('、')}
+                      {(importResult.unmatched || []).join('、')}
                     </div>
                     <p className="text-xs text-amber-600 mt-2">请检查 Excel 中的学生姓名是否与班级名单一致。</p>
                   </div>
                 )}
-                {importResult.errors.length > 0 && (
+                {(importResult.errors || []).length > 0 && (
                   <div className="bg-black/[0.05] p-4 rounded-xl max-h-40 overflow-y-auto">
                     <div className="text-sm font-medium mb-2">错误信息：</div>
                     {importResult.errors.map((err, i) => (
@@ -1046,7 +1046,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
               <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
                 <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级排名【前】</td>
                 {lineData.map((d, i) => (
-                  <td key={i} className="px-3 py-2 text-center font-semibold">{d.rank > 0 ? d.rank.toFixed(2) : '-'}</td>
+                  <td key={i} className="px-3 py-2 text-center font-semibold">{d.rank > 0 ? Math.round(d.rank) : '-'}</td>
                 ))}
               </tr>
             </tbody>

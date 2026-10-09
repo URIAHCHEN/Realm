@@ -73,7 +73,7 @@ export const DEFAULT_CLASS_PERFORMANCE_OPTIONS = [
 
 // 全局默认选项（v3：带表情符号的正式选项集；v3 起同时按"内容"兜底迁移旧 v1 选项）
 export const DEFAULT_OPTIONS_VERSION = 3;
-export const DEFAULT_ATTENDANCE_OPTIONS = ['迟到❗', '准时👍', '请假🏫', '调课👩‍'];
+export const DEFAULT_ATTENDANCE_OPTIONS = ['迟到❗', '准时👍', '请假🏫', '调课👩'];
 export const DEFAULT_HOMEWORK_OPTIONS = ['完成✅', '未做完❎', '未完成❌', '补发⚠️', '按要求❗', '错题本欠缺✍️', '笔记不过关📒'];
 export const DEFAULT_LISTENING_OPTIONS = ['很棒哦👏', '未完成⭕'];
 
@@ -148,6 +148,8 @@ const withLessonDefaults = (cfg: LessonConfig, appConfig: AppConfig): LessonConf
     : [...DEFAULT_CLASS_PERFORMANCE_OPTIONS],
   feedbackTemplate: cfg.feedbackTemplate || appConfig.defaultFeedbackTemplate,
   praiseTemplate: cfg.praiseTemplate || appConfig.defaultPraiseTemplate,
+  // 题型兜底：云端/旧备份缺 questionTypes 时，配置面板/统计/表格会裸读 .map 崩溃
+  questionTypes: cfg.questionTypes || [],
 });
 
 // 旧版本存储的全局默认选项 → 迁移到 v3 正式选项集（带表情符号）。

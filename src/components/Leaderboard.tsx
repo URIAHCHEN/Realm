@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { Fragment, useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
 
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import fengyunPoster from '@/assets/fengyun-poster.webp';
 import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
 
@@ -37,7 +38,7 @@ function TheaterEmptyState({ icon: Icon, text }: { icon: typeof Trophy; text: st
   );
 }
 
-type LeaderboardMode = 'top10' | 'champion' | 'progress' | 'listening' | 'homework';
+type LeaderboardMode = 'top10' | 'fengyun' | 'champion' | 'progress' | 'listening' | 'homework';
 type LessonRange = 'current' | 'all' | 'custom';
 type ExportFormat = 'text' | 'csv' | 'json';
 
@@ -312,6 +313,16 @@ export function Leaderboard({
       } else {
         text += '暂无数据\n';
       }
+    } else if (mode === 'fengyun') {
+      text += ' 风云榜\n\n';
+      if (entranceRankings.length > 0) {
+        entranceRankings.slice(0, 3).forEach((r) => {
+          const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `第${r.rank}名`;
+          text += `${medal} ${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
+        });
+      } else {
+        text += '暂无数据\n';
+      }
     } else if (mode === 'champion') {
       text += ' 入门测状元\n\n';
       if (champion) {
@@ -380,7 +391,12 @@ export function Leaderboard({
       filename = `表扬榜_${rangeText}.txt`;
       mimeType = 'text/plain;charset=utf-8';
     } else if (format === 'csv') {
-      if (mode === 'top10' || mode === 'champion') {
+      if (mode === 'fengyun') {
+        content = '排名,姓名,昵称,总分,正确率\n';
+        entranceRankings.slice(0, 3).forEach(r => {
+          content += [r.rank, r.studentName, r.nickname, r.totalScore, `${r.correctRate}%`].map(csvCell).join(',') + '\n';
+        });
+      } else if (mode === 'top10' || mode === 'champion') {
         content = '排名,姓名,昵称,总分,正确率\n';
         const rows = mode === 'champion' && champion ? [champion] : entranceRankings;
         rows.forEach(r => {
@@ -410,6 +426,7 @@ export function Leaderboard({
     } else if (format === 'json') {
       let data: unknown;
       if (mode === 'top10') data = { type: 'top10', range: rangeText, rankings: entranceRankings };
+      else if (mode === 'fengyun') data = { type: 'fengyun', range: rangeText, rankings: entranceRankings.slice(0, 3) };
       else if (mode === 'champion') data = { type: 'champion', range: rangeText, champion };
       else if (mode === 'progress') data = { type: 'progress', range: rangeText, stars: progressStars };
       else if (mode === 'listening') data = { type: 'listening', range: rangeText, rankings: listeningRankings };
@@ -449,7 +466,7 @@ export function Leaderboard({
         ignoreElements: (el) => el.nodeType === 1 && (el as HTMLElement).hasAttribute('data-h2c-ignore')
       });
       const link = document.createElement('a');
-      const modeLabel = mode === 'top10' ? '前十名' : mode === 'champion' ? '状元' : mode === 'progress' ? '进步之星' : mode === 'listening' ? '课后任务达人' : '作业表彰';
+      const modeLabel = mode === 'top10' ? '前十名' : mode === 'fengyun' ? '风云榜' : mode === 'champion' ? '状元' : mode === 'progress' ? '进步之星' : mode === 'listening' ? '课后任务达人' : '作业表彰';
       link.download = sanitizeFileName(`表扬榜_${modeLabel}_${rangeText}.png`);
       link.href = canvas.toDataURL('image/png');
       link.click();
@@ -466,6 +483,35 @@ export function Leaderboard({
 
   // 渲染主内容
   const renderContent = () => {
+    // 风云榜：按用户指定方案 —— 模板整页压缩成一张底图内置，仅 3 个名字槽动态替换为当日小测前 3 名。
+    // 底图由模板 1:1 重建（奖杯插画 / 标题 / 三枚奖牌 / congratulations / 人偶全部保留），
+    // 名字槽坐标与模板占位文本框一致（895.4,476.3 / 598.9 / 711.3 @2000×1125）。
+    if (mode === 'fengyun') {
+      const top3 = entranceRankings.slice(0, 3);
+      return (
+        <div className="fengyun-wrap">
+          <div className="fengyun-poster">
+            <img src={fengyunPoster} alt="本次测试风云榜" className="fengyun-bg" />
+            {top3.map((r, i) => (
+              <Fragment key={r.id}>
+                <span className={`fengyun-medal fengyun-medal-${i + 1}`}>
+                  {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `第${r.rank}名`}
+                </span>
+                <span className={`fengyun-name fengyun-slot-${i + 1}`}>{r.nickname}</span>
+              </Fragment>
+            ))}
+          </div>
+          <p className="fengyun-hint">
+            {top3.length === 0
+              ? '当日小测暂无到课学员数据'
+              : top3.length < 3
+                ? `当日到课 ${top3.length} 人，空位留白`
+                : '名单随当日小测成绩自动更新 · 同分并列' }
+          </p>
+        </div>
+      );
+    }
+
     if (mode === 'top10') {
       return (
         <div className="theater-stage">
@@ -723,6 +769,7 @@ export function Leaderboard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="top10">🏆 前十名</SelectItem>
+              <SelectItem value="fengyun">🏅 风云榜</SelectItem>
               <SelectItem value="champion">👑 状元</SelectItem>
               <SelectItem value="progress">📈 进步之星</SelectItem>
               <SelectItem value="listening">🎙️ 课后任务达人</SelectItem>

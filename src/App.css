@@ -2432,22 +2432,21 @@ html[data-exporting] * { animation: none !important; }
 .dark .text-\[\#8e8e93\] { color: #9aa4b2; }
 .dark :is(.border-\[\#e5e5ea\], .border-\[\#d1d1d6\]) { border-color: rgba(255, 255, 255, 0.14); }
 
-/* ==================== 负面状态整格高亮（2026-10-09 · 用户要求）====================
-   学情表里「未完成 / 缺勤 / 迟到」等负面字眼所在格子整体高亮：同色系浅底 + 同色系加深文字，
-   与学情公示导出的 stateCell 保持同一视觉口径（浅底 tint + 深一档文字）。
-   实现用 :has() 精准命中那一个单元格，不动行内其它格子；浏览器不支持 :has() 时自然降级为现状。 */
-.data-table td:has(.opt-negative) { background: #fdecec !important; }
-.dark .data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.14) !important; }
-/* 高亮格里的胶囊改为白底 + 加深描边/文字，避免"红上叠红" */
+/* ==================== 负面状态整格高亮 · v2 降噪（2026-10-09 用户反馈"红方格突兀"后改版）====================
+   上一版整格铺粉底 + 红边胶囊，实际观感是"红色方格"，太吵。
+   本版：① 单元格只留极浅水洗底（几乎无色温）② 重点全给值本身——柔和红胶囊、去掉硬边框、
+   文字加深一档；与学情公示导出的 stateCell 同口径。:has() 不支持时自然降级。 */
+.data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.045) !important; }
+.dark .data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.09) !important; }
 .data-table td:has(.opt-negative) .opt-negative {
-  background: #fff !important;
-  border-color: #f0a8b6 !important;
+  background: rgba(244, 63, 94, 0.10) !important;
+  border-color: rgba(244, 63, 94, 0.26) !important;
   color: #b91c1c !important;
   font-weight: 700 !important;
 }
 .dark .data-table td:has(.opt-negative) .opt-negative {
-  background: rgba(255, 255, 255, 0.10) !important;
-  border-color: rgba(244, 63, 94, 0.45) !important;
+  background: rgba(244, 63, 94, 0.18) !important;
+  border-color: rgba(244, 63, 94, 0.40) !important;
   color: #fda4af !important;
 }
 
@@ -2692,3 +2691,38 @@ html[data-exporting] * { animation: none !important; }
 }
 /* 导出态：被忽略的控制栏连占位一起移除（避免导出图底部留下一条空白） */
 .praise-root.praise-exporting [data-h2c-ignore] { display: none !important; }
+
+/* ==================== 风云榜（2026-10-09 · 用户指定方案：模板整图内置 + 人名动态）====================
+   底图为模板 1:1 重建（2000×1125，WebP 86KB，含奖杯插画/标题/奖牌/congratulations/人偶），
+   名字槽按模板占位文本框坐标换算成百分比定位；字号用容器查询单位随宽度等比缩放，
+   并给出 25px 基准回退（等价于桌面默认 ~1000px 宽时的正确字号）。 */
+.fengyun-wrap { display: flex; flex-direction: column; align-items: center; }
+.praise-root .fengyun-poster {
+  position: relative; width: 100%; max-width: 1280px;
+  container-type: inline-size;
+  background: #fff; border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--pr-border);
+  box-shadow: var(--pr-shadow);
+}
+.praise-root .fengyun-bg { display: block; width: 100%; height: auto; }
+.praise-root .fengyun-name {
+  position: absolute; white-space: nowrap; overflow: visible;
+  font-size: 25px; font-size: 2.5cqw;   /* 模板 24pt @150dpi = 50px/2000 宽 */
+  font-weight: 700; color: #1a1a1a; line-height: 1.2;
+  padding-top: 0.375cqw; padding-left: 0.75cqw;  /* 文本框默认内边距 0.05in / 0.1in */
+}
+.praise-root .fengyun-slot-1 { left: 44.77%; top: 42.34%; width: 9.95%; height: 6.67%; }
+.praise-root .fengyun-slot-2 { left: 44.77%; top: 53.24%; width: 8.65%; height: 6.67%; }
+.praise-root .fengyun-slot-3 { left: 44.77%; top: 63.23%; width: 8.65%; height: 6.67%; }
+/* 奖牌也是动态槽：同分并列 → 同牌（三人并列第一 = 三枚金牌） */
+.praise-root .fengyun-medal {
+  position: absolute; white-space: nowrap;
+  font-size: 41.5px; font-size: 4.15cqw;   /* 模板 40pt @150dpi ≈ 83px/2000 宽 */
+  line-height: 1.2;
+  padding-top: 0.3cqw; padding-left: 0.7cqw;
+}
+.praise-root .fengyun-medal-1 { left: 35.98%; top: 39.68%; }
+.praise-root .fengyun-medal-2 { left: 35.98%; top: 50.52%; }
+.praise-root .fengyun-medal-3 { left: 35.98%; top: 60.51%; }
+.praise-root .fengyun-hint { margin-top: 12px; font-size: 12.5px; color: var(--pr-muted); }
+/* 导出态下底图本身就是白纸：环绕留白已由 .praise-exporting 提供 */

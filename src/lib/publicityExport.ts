@@ -213,16 +213,18 @@ export function buildPublicityHTML(
   // 2026-10-09 按用户要求升级：从"只标红文字"改为"整格高亮突出"，底色取同色系的浅tint、文字再加深一档
   const NEG = /未完成|未交|未做|未带|没带|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
   const isDarkStyle = style === 'dark';
+  // v2 降噪（2026-10-09 用户反馈"红方格突兀"）：底色只留极浅水洗（几乎无色温），
+  // 重点靠文字本身（加深一档 + 加粗）；与表内高亮同一口径。
   const stateCell = (text: string): { css: string; cellBg: string } => {
     if (/请假|调课/.test(text)) {
       return isDarkStyle
-        ? { css: 'font-size:13px;color:#93c5fd;font-weight:700;', cellBg: 'rgba(59,130,246,0.16)' }
-        : { css: 'font-size:13px;color:#1d4ed8;font-weight:700;', cellBg: '#e8f0fe' };
+        ? { css: 'font-size:13px;color:#93c5fd;font-weight:700;', cellBg: 'rgba(59,130,246,0.09)' }
+        : { css: 'font-size:13px;color:#1d4ed8;font-weight:700;', cellBg: 'rgba(59,130,246,0.055)' };
     }
     if (NEG.test(text)) {
       return isDarkStyle
-        ? { css: 'font-size:13px;color:#fda4af;font-weight:800;', cellBg: 'rgba(244,63,94,0.16)' }
-        : { css: 'font-size:13px;color:#b91c1c;font-weight:800;', cellBg: '#fdecec' };
+        ? { css: 'font-size:13px;color:#fda4af;font-weight:800;', cellBg: 'rgba(244,63,94,0.10)' }
+        : { css: 'font-size:13px;color:#b91c1c;font-weight:800;', cellBg: 'rgba(244,63,94,0.055)' };
     }
     return { css: `font-size:13px;color:${p.text};`, cellBg: '' };
   };

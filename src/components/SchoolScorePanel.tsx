@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceDot } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceDot, ReferenceLine } from 'recharts';
+import { TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES } from '@/lib/chartTheme';
 import {
   Plus, Trash2, TrendingUp, Award, Upload, FileSpreadsheet,
   ClipboardList, Users, Target, CalendarDays, Medal, ArrowRight,
@@ -937,18 +938,21 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
         <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={lineData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-              <YAxis stroke="#64748b" fontSize={12} domain={[0, 100]} unit="%" />
+              <CartesianGrid {...GRID} />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} unit="%" tick={AXIS_TICK_SM} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }}
+                contentStyle={TOOLTIP_CONTENT}
+                labelStyle={TOOLTIP_LABEL}
                 formatter={(v: number, k: string) => [`${v}%`, k]}
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ''}
               />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Line type="monotone" dataKey="classMax" name="班级最高" stroke="#a855f7" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="classAvg" name="班级平均" stroke="#94a3b8" strokeWidth={2} strokeDasharray="3 3" dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="studentRate" name="学员正确率" stroke="#2563eb" strokeWidth={3} dot={{ r: 5, fill: '#2563eb' }} activeDot={{ r: 7 }} />
+              <Legend wrapperStyle={LEGEND_STYLE} />
+              <Line type="monotone" dataKey="classMax" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
+              <Line type="monotone" dataKey="classAvg" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="studentRate" name="学员正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ r: 5, fill: CHART_SERIES[0] }} activeDot={{ r: 7 }} />
+              <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />
+              <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopLeft' }} />
               {improvements.map((imp, i) => {
                 const idx = lineData.findIndex(d => d.name === imp.examName);
                 if (idx === -1) return null;
@@ -983,7 +987,7 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
                   {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Legend wrapperStyle={LEGEND_STYLE_SM} />
               </PieChart>
             </ResponsiveContainer>
           </div>

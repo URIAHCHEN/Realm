@@ -18,6 +18,10 @@ import { ReportCustomFields } from '@/components/ReportCustomFields';
 import { COLORS } from '@/components/report/palette';
 import { TeachingAdvice } from '@/components/report/TeachingAdvice';
 import { splitSegments, type StudentReportStats, type ClassReportStats } from '@/lib/reportStats';
+import {
+  TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
+  CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
+} from '@/lib/chartTheme';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { 
@@ -309,23 +313,24 @@ export function PersonalReportView({
         <div className="report-chart-container" style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={comboTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid {...GRID} />
               <XAxis dataKey="lesson" stroke="#6b7280" />
               <YAxis domain={[0, 100]} stroke="#6b7280" />
               <Tooltip
-                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                contentStyle={TOOLTIP_CONTENT}
+                labelStyle={TOOLTIP_LABEL}
                 formatter={(v: number, n: string) => [n === '班级排名' ? v : `${v}%`, n]}
               />
               <Legend />
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
-              <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '目标 80%', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+              <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
               {trendType === 'bar' && <Bar dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
-              {trendType === 'line' && <Line type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }} />}
-              {trendType === 'area' && <Area type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="#3b82f622" />}
+              {trendType === 'line' && <Line type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
+              {trendType === 'area' && <Area type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
               {/* 班级对比线：定位"自己在班里什么位置" */}
-              <Line type="monotone" dataKey="班级平均" name="班级平均" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="班级最高" name="班级最高" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <Line type="monotone" dataKey="班级平均" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -345,16 +350,16 @@ export function PersonalReportView({
                   <stop offset="100%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.35} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="2 6" stroke="#eef1f5" vertical={false} />
-              <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-              <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />}
+              <CartesianGrid {...GRID} />
+              <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+              <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
+              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />}
               <Tooltip
-                contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px', boxShadow: '0 12px 30px -18px rgba(15,23,42,.4)' }}
-                labelStyle={{ fontWeight: 600 }}
+                contentStyle={TOOLTIP_CONTENT}
+                labelStyle={TOOLTIP_LABEL}
               />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '目标 80%', fontSize: 11, fill: '#b45309', position: 'insideTopRight' }} />}
+              <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
+              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
               <Bar yAxisId="l" dataKey="score" name="得分" fill="url(#scoreFill)" radius={[6, 6, 0, 0]} maxBarSize={38}>
                 <LabelList dataKey="score" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} />
               </Bar>
@@ -388,8 +393,8 @@ export function PersonalReportView({
                   </PieChart>
                 ) : distType === 'bar' ? (
                   <BarChart data={pieData} layout="vertical" margin={{ top: 6, right: 56, left: 8, bottom: 6 }} barCategoryGap="22%">
-                    <CartesianGrid strokeDasharray="2 6" stroke="#eef1f5" horizontal={false} />
-                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                    <CartesianGrid {...GRID} vertical />
+                    <XAxis type="number" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
                     <YAxis type="category" dataKey="name" width={76} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#475569' }} />
                     <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px' }} />
                     <Bar dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
@@ -798,7 +803,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           <div className="report-chart-container" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={classStats.distribution}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid {...GRID} />
                 <XAxis dataKey="label" stroke="#6b7280" />
                 <YAxis stroke="#6b7280" />
                 <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
@@ -854,20 +859,27 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           <h2 className="report-section-title">
             <Activity className="w-5 h-5 inline mr-2" />
             各次课正确率对比
-            <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=班级平均，线=最高/最低，红线=目标 80%）</span>
+            <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=班级平均并标数值，线=最高/最低，黄虚线=达标 80%，绿虚线=优秀 85%）</span>
           </h2>
-          <div className="report-chart-container" style={{ height: 300 }}>
+          <div className="report-chart-container" role="img" aria-label="各次课班级正确率对比：柱为班级平均，折线为班级最高与最低，含 80% 达标线与 85% 优秀线" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={classComboTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="lesson" stroke="#6b7280" />
-                <YAxis domain={[0, 100]} stroke="#6b7280" />
-                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} formatter={(v: number, n: string) => [`${v}`, n]} />
-                <Legend />
-                <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '目标 80%', position: 'right', fontSize: 11, fill: '#ef4444' }} />
-                <Bar dataKey="班级平均" name="班级平均正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={26} />
-                <Line type="monotone" dataKey="班级最高" name="班级最高" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="班级最低" name="班级最低" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <ComposedChart data={classComboTrend} margin={{ top: 18, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid {...GRID} />
+                <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+                <YAxis domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+                <Tooltip
+                  contentStyle={TOOLTIP_CONTENT}
+                  labelStyle={TOOLTIP_LABEL}
+                  formatter={(v: number, n: string) => [`${v}%`, n]}
+                />
+                <Legend wrapperStyle={LEGEND_STYLE} />
+                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
+                <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_GOOD }} />
+                <Bar dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={26}>
+                  <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />
+                </Bar>
+                <Line type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

@@ -30,7 +30,12 @@ import {
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 
 import { attendanceRateOf, isQuizAssessed } from '@/lib/attendance';
+import {
+  AXIS_TICK, AXIS_TICK_SM, AXIS_TICK_XS, GRID, TOOLTIP_CONTENT, TOOLTIP_LABEL,
+  LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
+} from '@/lib/chartTheme';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { buildTrendExportHTML } from '@/lib/trendExport';
 import { studentLessonTrend } from '@/lib/lessonStats';
 
 interface StudentAnalysisProps {
@@ -49,15 +54,9 @@ interface StudentAnalysisProps {
   getLessonConfig: (classId: string, lessonNumber: number) => LessonConfig;
 }
 
-const CHART_COLORS = ['#0a84ff', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
-
-const tooltipStyle = {
-  backgroundColor: 'rgba(255,255,255,0.96)',
-  border: '1px solid #e2e8f0',
-  borderRadius: '12px',
-  boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-  fontSize: 13,
-};
+// 图表统一主题（lib/chartTheme）：字体/刻度/网格/tooltip/图例/语义色全站一致
+const CHART_COLORS = CHART_SERIES;
+const tooltipStyle = TOOLTIP_CONTENT;
 
 // 选项着色：按语义关键词判断，不再硬编码旧版选项文本
 // （老师改选项文案、或导入的是新选项时，颜色依然正确）
@@ -204,7 +203,8 @@ export function StudentAnalysis({
     const avgRate = Math.round(scorePool.reduce((a, r) => a + r.correctRate, 0) / scorePool.length * 10) / 10;
     const latest = records[records.length - 1];
     const prev = records[records.length - 2];
-    const trend = prev ? latest.totalScore - prev.totalScore : 0;
+    // 保留一位小数：浮点减法会产生 1.3000000000000007 这类噪声，直接显示很扎眼
+    const trend = prev ? Math.round((latest.totalScore - prev.totalScore) * 10) / 10 : 0;
     const fullScore = getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber));
     const attendanceRate = attendanceRateOf(records.map(r => r.attendance));
     return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
@@ -266,22 +266,45 @@ export function StudentAnalysis({
   const [exportingTrend, setExportingTrend] = useState(false);
 
   // 导出「入门测趋势」为 PNG，文件名带学生姓名，便于直接发给家长
+  // 入门测趋势导出：走独立导出模板（离屏渲染），不再直接截界面卡片
+  //  —— 原实现会把「导出图片」按钮截进图里，且 truncate 副标题在 html2canvas 下字形被裁（字体异常）
   const handleExportTrend = async () => {
-    const node = trendCardRef.current;
-    if (!node || exportingTrend) return;
+    if (exportingTrend) return;
     setExportingTrend(true);
+    let container: HTMLDivElement | null = null;
     try {
+      const latest = [...records].reverse().find(r => isQuizAssessed(r)) || records[records.length - 1];
+      const fullScore = latest ? getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber)) : 0;
+      container = document.createElement('div');
+      container.style.cssText = 'position:fixed;left:-20000px;top:0;width:1200px;z-index:-1;pointer-events:none;';
+      container.innerHTML = buildTrendExportHTML({
+        nickname,
+        className: currentClassData.className,
+        fullScore,
+        rows: entranceTrend.map(t => ({
+          lesson: t.lesson, rate: t.学生正确率, classMax: t.班级最高, classAvg: t.班级平均,
+          rank: t.班级排名, size: t.班级人数,
+        })),
+        generatedAt: new Date(),
+      });
+      document.body.appendChild(container);
+      // 等 DOM/字体就绪（离屏节点参与布局后再截图，避免空图）
+      await new Promise(r => setTimeout(r, 320));
+      const target = container.firstElementChild as HTMLElement;
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
-      const url = canvas.toDataURL('image/png');
+      const canvas = await html2canvas(target, {
+        backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false,
+        width: target.offsetWidth, height: target.offsetHeight,
+      });
       const a = document.createElement('a');
-      a.href = url;
+      a.href = canvas.toDataURL('image/png');
       a.download = `${nickname}_入门测趋势.png`;
       a.click();
       toast.success(`已导出 ${nickname}_入门测趋势.png`);
     } catch (e) {
       toast.error('导出失败：' + (e instanceof Error ? e.message : String(e)));
     } finally {
+      container?.remove();
       setExportingTrend(false);
     }
   };
@@ -425,15 +448,15 @@ export function StudentAnalysis({
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendChartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <YAxis yAxisId="score" tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <CartesianGrid {...GRID} />
+                    <XAxis dataKey="name" tick={AXIS_TICK} />
+                    <YAxis yAxisId="score" tick={AXIS_TICK} />
+                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} unit="%" tick={AXIS_TICK} />
                     <Tooltip
-                      contentStyle={tooltipStyle}
+                      contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL}
                       formatter={(value, name) => (name === '正确率' ? [`${value}%`, '正确率'] : [`${value} 分`, '总分'])}
                     />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Legend wrapperStyle={LEGEND_STYLE} />
                     <ReferenceLine yAxisId="rate" y={85} stroke="#10b981" strokeDasharray="4 4"
                       label={{ value: '优秀线 85%', fontSize: 11, fill: '#10b981', position: 'insideTopRight' }} />
                     <ReferenceLine yAxisId="rate" y={60} stroke="#f59e0b" strokeDasharray="4 4"
@@ -443,7 +466,7 @@ export function StudentAnalysis({
                         label={{ value: `本生均值 ${rateAvg}%`, fontSize: 11, fill: '#64748b', position: 'insideLeft' }} />
                     )}
                     <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
-                    <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
+                    <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke={CHART_GOOD} strokeWidth={2.5} dot={{ r: 4, fill: CHART_GOOD }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -458,10 +481,10 @@ export function StudentAnalysis({
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
                       <PolarGrid stroke="#e2e8f0" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} angle={30} />
+                      <PolarAngleAxis dataKey="subject" tick={AXIS_TICK_SM} />
+                      <PolarRadiusAxis domain={[0, 100]} tick={AXIS_TICK_XS} angle={30} />
                       <Radar name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.9)" fill="rgb(var(--brand-rgb) / 0.25)" strokeWidth={2} />
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
@@ -499,7 +522,7 @@ export function StudentAnalysis({
                     <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 whitespace-nowrap">
                       <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />入门测趋势
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">
+                    <p className="text-xs text-slate-400 mt-1 leading-5 break-words">
                       {esc(nickname)} · {currentClassData.className} · 共 {entranceTrend.length} 次
                     </p>
                   </div>
@@ -576,17 +599,17 @@ export function StudentAnalysis({
                       班级最高: t.班级最高,
                       班级平均: t.班级平均,
                     }))} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => `${value}%`} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <CartesianGrid {...GRID} />
+                      <XAxis dataKey="name" tick={AXIS_TICK} />
+                      <YAxis domain={[0, 100]} unit="%" tick={AXIS_TICK} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(value: number) => `${value}%`} />
+                      <Legend wrapperStyle={LEGEND_STYLE_SM} />
                       <ReferenceLine y={85} stroke="#10b981" strokeDasharray="4 4"
                         label={{ value: '优秀 85%', fontSize: 10, fill: '#10b981', position: 'insideTopRight' }} />
                       <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4"
                         label={{ value: '及格 60%', fontSize: 10, fill: '#f59e0b', position: 'insideBottomRight' }} />
-                      <Line type="monotone" dataKey="班级最高" stroke="#cbd5e1" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="班级平均" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="班级最高" stroke={CHART_NEUTRAL} strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -600,12 +623,14 @@ export function StudentAnalysis({
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={qtTrendData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <Tooltip contentStyle={tooltipStyle} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <LineChart data={qtTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid {...GRID} />
+                      <XAxis dataKey="name" tick={AXIS_TICK} />
+                      <YAxis domain={[0, 100]} unit="%" tick={AXIS_TICK} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(v: number) => `${v}%`} />
+                      <Legend wrapperStyle={LEGEND_STYLE_SM} />
+                      <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4"
+                        label={{ value: '优秀 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopRight' }} />
                       {qtNames.map((name, i) => (
                         <Line key={name} type="monotone" dataKey={name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                       ))}
@@ -624,11 +649,11 @@ export function StudentAnalysis({
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={qtCompareData} layout="vertical" margin={{ top: 8, right: 26, left: 4, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                      <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <YAxis type="category" dataKey="name" width={84} tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => `${value}%`} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <CartesianGrid {...GRID} />
+                      <XAxis type="number" domain={[0, 100]} unit="%" tick={AXIS_TICK_SM} />
+                      <YAxis type="category" dataKey="name" width={84} tick={AXIS_TICK_SM} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(value: number) => `${value}%`} />
+                      <Legend wrapperStyle={LEGEND_STYLE_SM} />
                       <ReferenceLine x={85} stroke="#10b981" strokeDasharray="4 4"
                         label={{ value: '优秀85', fontSize: 10, fill: '#10b981', position: 'top' }} />
                       <ReferenceLine x={60} stroke="#f59e0b" strokeDasharray="4 4"
@@ -667,10 +692,10 @@ export function StudentAnalysis({
                   <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={schoolData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} />
-                        <Tooltip contentStyle={tooltipStyle} />
+                        <CartesianGrid {...GRID} />
+                        <XAxis dataKey="name" tick={AXIS_TICK} />
+                        <YAxis domain={[0, 100]} tick={AXIS_TICK} />
+                        <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
                         <Line type="monotone" dataKey="得分率" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6' }} />
                       </LineChart>
                     </ResponsiveContainer>

@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
+import { buildTrendExportHTML } from '@/lib/trendExport';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -412,6 +413,28 @@ group('学习建议（精简版）');
     '甲', false, [], 0, undefined, 'daily', true, undefined, { '【学习建议】': 'ADV_MARK' }
   );
   check(!four.includes('【学习建议】'), '四个一模板【学习建议】参数不残留占位符');
+}
+
+// ============ 入门测趋势导出模板（独立离屏 HTML） ============
+group('入门测趋势导出');
+{
+  const html = buildTrendExportHTML({
+    nickname: '陈志佳',
+    className: 'L1',
+    fullScore: 43,
+    rows: [
+      { lesson: 1, rate: 70, classMax: 93, classAvg: 69.1, rank: 10, size: 26 },
+      { lesson: 2, rate: 87.7, classMax: 100, classAvg: 87.1, rank: 15, size: 28 },
+      { lesson: 3, rate: 90.7, classMax: 100, classAvg: 93, rank: 20, size: 28 },
+    ],
+    generatedAt: new Date(2026, 9, 9, 22, 49),
+  });
+  check(html.includes('陈志佳') && html.includes('L1'), '导出模板含学生与班级');
+  check(html.includes('优秀线 85%') && html.includes('及格线 60%'), '导出模板含优秀/及格参考线');
+  check(html.includes('第1次') && html.includes('第3次'), '导出模板含逐次表头');
+  check((html.match(/<polyline/g) || []).length === 3, '折线图正好 3 条序列（最高/平均/本人）');
+  check(html.includes('10/26') && html.includes('20/28'), '包含个人名次/班级人数');
+  check(!/【[^】]+】/.test(html), '导出模板无未替换的占位符');
 }
 
 console.log('');

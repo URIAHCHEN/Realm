@@ -88,7 +88,8 @@ export function getSessionEmail(): string | null {
 }
 
 async function callGoTrue(path: string, init: RequestInit): Promise<Response> {
-  return fetch(authUrl(path), init);
+  // 10s 超时：刷新请求一旦挂住，refreshInFlight 会一直被复用 → 同步彻底卡死到刷新页面
+  return fetch(authUrl(path), { ...init, signal: AbortSignal.timeout(10_000) });
 }
 
 /** 登录；返回错误时 message 为可读中文提示 */

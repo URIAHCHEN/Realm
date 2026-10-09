@@ -414,14 +414,26 @@ export function useClassData() {
 
   // 班级数据
   const [classes, setClasses] = useState<{ [key: string]: Class }>(() => {
-    const saved = safeParse<{ [key: string]: Class } | null>('classData', null);
-    if (saved && typeof saved === 'object') {
-      // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
-      const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
-      // 课次模板自愈：登记表里的最后一次编辑优先
-      return applyTemplateStore(appConfig, migrated).classes;
+    // 区分"首次运行（无存储）"与"存储损坏"：损坏若回退示例数据，会被首次对账
+    // 无条件上传 → 把示例班推成全团队线上数据（P0）。损坏→隔离为空并留备份键。
+    let raw: string | null = null;
+    try { raw = localStorage.getItem('classData'); } catch { raw = null; }
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw) as { [key: string]: Class } | null;
+        if (saved && typeof saved === 'object') {
+          // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
+          const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
+          // 课次模板自愈：登记表里的最后一次编辑优先
+          return applyTemplateStore(appConfig, migrated).classes;
+        }
+      } catch {
+        console.warn('[load] classData 损坏，已隔离为空（不回退示例数据，避免误推上云）');
+        try { localStorage.setItem('classData.corrupt-backup', raw); } catch { /* ignore */ }
+        return {};
+      }
     }
-    // 初始化示例数据
+    // 初始化示例数据（仅首次运行、无存储时）
     return {
       'class1': {
         id: 'class1',

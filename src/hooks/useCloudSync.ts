@@ -62,10 +62,13 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const pendingImportHash = useRef(false);
   /** reconcile 互斥：focus 与 visibilitychange 会几乎同时触发，避免并发对账 */
   const reconciling = useRef(false);
+  /** doPush 单飞：定时推送 + 对账推送 + 手动推送可并发，慢的那次带旧快照后落盘会覆盖新数据 */
+  const pushInFlight = useRef(false);
 
   snapshotRef.current = snapshot;
 
   const doPush = useCallback(async (cfg: CloudSyncConfig, silent = false) => {
+    if (pushInFlight.current) return false;
     if (!canWrite) {
       setStatus('readonly');
       statusRef.current = 'readonly';
@@ -74,6 +77,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       return false;
     }
     setAction('pushing');
+    pushInFlight.current = true;
     try {
       // 关键：固定"本次真正上传的那份快照"。
       // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
@@ -99,6 +103,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       return false;
     } finally {
       setAction('idle');
+      pushInFlight.current = false;
     }
   }, [canWrite]);
 
@@ -332,22 +337,30 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   /** 管理员批准：该版本成为线上数据（保留其余待审条目） */
   const approvePending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
     if (!config) return;
-    const rest = removePending(pending, item.id);
-    await pushSnapshot(config, { ...item.snapshot, pendingVersions: rest });
-    onImport(item.snapshot);
-    setPending(rest);
-    saveSyncMeta({ lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(item.snapshot) });
-    setMessage('已批准 ' + item.by + ' 的修订并写入线上数据');
+    try {
+      const rest = removePending(pending, item.id);
+      await pushSnapshot(config, { ...item.snapshot, pendingVersions: rest });
+      onImport(item.snapshot);
+      setPending(rest);
+      saveSyncMeta({ lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(item.snapshot) });
+      setMessage('已批准 ' + item.by + ' 的修订并写入线上数据');
+    } catch (e) {
+      toast.error('批准失败：' + toSyncMessage(e));
+    }
   }, [config, pending, onImport]);
 
   /** 管理员驳回：仅把该条目从队列移除（线上数据不变） */
   const rejectPending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
     if (!config) return;
-    const rest = removePending(pending, item.id);
-    const cloud = await fetchCloudState(config);
-    await pushSnapshot(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest });
-    setPending(rest);
-    setMessage('已驳回 ' + item.by + ' 的修订');
+    try {
+      const rest = removePending(pending, item.id);
+      const cloud = await fetchCloudState(config);
+      await pushSnapshot(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest });
+      setPending(rest);
+      setMessage('已驳回 ' + item.by + ' 的修订');
+    } catch (e) {
+      toast.error('驳回失败：' + toSyncMessage(e));
+    }
   }, [config, pending]);
 
   const reconcileNow = useCallback(() => {

@@ -112,7 +112,11 @@ export function normalizeUrl(url: string): string {
 // ============ 哈希：判断本地/云端数据是否一致 ============
 
 export function hashSnapshot(snapshot: SyncSnapshot): string {
-  const json = JSON.stringify(snapshot, (_key, value) => {
+  const json = JSON.stringify(snapshot, (key, value) => {
+    // 哈希域统一：pendingVersions 只存在于"推送体/云端 data"，本地与 meta 哈希不含它。
+    // 若不剔除，submit/approve 推送后 cloud.hash 恒 ≠ 本地哈希 → cloudChanged 恒真 →
+    // 每 60s 无休止 doPull 覆盖本地正在录入的内容（P0）。
+    if (key === 'pendingVersions') return undefined;
     // 对象键排序，保证哈希稳定
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return Object.keys(value)

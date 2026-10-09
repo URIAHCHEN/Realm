@@ -89,7 +89,8 @@ export function Leaderboard({
   calculateClassStats
 }: LeaderboardProps) {
   const [copied, setCopied] = useState(false);
-  const [mode, setMode] = useState<LeaderboardMode>('top10');
+  // 默认展开风云榜（用户指定）：榜单首页即当日风云榜
+  const [mode, setMode] = useState<LeaderboardMode>('fengyun');
   const [lessonRange, setLessonRange] = useState<LessonRange>('current');
   const [customStart, setCustomStart] = useState<number>(lessonNumber);
   const [customEnd, setCustomEnd] = useState<number>(lessonNumber);
@@ -769,8 +770,8 @@ export function Leaderboard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="top10">🏆 前十名</SelectItem>
               <SelectItem value="fengyun">🏅 风云榜</SelectItem>
+              <SelectItem value="top10">🏆 前十名</SelectItem>
               <SelectItem value="champion">👑 状元</SelectItem>
               <SelectItem value="progress">📈 进步之星</SelectItem>
               <SelectItem value="listening">🎙️ 课后任务达人</SelectItem>

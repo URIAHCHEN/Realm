@@ -21,6 +21,8 @@ import {
   PolarRadiusAxis,
   Radar,
   LineChart,
+  BarChart,
+  ReferenceLine,
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Minus, BarChart3, Activity, School,
@@ -214,6 +216,27 @@ export function StudentAnalysis({
     [records]
   );
 
+  // 本生正确率均值（参考线）：与 KPI 口径一致，排除请假/缺勤课次
+  const rateAvg = useMemo(() => {
+    const pool = records.filter(r => isQuizAssessed(r)).map(r => r.correctRate);
+    if (pool.length === 0) return 0;
+    return Math.round((pool.reduce((a, b) => a + b, 0) / pool.length) * 10) / 10;
+  }, [records]);
+
+  // 各题型得分率对比：本人 vs 班级平均（都用各课次自己的满分作分母，跨课次取均值）
+  // 用途：与雷达图配对 —— 雷达看"形状"，这里看"与班均的具体差距"，并标出 85/60 分档线
+  const qtCompareData = useMemo(() => {
+    if (qtNames.length === 0) return [];
+    const classPool = (classRecords || []).filter(r => isQuizAssessed(r));
+    const avg = (a: number[]) => a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0;
+    return qtNames.map(name => {
+      const mine = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      const cls = classPool.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      return { name, 本人: avg(mine), 班均: avg(cls) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qtNames, records, classRecords, currentClassData, getLessonConfig]);
+
   // 题型雷达图（跨课次按题型名取平均得分率 %）——只统计真正有该题型的课次
   const radarData = useMemo(() => {
     if (records.length === 0) return [];
@@ -314,7 +337,7 @@ export function StudentAnalysis({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[1100px] w-[96vw] max-h-[92vh] overflow-y-auto rounded-3xl">
+      <DialogContent className="sm:max-w-[min(1280px,96vw)] w-[96vw] h-[86vh] sm:h-[84vh] overflow-y-auto rounded-3xl">
         <DialogHeader className="space-y-0">
           {/* 头部：头像 + 姓名 + 趋势标识 */}
           <div className="flex items-center gap-4 pt-1">
@@ -376,7 +399,9 @@ export function StudentAnalysis({
         )}
 
         <Tabs defaultValue="overview" className="mt-1">
-          <TabsList className="bg-slate-100/80 rounded-2xl p-1 h-auto">
+          {/* 加 ios-tabs-list：全局有 [role=tablist]:not(.ios-tabs-list) 的两列网格规则，
+              不排除会变成 2×2 换行；这里是弹窗内的单行 tabs，跟全站标签栏样式一致 */}
+          <TabsList className="ios-tabs-list bg-slate-100/80 rounded-2xl p-1 h-auto">
             <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm gap-1.5">
               <BarChart3 className="w-4 h-4" />成绩总览
             </TabsTrigger>
@@ -391,18 +416,32 @@ export function StudentAnalysis({
           {/* 成绩总览 */}
           <TabsContent value="overview" className="space-y-4 mt-4">
             <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-[color:var(--brand)]" />总分与正确率走势
               </p>
-              <div style={{ height: 260 }}>
+              <p className="text-xs text-slate-400 mt-0.5 mb-3">
+                柱=总分（左轴） · 线=正确率（右轴） · 绿虚线=优秀线 85% · 黄虚线=及格线 60% · 灰虚线=本生均值 {rateAvg}%
+              </p>
+              <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={trendChartData}>
+                  <ComposedChart data={trendChartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
                     <YAxis yAxisId="score" tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <Tooltip contentStyle={tooltipStyle} />
+                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(value, name) => (name === '正确率' ? [`${value}%`, '正确率'] : [`${value} 分`, '总分'])}
+                    />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <ReferenceLine yAxisId="rate" y={85} stroke="#10b981" strokeDasharray="4 4"
+                      label={{ value: '优秀线 85%', fontSize: 11, fill: '#10b981', position: 'insideTopRight' }} />
+                    <ReferenceLine yAxisId="rate" y={60} stroke="#f59e0b" strokeDasharray="4 4"
+                      label={{ value: '及格线 60%', fontSize: 11, fill: '#f59e0b', position: 'insideBottomRight' }} />
+                    {rateAvg > 0 && (
+                      <ReferenceLine yAxisId="rate" y={rateAvg} stroke="#94a3b8" strokeDasharray="2 4"
+                        label={{ value: `本生均值 ${rateAvg}%`, fontSize: 11, fill: '#64748b', position: 'insideLeft' }} />
+                    )}
                     <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
                     <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
                   </ComposedChart>
@@ -426,6 +465,31 @@ export function StudentAnalysis({
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
+                {/* 强项 / 弱项小结：一眼给结论，同时填满与右列等高的卡片 */}
+                {qtCompareData.length > 0 && (() => {
+                  const byRate = [...qtCompareData].sort((a, b) => b.本人 - a.本人);
+                  const best = byRate[0];
+                  const worst = byRate[byRate.length - 1];
+                  const byGap = [...qtCompareData]
+                    .map(q => ({ ...q, gap: Math.round((q.本人 - q.班均) * 10) / 10 }))
+                    .sort((a, b) => a.gap - b.gap)[0];
+                  return (
+                    <div className="mt-3 pt-3 border-t border-black/5 space-y-1.5 text-xs">
+                      <p className="text-slate-500">
+                        最强项 <span className="font-semibold text-emerald-600">{best.name} {best.本人}%</span>
+                        <span className="mx-2 text-slate-300">|</span>
+                        最弱项 <span className="font-semibold text-rose-500">{worst.name} {worst.本人}%</span>
+                      </p>
+                      <p className="text-slate-500">
+                        与班均差距最大：
+                        <span className="font-semibold" style={{ color: byGap.gap >= 0 ? '#047857' : '#b91c1c' }}>
+                          {byGap.name} {byGap.gap >= 0 ? '+' : ''}{byGap.gap}%
+                        </span>
+                        <span className="text-slate-400">（本人 {byGap.本人}% vs 班均 {byGap.班均}%）</span>
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 入门测趋势：正确率 / 班级最高 / 班级平均 + 班级排名，可导出为以学生姓名命名的图片 */}
@@ -504,19 +568,23 @@ export function StudentAnalysis({
                   </table>
                 </div>
 
-                <div style={{ height: 240 }}>
+                <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={entranceTrend.map(t => ({
                       name: `第${t.lesson}次`,
                       学生正确率: t.学生正确率,
                       班级最高: t.班级最高,
                       班级平均: t.班级平均,
-                    }))}>
+                    }))} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
                       <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => `${value}%`} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <ReferenceLine y={85} stroke="#10b981" strokeDasharray="4 4"
+                        label={{ value: '优秀 85%', fontSize: 10, fill: '#10b981', position: 'insideTopRight' }} />
+                      <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4"
+                        label={{ value: '及格 60%', fontSize: 10, fill: '#f59e0b', position: 'insideBottomRight' }} />
                       <Line type="monotone" dataKey="班级最高" stroke="#cbd5e1" strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="班级平均" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
@@ -542,6 +610,32 @@ export function StudentAnalysis({
                         <Line key={name} type="monotone" dataKey={name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                       ))}
                     </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* 题型得分率对比（本人 vs 班均）：与雷达图配对 —— 雷达看形状，这里看与班均的具体差距
+                  并标出 85 优秀 / 60 及格 两条分档线；补上这一张后成绩总览为 2×2 对称布局 */}
+              <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Target className="w-4 h-4 text-[color:var(--brand)]" />题型得分率对比
+                  <span className="text-xs font-normal text-slate-400">（本人 vs 班级平均 · 跨课次均值 · 绿=优秀85 黄=及格60）</span>
+                </p>
+                <div style={{ height: 250 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={qtCompareData} layout="vertical" margin={{ top: 8, right: 26, left: 4, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <YAxis type="category" dataKey="name" width={84} tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => `${value}%`} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <ReferenceLine x={85} stroke="#10b981" strokeDasharray="4 4"
+                        label={{ value: '优秀85', fontSize: 10, fill: '#10b981', position: 'top' }} />
+                      <ReferenceLine x={60} stroke="#f59e0b" strokeDasharray="4 4"
+                        label={{ value: '及格60', fontSize: 10, fill: '#f59e0b', position: 'bottom' }} />
+                      <Bar dataKey="本人" fill="rgb(var(--brand-rgb) / 0.85)" radius={[0, 5, 5, 0]} barSize={11} />
+                      <Bar dataKey="班均" fill="#cbd5e1" radius={[0, 5, 5, 0]} barSize={11} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>

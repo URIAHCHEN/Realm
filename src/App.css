@@ -2364,8 +2364,8 @@ html[data-exporting] * { animation: none !important; }
 .dark :is(.text-red-500, .text-red-700) { color: #fca5a5; }
 .dark :is(.text-blue-600, .text-blue-700, .text-sky-600) { color: #93c5fd; }
 .dark :is(.text-orange-600, .text-orange-700) { color: #fdba74; }
-/* 暗色下 ink 令牌补偿：弱化文本换浅色实现（浅色下已加深一档） */
-.dark { --ink-3: #b6b6bc; --ink-4: #a3a3a9; }
+/* 暗色下 ink 令牌整体换浅（此前 --ink/--ink-2 在暗色下仍是深色 → 卡片外文字不可见） */
+.dark { --ink: #e5e7eb; --ink-2: #cbd5e1; --ink-3: #b6b6bc; --ink-4: #a3a3a9; }
 
 /* —— B. 数字排版：表格与报告的数字统一等宽对齐（tabular-nums） —— */
 .data-table { font-variant-numeric: tabular-nums; }
@@ -2393,3 +2393,41 @@ html[data-exporting] * { animation: none !important; }
 .dark { --link: rgb(var(--brand-rgb)); }
 /* 危险红在暗色下用浅红（#d92c20 在深底上过暗） */
 .dark .text-\[\#d92c20\] { color: #f87171; }
+
+/* 暗色：纯白/浅灰实体底（表格包裹层、下拉、粘性列、弹层等）统一转深 —— 此前 38 处 bg-white 在暗色下保持白底，白字压白底 */
+.dark .bg-white { background-color: rgba(255, 255, 255, 0.06); }
+.dark :is([class~="bg-[#f2f2f7]"], [class~="bg-[#f5f6f8]"]) { background-color: rgba(255, 255, 255, 0.06); }
+.dark [class~="bg-[#f3e8ff]"] { background-color: rgba(139, 92, 246, 0.16); }
+
+/* 暗色：微黑底（分段控件底/凹陷面板）与剧场瓷贴统一转深；红 800 提亮 */
+.dark :is([class~="bg-black/[0.02]"], [class~="bg-black/[0.03]"], [class~="bg-black/[0.04]"], [class~="bg-black/[0.05]"], [class~="bg-black/[0.06]"], [class~="bg-black/[0.07]"], [class~="bg-black/[0.09]"]) { background-color: rgba(255, 255, 255, 0.06); }
+.dark .theater-stat-card { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.10); }
+.dark .text-red-800 { color: #fca5a5; }
+/* 暗色：班级选择横条的整宽白渐变带转深 */
+.dark .class-band::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0) 100%);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+/* 暗色：.ios-glass-card 漏网（班级选择卡等） */
+.dark .ios-glass-card { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.10); }
+
+/* —— F. 暗色收尾（2026-10-09 二轮扫描发现）——
+   ① 顶栏玻璃条在暗色下仍是白 62%（整条发亮）；② 半透明白底（/60~/95）上浅字不可见；
+   ③ slate-800/900、sky-500、讲台姓名（.student-name）等深色文字在暗底不可读。 */
+.dark .liquid-glass-header {
+  background: rgba(15, 20, 30, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 30px -22px rgba(0, 0, 0, 0.6);
+}
+.dark .liquid-glass-header button,
+.dark .liquid-glass-header a { border-color: rgba(255, 255, 255, 0.14) !important; }
+.dark :is([class~="bg-white/95"], [class~="bg-white/80"], [class~="bg-white/70"], [class~="bg-white/60"]) { background-color: rgba(255, 255, 255, 0.08); }
+.dark .text-slate-800 { color: #e2e8f0; }
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark :is(.text-gray-700, .text-gray-800, .text-gray-900) { color: #e2e8f0; }
+.dark :is(.text-sky-500, .text-sky-400) { color: #7dd3fc; }
+.dark .student-name { color: #cbd5e1; }
+.dark .student-name.champion { color: #7dd3fc; }
+/* 暗色：硬编码 iOS 灰阶（顶栏按钮/菜单项/标签）映射 */
+.dark :is(.text-\[\#1c1c1e\], .text-\[\#3c3c43\]) { color: #e5e7eb; }
+.dark .text-\[\#8e8e93\] { color: #9aa4b2; }
+.dark :is(.border-\[\#e5e5ea\], .border-\[\#d1d1d6\]) { border-color: rgba(255, 255, 255, 0.14); }

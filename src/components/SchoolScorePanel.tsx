@@ -192,7 +192,8 @@ export function SchoolScorePanel({
         const firstRate = first.totalScore > 0 ? (first.score / first.totalScore) * 100 : 0;
         const lastRate = last.totalScore > 0 ? (last.score / last.totalScore) * 100 : 0;
         const rateImprovement = lastRate - firstRate;
-        const scoreImprovement = last.score - first.score;
+        // 保留一位小数：浮点减法噪声（如 4.899999999999999）直接显示很扎眼
+        const scoreImprovement = Math.round((last.score - first.score) * 10) / 10;
         const rankImprovement = first.classRank && last.classRank ? first.classRank - last.classRank : undefined;
         return {
           name,

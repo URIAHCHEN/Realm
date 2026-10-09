@@ -821,7 +821,7 @@ export function StudentTable({
                           <TableCell className="text-base tnum">
                             <div className="space-y-1">
                               <Select value={attendanceDisplay.value} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
-                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg ${optionToneClass(record?.attendance)}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectTrigger className={`w-24 h-9 text-sm rounded-lg ${optionToneClass(record?.attendance)} ${/迟到|缺勤|缺席/.test(record?.attendance || '') ? 'opt-negative' : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
                                   {attendanceDisplay.raw && <SelectItem value={attendanceDisplay.raw}>{attendanceDisplay.raw}</SelectItem>}

@@ -46,6 +46,26 @@ check(snap.rankById.get('e') === undefined, '请假学员无排名');
 check(formatRank(3, 4) === '3/4', '排名文本格式「个人/人数」= 3/4');
 check(formatRank(0, 0) === '—', '无数据时排名文本为 —');
 
+// 并列后移（competition ranking）：后一名 = 位置序号（跳过并列占用的名额）
+const tieRanks = classSnapshotOfLesson([
+  rec({ id: 't1', studentName: 'T1', correctRate: 100 }),
+  rec({ id: 't2', studentName: 'T2', correctRate: 100 }),
+  rec({ id: 't3', studentName: 'T3', correctRate: 100 }),
+  rec({ id: 't4', studentName: 'T4', correctRate: 90 }),
+  rec({ id: 't5', studentName: 'T5', correctRate: 90 }),
+  rec({ id: 't6', studentName: 'T6', correctRate: 80 }),
+], 1);
+check(tieRanks.rankById.get('t1') === 1 && tieRanks.rankById.get('t2') === 1 && tieRanks.rankById.get('t3') === 1,
+  '三人并列第一 → 全部名次 1');
+check(tieRanks.rankById.get('t4') === 4 && tieRanks.rankById.get('t5') === 4,
+  '并列后按并列数后移 → 下一个名次是 4（而非 2）');
+check(tieRanks.rankById.get('t6') === 6, '再并一轮后 → 名次 6');
+const allTie = classSnapshotOfLesson([
+  rec({ id: 'a1', studentName: 'A1', correctRate: 88 }),
+  rec({ id: 'a2', studentName: 'A2', correctRate: 88 }),
+], 1);
+check(allTie.rankById.get('a1') === 1 && allTie.rankById.get('a2') === 1, '全班同分 → 全员并列第 1');
+
 const row = studentLessonRow(cls[1], cls);
 check(row.rankText === '2/4', `B 的排名文本 = 2/4（实际 ${row.rankText}）`);
 check(row.classAvgRate === 87.9, `班均 = 87.9（实际 ${row.classAvgRate}）`);

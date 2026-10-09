@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,8 +31,8 @@ interface LeaderboardProps {
 function TheaterEmptyState({ icon: Icon, text }: { icon: typeof Trophy; text: string }) {
   return (
     <div className="empty-state">
-      <Icon className="w-20 h-20 text-yellow-300/50 mb-4" />
-      <p className="text-white/70 text-lg">{text}</p>
+      <Icon className="w-14 h-14 mb-3 empty-ico" />
+      <p className="empty-text">{text}</p>
     </div>
   );
 }
@@ -80,39 +80,6 @@ function generateShortNickname(fullName: string): string {
   return fullName;
 }
 
-// 彩带组件
-function Confetti() {
-  const [confetti, setConfetti] = useState<Array<{ id: number; left: number; delay: number; color: string }>>([]);
-
-  useEffect(() => {
-    const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFE66D', '#FF6B9D', '#C7CEEA'];
-    const newConfetti = Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 3,
-      color: colors[Math.floor(Math.random() * colors.length)]
-    }));
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 彩带仅在挂载时随机生成一次
-    setConfetti(newConfetti);
-  }, []);
-
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
-      {confetti.map((c) => (
-        <div
-          key={c.id}
-          className="confetti-piece"
-          style={{
-            left: `${c.left}%`,
-            animationDelay: `${c.delay}s`,
-            backgroundColor: c.color
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 export function Leaderboard({
   records,
   lessonConfig,
@@ -121,7 +88,6 @@ export function Leaderboard({
   calculateClassStats
 }: LeaderboardProps) {
   const [copied, setCopied] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(true);
   const [mode, setMode] = useState<LeaderboardMode>('top10');
   const [lessonRange, setLessonRange] = useState<LessonRange>('current');
   const [customStart, setCustomStart] = useState<number>(lessonNumber);
@@ -130,11 +96,6 @@ export function Leaderboard({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const leaderboardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowConfetti(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   // 可用课次列表
   const allLessons = useMemo(() => {
@@ -226,7 +187,8 @@ export function Leaderboard({
         recs.sort((a, b) => a.lessonNumber - b.lessonNumber);
         const first = recs[0];
         const last = recs[recs.length - 1];
-        const improvement = last.totalScore - first.totalScore;
+        // 保留一位小数：浮点减法会产出 4.899999999999999 这类噪声，直接显示很扎眼
+        const improvement = Math.round((last.totalScore - first.totalScore) * 10) / 10;
         const improvementRate = first.totalScore > 0
           ? (improvement / first.totalScore) * 100
           : 0;
@@ -473,14 +435,12 @@ export function Leaderboard({
     setShowExportMenu(false);
     if (!leaderboardRef.current || isExportingImage) return;
     setIsExportingImage(true);
-    // 关闭彩带层，避免动画元素被截入图片
-    setShowConfetti(false);
     try {
       await new Promise(r => setTimeout(r, 120));
       const target = leaderboardRef.current;
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
-        backgroundColor: '#f1f5f9',
+        backgroundColor: document.documentElement.classList.contains('dark') ? '#101826' : '#f3f6fb',
         scale: 2,
         useCORS: true,
         logging: false,
@@ -520,45 +480,25 @@ export function Leaderboard({
             <>
               {entranceRankings.slice(0, 3).length >= 3 && (
                 <div className="podium-stage">
-                  {entranceRankings[1] && (
-                    <div className="podium-item second-place">
-                      <div className="torn-paper-card silver-paper">
-                        <div className="medal-badge silver">2</div>
-                        <p className="student-name">{entranceRankings[1].shortNickname}</p>
-                        <p className="student-fullname">{entranceRankings[1].nickname}</p>
-                        <p className="score-text">{entranceRankings[1].totalScore}分</p>
-                        <p className="rate-text">{entranceRankings[1].correctRate}%</p>
+                  {[1, 0, 2].map((slot) => {
+                    const item = entranceRankings[slot];
+                    if (!item) return null;
+                    // 名次驱动：同分并列 → 同号同色（如并列第一 → 三张卡片都是金色「1」）
+                    const tone = item.rank === 1 ? 'gold' : item.rank === 2 ? 'silver' : item.rank === 3 ? 'bronze' : 'plain';
+                    const place = slot === 0 ? 'first' : slot === 1 ? 'second' : 'third';
+                    return (
+                      <div key={item.id} className={`podium-item place-${place}`}>
+                        <div className={`podium-card tone-${tone}`}>
+                          <div className={`podium-medal tone-${tone}`}>{item.rank}</div>
+                          <p className="podium-short">{item.shortNickname}</p>
+                          <p className="podium-full">{item.nickname}</p>
+                          <p className="podium-score">{item.totalScore}<span className="podium-unit">分</span></p>
+                          <p className="podium-rate">正确率 {item.correctRate}%</p>
+                        </div>
+                        <div className={`podium-stand tone-${tone}`} />
                       </div>
-                      <div className="podium-base silver-base">🥈</div>
-                    </div>
-                  )}
-                  {entranceRankings[0] && (
-                    <div className="podium-item first-place">
-                      <div className="trophy-float">
-                        <Trophy className="w-16 h-16 text-yellow-300" />
-                      </div>
-                      <div className="torn-paper-card gold-paper">
-                        <div className="crown-icon">👑</div>
-                        <p className="student-name champion">{entranceRankings[0].shortNickname}</p>
-                        <p className="student-fullname">{entranceRankings[0].nickname}</p>
-                        <p className="score-text champion">{entranceRankings[0].totalScore}分</p>
-                        <p className="rate-text">{entranceRankings[0].correctRate}%</p>
-                      </div>
-                      <div className="podium-base gold-base">🥇</div>
-                    </div>
-                  )}
-                  {entranceRankings[2] && (
-                    <div className="podium-item third-place">
-                      <div className="torn-paper-card bronze-paper">
-                        <div className="medal-badge bronze">3</div>
-                        <p className="student-name">{entranceRankings[2].shortNickname}</p>
-                        <p className="student-fullname">{entranceRankings[2].nickname}</p>
-                        <p className="score-text">{entranceRankings[2].totalScore}分</p>
-                        <p className="rate-text">{entranceRankings[2].correctRate}%</p>
-                      </div>
-                      <div className="podium-base bronze-base">🥉</div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               )}
               {entranceRankings.length > 3 && (
@@ -566,8 +506,10 @@ export function Leaderboard({
                   {entranceRankings.slice(3).map((r) => (
                     <div key={r.id} className="rank-item">
                       <span className="rank-number">{r.rank}</span>
-                      <span className="rank-name">{r.shortNickname}</span>
-                      <span className="rank-fullname">{r.nickname}</span>
+                      <span className="rank-name-cell">
+                        <span className="rank-name">{r.shortNickname}</span>
+                        <span className="rank-fullname">{r.nickname}</span>
+                      </span>
                       <span className="rank-score">{r.totalScore}分</span>
                       <span className="rank-rate">{r.correctRate}%</span>
                     </div>
@@ -593,18 +535,16 @@ export function Leaderboard({
             <Crown className="w-10 h-10 text-yellow-300 crown-shine" />
           </div>
           {champion ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="w-40 h-40 rounded-full bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-500 flex items-center justify-center shadow-2xl mb-8 animate-pulse">
-                <Trophy className="w-20 h-20 text-red-900" />
+            <div className="champion-wrap">
+              <div className="podium-card champion-card tone-gold">
+                <div className="podium-medal tone-gold champion-medal">1</div>
+                <div className="champion-crown"><Trophy className="w-6 h-6" /></div>
+                <p className="podium-short champion-short">{champion.shortNickname}</p>
+                <p className="podium-full">{champion.nickname}</p>
+                <p className="podium-score champion-score">{champion.totalScore}<span className="podium-unit">分</span></p>
+                <p className="podium-rate">正确率 {champion.correctRate}%</p>
               </div>
-              <div className="torn-paper-card gold-paper scale-110">
-                <div className="crown-icon text-4xl">👑</div>
-                <p className="student-name champion text-3xl">{champion.shortNickname}</p>
-                <p className="student-fullname text-lg">{champion.nickname}</p>
-                <p className="score-text champion text-3xl mt-4">{champion.totalScore}分</p>
-                <p className="rate-text text-lg">正确率 {champion.correctRate}%</p>
-              </div>
-              <p className="mt-8 text-white/90 text-xl font-medium">独占鳌头，实至名归！</p>
+              <p className="champion-line">独占鳌头，实至名归！</p>
             </div>
           ) : (
             <TheaterEmptyState icon={Crown} text="暂无数据" />
@@ -635,12 +575,12 @@ export function Leaderboard({
                     <p className="progress-fullname">{s.nickname}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-2 text-white">
-                      <span className="text-white/70">{s.firstScore}分</span>
-                      <TrendingUp className="w-4 h-4 text-emerald-300" />
-                      <span className="font-bold text-emerald-300">{s.lastScore}分</span>
+                    <div className="flex items-center gap-2 progress-pts">
+                      <span className="progress-from">{s.firstScore}分</span>
+                      <TrendingUp className="w-4 h-4 progress-arrow" />
+                      <span className="progress-to">{s.lastScore}分</span>
                     </div>
-                    <span className="text-sm text-emerald-200">
+                    <span className="text-sm progress-delta">
                       {s.improvement >= 0 ? '+' : ''}{s.improvement}分 ({s.improvementRate >= 0 ? '+' : ''}{s.improvementRate.toFixed(1)}%)
                       {s.rankChange && s.rankChange > 0 ? ` · 排名前进了${s.rankChange}名` : ''}
                     </span>
@@ -670,7 +610,7 @@ export function Leaderboard({
               {listeningRankings.map((r, i) => (
                 <div key={r.id} className={`listening-card rank-${i + 1}`}>
                   <div className="listening-rank">
-                    {i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                    {r.rank === 1 ? '🏆' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : (r.rank || i + 1)}
                   </div>
                   <div className="listening-content">
                     <p className="listening-name">{r.shortNickname}</p>
@@ -740,54 +680,36 @@ export function Leaderboard({
   };
 
   return (
-    <div className="space-y-6" ref={leaderboardRef}>
-      {showConfetti && <Confetti />}
-
-      {/* 顶部统计卡片（含入截图区域） */}
+    <div className={`space-y-6 praise-root${isExportingImage ? ' praise-exporting' : ''}`} ref={leaderboardRef}>
+      {/* 顶部统计（含入截图区域）：干净瓷贴，与全站卡片语言一致 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <div className="theater-stat-card gold-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 flex items-center justify-center shadow-lg trophy-pulse">
-              <Trophy className="w-6 h-6 text-red-900" />
-            </div>
-            <div>
-              <p className="text-sm text-amber-700 font-medium">最高分</p>
-              <p className="text-2xl font-bold text-red-800">{stats.maxScore}</p>
-            </div>
-          </div>
+        <div className="praise-kpi">
+          <span className="praise-kpi-ico tone-gold"><Trophy className="w-5 h-5" /></span>
+          <span className="praise-kpi-text">
+            <span className="praise-kpi-label">最高分</span>
+            <span className="praise-kpi-value">{stats.maxScore}</span>
+          </span>
         </div>
-        <div className="theater-stat-card gold-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-300 to-yellow-500 flex items-center justify-center shadow-lg">
-              <TrendingUp className="w-6 h-6 text-red-900" />
-            </div>
-            <div>
-              <p className="text-sm text-amber-700 font-medium">平均分</p>
-              <p className="text-2xl font-bold text-red-800">{stats.avgScore}</p>
-            </div>
-          </div>
+        <div className="praise-kpi">
+          <span className="praise-kpi-ico tone-blue"><TrendingUp className="w-5 h-5" /></span>
+          <span className="praise-kpi-text">
+            <span className="praise-kpi-label">平均分</span>
+            <span className="praise-kpi-value">{stats.avgScore}</span>
+          </span>
         </div>
-        <div className="theater-stat-card gold-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
-              <Users className="w-6 h-6 text-red-900" />
-            </div>
-            <div>
-              <p className="text-sm text-amber-700 font-medium">参考人数</p>
-              <p className="text-2xl font-bold text-red-800">{lessonRecords.filter(r => r.totalScore > 0).length}</p>
-            </div>
-          </div>
+        <div className="praise-kpi">
+          <span className="praise-kpi-ico tone-violet"><Users className="w-5 h-5" /></span>
+          <span className="praise-kpi-text">
+            <span className="praise-kpi-label">参考人数</span>
+            <span className="praise-kpi-value">{lessonRecords.filter(r => r.totalScore > 0).length}</span>
+          </span>
         </div>
-        <div className="theater-stat-card gold-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shadow-lg">
-              <Star className="w-6 h-6 text-red-900" />
-            </div>
-            <div>
-              <p className="text-sm text-amber-700 font-medium">满分</p>
-              <p className="text-2xl font-bold text-red-800">{fullScore}</p>
-            </div>
-          </div>
+        <div className="praise-kpi">
+          <span className="praise-kpi-ico tone-emerald"><Star className="w-5 h-5" /></span>
+          <span className="praise-kpi-text">
+            <span className="praise-kpi-label">满分</span>
+            <span className="praise-kpi-value">{fullScore}</span>
+          </span>
         </div>
       </div>
 

@@ -2431,3 +2431,264 @@ html[data-exporting] * { animation: none !important; }
 .dark :is(.text-\[\#1c1c1e\], .text-\[\#3c3c43\]) { color: #e5e7eb; }
 .dark .text-\[\#8e8e93\] { color: #9aa4b2; }
 .dark :is(.border-\[\#e5e5ea\], .border-\[\#d1d1d6\]) { border-color: rgba(255, 255, 255, 0.14); }
+
+/* ==================== 负面状态整格高亮（2026-10-09 · 用户要求）====================
+   学情表里「未完成 / 缺勤 / 迟到」等负面字眼所在格子整体高亮：同色系浅底 + 同色系加深文字，
+   与学情公示导出的 stateCell 保持同一视觉口径（浅底 tint + 深一档文字）。
+   实现用 :has() 精准命中那一个单元格，不动行内其它格子；浏览器不支持 :has() 时自然降级为现状。 */
+.data-table td:has(.opt-negative) { background: #fdecec !important; }
+.dark .data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.14) !important; }
+/* 高亮格里的胶囊改为白底 + 加深描边/文字，避免"红上叠红" */
+.data-table td:has(.opt-negative) .opt-negative {
+  background: #fff !important;
+  border-color: #f0a8b6 !important;
+  color: #b91c1c !important;
+  font-weight: 700 !important;
+}
+.dark .data-table td:has(.opt-negative) .opt-negative {
+  background: rgba(255, 255, 255, 0.10) !important;
+  border-color: rgba(244, 63, 94, 0.45) !important;
+  color: #fda4af !important;
+}
+
+/* ====================================================================
+   表扬榜视觉重做（2026-10-09 · 用户要求"重做级美化"）
+   设计语言：与全站一致的 Apple 玻璃卡体系 —— 白卡/hairline 边框/柔影/品牌蓝点缀，
+   领奖台与榜单全部换成现代卡片风（去毛边纸、去幕布、去漂浮奖杯、去彩带）；
+   名次驱动：同分并列 → 同号同色（并列第一 = 三张金色「1」）。
+   全部规则作用域收敛在 .praise-root 内，暗色单独适配；导出用 .praise-exporting 加底色+留白。
+   ==================================================================== */
+.praise-root {
+  --pr-card: #ffffff;
+  --pr-card-2: rgba(15, 23, 42, 0.03);
+  --pr-border: rgba(15, 23, 42, 0.08);
+  --pr-ink: #1c1c1e;
+  --pr-ink-2: #3c3c43;
+  --pr-muted: #64748b;
+  --pr-stage-bg: #ffffff;
+  --pr-shadow: 0 1px 2px rgba(16,24,40,.04), 0 10px 30px -18px rgba(16,24,40,.18);
+  --pr-export-bg: #f3f6fb;
+}
+.dark .praise-root {
+  --pr-card: rgba(255, 255, 255, 0.06);
+  --pr-card-2: rgba(255, 255, 255, 0.05);
+  --pr-border: rgba(255, 255, 255, 0.10);
+  --pr-ink: #e5e7eb;
+  --pr-ink-2: #cbd5e1;
+  --pr-muted: #9aa4b2;
+  --pr-stage-bg: rgba(255, 255, 255, 0.05);
+  --pr-shadow: none;
+  --pr-export-bg: #101826;
+}
+/* 导出态：给整块截图区加统一的底 + 留白，彻底消除"底色不均/边缘透明" */
+.praise-root.praise-exporting {
+  background: var(--pr-export-bg);
+  padding: 24px;
+  border-radius: 20px;
+}
+
+/* —— 顶部统计瓷贴 —— */
+.praise-root .praise-kpi {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--pr-card); border: 1px solid var(--pr-border);
+  border-radius: 16px; padding: 14px 16px; box-shadow: var(--pr-shadow);
+}
+.praise-root .praise-kpi-ico {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.praise-root .praise-kpi-ico.tone-gold { background: rgba(240, 169, 44, 0.14); color: #b7791f; }
+.praise-root .praise-kpi-ico.tone-blue { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+.praise-root .praise-kpi-ico.tone-violet { background: rgba(124, 92, 246, 0.12); color: #6d28d9; }
+.praise-root .praise-kpi-ico.tone-emerald { background: rgba(16, 185, 129, 0.13); color: #047857; }
+.praise-root .praise-kpi-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.praise-root .praise-kpi-label { font-size: 12px; color: var(--pr-muted); }
+.praise-root .praise-kpi-value { font-size: 22px; font-weight: 800; color: var(--pr-ink); line-height: 1.15; font-variant-numeric: tabular-nums; }
+
+/* —— 主舞台：白卡（暗色深卡），去掉幕布/聚光灯 —— */
+.praise-root .theater-stage,
+.praise-root .theater-stage.green-stage,
+.praise-root .theater-stage.purple-stage {
+  background: var(--pr-stage-bg);
+  border: 1px solid var(--pr-border);
+  border-radius: 20px;
+  padding: 26px 26px 22px;
+  box-shadow: var(--pr-shadow);
+  overflow: hidden;
+}
+.praise-root .theater-stage::before { display: none; }  /* 幕布纹理 */
+.praise-root .spotlight { display: none; }              /* 聚光灯 */
+
+/* 标题行：小皇冠 + 深色标题（替代蓝色发光大字） */
+.praise-root .theater-header { gap: 10px; margin-bottom: 22px; }
+.praise-root .theater-header svg { width: 20px !important; height: 20px !important; color: #d9a514 !important; animation: none !important; filter: none !important; }
+.praise-root .theater-title { font-size: 21px; font-weight: 800; color: var(--pr-ink); text-shadow: none; letter-spacing: .5px; }
+
+/* —— 领奖台 —— */
+.praise-root .podium-stage { align-items: flex-end; gap: 22px; margin-bottom: 10px; padding: 22px 6px 0; }
+.praise-root .podium-item { display: flex; flex-direction: column; align-items: center; width: 210px; max-width: 30%; }
+.praise-root .podium-card {
+  position: relative; width: 100%; overflow: visible;
+  background: var(--pr-card); border: 1px solid var(--pr-border);
+  border-radius: 18px; box-shadow: var(--pr-shadow);
+  padding: 26px 14px 16px; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+}
+.praise-root .podium-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 18px 18px 0 0; }
+.praise-root .podium-card.tone-gold::before { background: linear-gradient(90deg, #f7c948, #e8a70f); }
+.praise-root .podium-card.tone-silver::before { background: linear-gradient(90deg, #e3e9f0, #aab6c6); }
+.praise-root .podium-card.tone-bronze::before { background: linear-gradient(90deg, #efb489, #c97f4b); }
+.praise-root .podium-card.tone-plain::before { background: linear-gradient(90deg, #cbd5e1, #94a3b8); }
+.praise-root .place-first .podium-card { padding-top: 32px; padding-bottom: 20px; }
+.praise-root .place-first { transform: translateY(-8px); }
+/* 名次圆章：同分并列 → 同色同号 */
+.praise-root .podium-medal {
+  position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+  width: 34px; height: 34px; line-height: 34px; border-radius: 50%;
+  font-size: 15px; font-weight: 800; color: #fff; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.praise-root .podium-medal.tone-gold { background: linear-gradient(135deg, #f7c948, #e8a70f); box-shadow: 0 4px 10px -3px rgba(232, 167, 15, .65); }
+.praise-root .podium-medal.tone-silver { background: linear-gradient(135deg, #dfe5ec, #a9b4c3); box-shadow: 0 4px 10px -3px rgba(148, 163, 184, .6); }
+.praise-root .podium-medal.tone-bronze { background: linear-gradient(135deg, #efb489, #c97f4b); box-shadow: 0 4px 10px -3px rgba(201, 127, 75, .6); }
+.praise-root .podium-medal.tone-plain { background: linear-gradient(135deg, #94a3b8, #64748b); }
+.praise-root .podium-short { font-size: 20px; font-weight: 800; color: var(--pr-ink); line-height: 1.2; }
+.praise-root .podium-full { font-size: 12px; color: var(--pr-muted); margin-top: 2px; }
+.praise-root .podium-score { font-size: 26px; font-weight: 800; color: var(--pr-ink); font-variant-numeric: tabular-nums; margin-top: 10px; line-height: 1.1; }
+.praise-root .podium-unit { font-size: 13px; font-weight: 600; color: var(--pr-muted); margin-left: 1px; }
+.praise-root .podium-rate {
+  display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; color: var(--pr-ink-2); background: var(--pr-card-2);
+}
+/* 底座：柔和横条（取代 emoji 台阶） */
+.praise-root .podium-stand { width: 76%; height: 10px; border-radius: 999px; margin-top: 14px; }
+.praise-root .podium-stand.tone-gold { background: linear-gradient(90deg, rgba(247,201,72,.18), rgba(232,167,15,.62), rgba(247,201,72,.18)); }
+.praise-root .podium-stand.tone-silver { background: linear-gradient(90deg, rgba(223,229,236,.2), rgba(169,180,195,.6), rgba(223,229,236,.2)); }
+.praise-root .podium-stand.tone-bronze { background: linear-gradient(90deg, rgba(239,180,137,.2), rgba(201,127,75,.6), rgba(239,180,137,.2)); }
+.praise-root .podium-stand.tone-plain { background: linear-gradient(90deg, rgba(148,163,184,.15), rgba(148,163,184,.45), rgba(148,163,184,.15)); }
+
+/* —— 榜单列表 —— */
+.praise-root .rank-list { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.praise-root .rank-item {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 14px;
+  background: var(--pr-card-2); border: 1px solid transparent;
+  border-radius: 12px; padding: 10px 16px;
+}
+.praise-root .rank-item:last-child { border-bottom: 1px solid transparent; }
+.praise-root .rank-number {
+  width: 30px; height: 30px; line-height: 30px; border-radius: 50%; text-align: center;
+  font-size: 13.5px; font-weight: 800; color: var(--pr-ink-2);
+  background: var(--pr-card); border: 1px solid var(--pr-border);
+  font-variant-numeric: tabular-nums; justify-self: center;
+}
+.praise-root .rank-name-cell { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.praise-root .rank-name { font-size: 15px; font-weight: 700; color: var(--pr-ink); flex-shrink: 0; }
+.praise-root .rank-fullname { font-size: 12.5px; color: var(--pr-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.praise-root .rank-score { font-size: 15px; font-weight: 800; color: var(--pr-ink); font-variant-numeric: tabular-nums; justify-self: end; }
+.praise-root .rank-rate { font-size: 12.5px; color: var(--pr-muted); font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+
+/* —— 空状态 —— */
+.praise-root .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 56px 16px; }
+.praise-root .empty-ico { color: var(--pr-muted); opacity: .55; }
+.praise-root .empty-text { color: var(--pr-muted); font-size: 15px; }
+
+/* —— 状元 —— */
+.praise-root .champion-wrap { display: flex; flex-direction: column; align-items: center; padding: 34px 0 26px; }
+.praise-root .champion-card { width: 300px; max-width: 84%; padding-top: 34px !important; padding-bottom: 24px !important; }
+.praise-root .champion-medal { top: -17px; }
+.praise-root .champion-crown { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(240, 169, 44, 0.14); color: #b7791f; margin-bottom: 8px; }
+.praise-root .champion-short { font-size: 26px; }
+.praise-root .champion-score { font-size: 32px; margin-top: 12px; }
+.praise-root .champion-line { margin-top: 20px; font-size: 15px; font-weight: 600; color: var(--pr-muted); }
+
+/* —— 进步之星 —— */
+.praise-root .progress-list { display: flex; flex-direction: column; gap: 10px; }
+.praise-root .progress-card {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--pr-card); border: 1px solid var(--pr-border);
+  border-radius: 14px; padding: 14px 18px; box-shadow: var(--pr-shadow);
+}
+.praise-root .progress-rank {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+  font-variant-numeric: tabular-nums;
+}
+.praise-root .progress-card.rank-1 .progress-rank { background: linear-gradient(135deg, #f7c948, #e8a70f); box-shadow: 0 4px 10px -3px rgba(232,167,15,.6); }
+.praise-root .progress-card.rank-2 .progress-rank { background: linear-gradient(135deg, #dfe5ec, #a9b4c3); box-shadow: 0 4px 10px -3px rgba(148,163,184,.55); }
+.praise-root .progress-card.rank-3 .progress-rank { background: linear-gradient(135deg, #efb489, #c97f4b); box-shadow: 0 4px 10px -3px rgba(201,127,75,.55); }
+.praise-root .progress-info { flex: 1; min-width: 0; }
+.praise-root .progress-name { font-size: 15.5px; font-weight: 700; color: var(--pr-ink); }
+.praise-root .progress-fullname { font-size: 12.5px; color: var(--pr-muted); }
+.praise-root .progress-pts { color: var(--pr-ink-2); font-variant-numeric: tabular-nums; }
+.praise-root .progress-from { color: var(--pr-muted); }
+.praise-root .progress-arrow { color: #059669; }
+.praise-root .progress-to { font-weight: 800; color: #047857; }
+.praise-root .progress-delta { color: #047857; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dark .praise-root .progress-to, .dark .praise-root .progress-delta { color: #6ee7b7; }
+.dark .praise-root .progress-arrow { color: #6ee7b7; }
+
+/* —— 课后任务达人 —— */
+.praise-root .listening-grid { display: flex; flex-direction: column; gap: 10px; }
+.praise-root .listening-card {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  background: var(--pr-card); border: 1px solid var(--pr-border);
+  border-radius: 14px; padding: 13px 18px; box-shadow: var(--pr-shadow);
+}
+.praise-root .listening-card.rank-1 { border-color: rgba(232, 167, 15, 0.4); }
+.praise-root .listening-rank { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; color: var(--pr-ink-2); background: var(--pr-card-2); font-variant-numeric: tabular-nums; }
+.praise-root .listening-content { flex: 1; min-width: 0; }
+.praise-root .listening-name { font-size: 15.5px; font-weight: 700; color: var(--pr-ink); }
+.praise-root .listening-fullname { font-size: 12.5px; color: var(--pr-muted); }
+.praise-root .listening-score { display: flex; align-items: baseline; gap: 2px; }
+.praise-root .score-number { font-size: 20px; font-weight: 800; color: var(--pr-ink); font-variant-numeric: tabular-nums; }
+.praise-root .score-label { font-size: 12px; color: var(--pr-muted); }
+.praise-root .sparkle-icon { position: absolute; right: 14px; top: 10px; width: 16px; height: 16px; color: #e8a70f; }
+
+/* —— 作业表彰（荣誉墙）—— */
+.praise-root .honor-wall { display: flex; flex-direction: column; gap: 16px; }
+.praise-root .honor-section {
+  background: var(--pr-stage-bg); border: 1px solid var(--pr-border);
+  border-radius: 18px; padding: 20px; box-shadow: var(--pr-shadow);
+}
+.praise-root .honor-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  padding: 0; border-radius: 0; background: none; color: var(--pr-ink);
+}
+.praise-root .honor-header h3 { font-size: 16.5px; font-weight: 800; color: var(--pr-ink); }
+.praise-root .honor-header svg { width: 19px; height: 19px; }
+.praise-root .honor-header.red-ribbon svg { color: #d97706; }
+.praise-root .honor-header.green-ribbon svg { color: #059669; }
+.praise-root .honor-content { padding: 0; }
+.praise-root .honor-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.praise-root .honor-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 13px; border-radius: 999px; font-size: 13.5px; font-weight: 700;
+}
+.praise-root .honor-badge.gold-badge { background: rgba(240, 169, 44, 0.13); color: #b7791f; border: 1px solid rgba(240, 169, 44, 0.30); }
+.praise-root .honor-badge.emerald-badge { background: rgba(16, 185, 129, 0.12); color: #047857; border: 1px solid rgba(16, 185, 129, 0.28); }
+.praise-root .honor-empty { color: var(--pr-muted); font-size: 13.5px; padding: 6px 0; }
+.dark .praise-root .honor-badge.gold-badge { color: #fcd34d; }
+.dark .praise-root .honor-badge.emerald-badge { color: #6ee7b7; }
+
+/* 暗色：kpi 图标与章节色调补足 */
+.dark .praise-root .praise-kpi-ico.tone-gold { color: #fcd34d; }
+.dark .praise-root .praise-kpi-ico.tone-blue { color: #93c5fd; }
+.dark .praise-root .praise-kpi-ico.tone-violet { color: #c4b5fd; }
+.dark .praise-root .praise-kpi-ico.tone-emerald { color: #6ee7b7; }
+.dark .praise-root .champion-crown { background: rgba(240, 169, 44, 0.18); color: #fcd34d; }
+.dark .praise-root .empty-ico { opacity: .5; }
+
+/* 窄屏收拢 */
+@media (max-width: 768px) {
+  .praise-root .podium-stage { gap: 12px; }
+  .praise-root .podium-item { width: 33%; max-width: none; }
+  .praise-root .podium-short { font-size: 16px; }
+  .praise-root .podium-score { font-size: 20px; }
+  .praise-root .rank-item { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; }
+  .praise-root .rank-rate { display: none; }
+}
+/* 导出态：被忽略的控制栏连占位一起移除（避免导出图底部留下一条空白） */
+.praise-root.praise-exporting [data-h2c-ignore] { display: none !important; }

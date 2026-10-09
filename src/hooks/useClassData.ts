@@ -219,6 +219,28 @@ function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRe
   });
 }
 
+// 加载期自愈：无条件重排所有课次名次。
+// 背景：旧数据里可能留着"同分未并列"的历史 rank（旧版本写入、或某次导入带入），
+// 且这些数据的正确率往往与重算结果完全一致 → recomputeRatesInClass 检测不到变化、不会触发重排，
+// 错误排名就会一直挂在表/导出/榜单上。这里每次加载/导入都无条件重排一遍（O(n log n)，一次到位），
+// 保证「同分并列 + 后一名按并列数后移」的口径对存量数据同样生效。
+function rerankAllLessons(all: { [key: string]: Class }): { [key: string]: Class } {
+  let changed = false;
+  const next: { [key: string]: Class } = {};
+  Object.entries(all).forEach(([cid, cls]) => {
+    if (!cls?.records?.length) { next[cid] = cls; return; }
+    let records = cls.records;
+    new Set(cls.records.map(r => r.lessonNumber)).forEach(lesson => {
+      records = rerankLesson(records, lesson);
+    });
+    // rerankLesson 用 map 生成新数组；逐项比对引用判断是否真的发生变更
+    const didChange = records.some((r, i) => r !== cls.records[i]);
+    if (didChange) { changed = true; next[cid] = { ...cls, records }; }
+    else next[cid] = cls;
+  });
+  return changed ? next : all;
+}
+
 // 解析某课次生效配置（与 getLessonConfig 同口径的纯函数版本，供加载期/导入期迁移使用）
 function resolveLessonConfigPure(classData: Class, lessonNumber: number, appConfig: AppConfig): LessonConfig {
   const cfgs = classData.lessonConfigs || {};
@@ -424,8 +446,8 @@ export function useClassData() {
         if (saved && typeof saved === 'object') {
           // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
           const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
-          // 课次模板自愈：登记表里的最后一次编辑优先
-          return applyTemplateStore(appConfig, migrated).classes;
+          // 课次模板自愈：登记表里的最后一次编辑优先；名次无条件重排（修复历史"同分未并列"）
+          return applyTemplateStore(appConfig, rerankAllLessons(migrated)).classes;
         }
       } catch {
         console.warn('[load] classData 损坏，已隔离为空（不回退示例数据，避免误推上云）');
@@ -1543,11 +1565,11 @@ export function useClassData() {
     if (tplChanged > 0 || incomingTemplates) writeTemplateStore(mergedTemplates);
 
     const baseAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
-    // 导入期迁移：请假清零 + 以课次真实满分重算正确率
-    const migratedClasses = recomputeAllRates(
+    // 导入期迁移：请假清零 + 以课次真实满分重算正确率；名次无条件重排（修复历史"同分未并列"）
+    const migratedClasses = rerankAllLessons(recomputeAllRates(
       normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(data?.classes || {}))),
       baseAppConfig
-    );
+    ));
     // 用合并后的登记表覆盖配置中的模板字段（本地更新者胜出）
     const healed = applyTemplateStore(baseAppConfig, migratedClasses);
     setAppConfig(healed.appConfig);

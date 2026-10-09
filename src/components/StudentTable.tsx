@@ -540,7 +540,7 @@ export function StudentTable({
                   <Button size="sm" variant="ghost" className="h-8 rounded-[var(--r-md)]" onClick={() => setConfirmClear(false)}>取消</Button>
                 </span>
               ) : (
-                <Button variant="outline" size="sm" className="gap-2 h-8 rounded-[var(--r-md)] border-[#ff3b30]/30 text-[#ff3b30] hover:bg-[#ff3b30]/10"
+                <Button variant="outline" size="sm" className="gap-2 h-8 rounded-[var(--r-md)] border-[#d92c20]/30 text-[#d92c20] hover:bg-[#d92c20]/10"
                   onClick={() => setConfirmClear(true)} title="删除本课全部记录与课次配置（可撤销；删除后该课次可重新新增）">
                   <Trash2 className="w-4 h-4" /><span className="hidden sm:inline">删除本课</span>
                 </Button>
@@ -781,7 +781,7 @@ export function StudentTable({
                               onClick={() => onViewStudentAnalysis(studentName)}
                               aria-label={`查看 ${getNickname(studentName)} 的学情分析`}
                               className="font-medium hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-rgb)/0.5)]"
-                              style={{ color: 'var(--brand)' }}
+                              style={{ color: 'var(--link)' }}
                             >
                               {getNickname(studentName)}
                             </button>

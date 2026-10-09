@@ -179,7 +179,7 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">转出仅移出名单，历史记录仍计入以往课次的班级统计</p>
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">转出仅移出名单，历史记录仍计入以往课次的班级统计</p>
           </div>
         )}
       </CardContent>

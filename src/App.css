@@ -65,7 +65,7 @@ body {
   font-weight: 500;
   color: #1c1c1e;
   border-radius: var(--r-md);
-  transition: all 0.25s var(--ease);
+  transition: color .25s var(--ease), background-color .25s var(--ease), box-shadow .25s var(--ease), opacity .25s var(--ease);
   position: relative;
   overflow: hidden;
   white-space: nowrap;
@@ -109,7 +109,7 @@ body {
   border-radius: var(--r-md);
   padding: 12px 16px;
   font-size: 16px;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
   backdrop-filter: blur(8px);
 }
 
@@ -122,7 +122,7 @@ body {
 
 /* iOS 18 卡片悬停效果 */
 .ios-card-hover {
-  transition: all 0.3s var(--ease);
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), background-color .3s var(--ease);
 }
 
 .ios-card-hover:hover {
@@ -176,7 +176,7 @@ body {
   border-radius: var(--r-md);
   padding: 10px 14px;
   font-size: 15px;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .ios-select:focus {
@@ -252,7 +252,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s var(--ease);
+  transition: background-color .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
   border: 0.5px solid transparent;
 }
 
@@ -393,7 +393,7 @@ body {
   font-weight: 600;
   padding: 10px 24px;
   box-shadow: 0 2px 12px rgb(var(--brand-rgb) / 0.3);
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .theater-button:hover {
@@ -415,7 +415,7 @@ body {
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
   border-radius: var(--r-md);
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .theater-tab:hover {
@@ -790,7 +790,7 @@ body {
   gap: 12px;
   border: 0.5px solid rgb(var(--brand-rgb) / 0.2);
   position: relative;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .listening-card:hover {
@@ -914,7 +914,7 @@ body {
   border-radius: 100px;
   font-weight: 600;
   font-size: 16px;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .honor-badge:hover {
@@ -957,7 +957,7 @@ body {
   border-radius: var(--r-lg);
   border: 0.5px solid rgb(var(--brand-rgb) / 0.2);
   position: relative;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .progress-card:hover {
@@ -1238,7 +1238,7 @@ body {
   background: rgba(255, 255, 255, 0.8);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
   border-radius: var(--r-md);
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
 }
 
 .liquid-glass-input:focus {
@@ -1252,7 +1252,7 @@ body {
   color: white;
   border-radius: var(--r-md);
   font-weight: 600;
-  transition: all var(--dur-ui) ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-ui) ease;
   box-shadow: 0 2px 8px rgb(var(--brand-rgb) / 0.25);
 }
 
@@ -1400,7 +1400,7 @@ body {
   /* 动效 */
   --dur-1:.16s; --dur-2:.24s; --dur-3:.36s; --ease:cubic-bezier(.4,0,.2,1);
   /* 语义文本色（统一原先散落的 #1c1c1e/#3c3c43/#8e8e93） */
-  --ink:#1c1c1e; --ink-2:#3c3c43; --ink-3:#6b6b70; --ink-4:#8e8e93; --hairline:rgba(0,0,0,.08);
+  --ink:#1c1c1e; --ink-2:#3c3c43; --ink-3:#6b6b70; --ink-4:#74747a; --hairline:rgba(0,0,0,.08);
   --glass:rgba(255,255,255,.72); --glass-2:rgba(255,255,255,.82);
 }
 
@@ -1444,7 +1444,7 @@ body{
 
 /* Tabs：激活渐变 + 平滑 */
 .ios-tabs-list{ background:var(--glass-2); border-radius:var(--r-lg); box-shadow:var(--sh-md); }
-.ios-tab-trigger{ border-radius:var(--r-md); font-weight:500; transition:all var(--dur-2) var(--ease); }
+.ios-tab-trigger{ border-radius:var(--r-md); font-weight:500; transition:color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
 .ios-tab-trigger:not([data-state="active"]):hover{ background:rgb(var(--brand-rgb)/.08); color:var(--brand); }
 
 /* 骨架屏 + 统一空状态 */
@@ -2324,3 +2324,72 @@ html[data-exporting] * { animation: none !important; }
 [data-theme='mono'] .data-table tbody td, [data-theme='mono'] .data-table tbody th { border-right: 1px solid rgb(15 23 42 / 0.08); }
 [data-theme='mono'] .praise-stat-tile { background: transparent; border: 1px solid rgb(15 23 42 / 0.30); border-radius: 0 !important; }
 [data-theme='mono'] [data-slot="badge"] { border-radius: 0 !important; border: 1px solid #0f172a; background: transparent; color: #0f172a; }
+
+
+/* ==================================================================
+   系统性视觉打磨（2026-10-09）—— 对比度 / 数字排版 / 暗色语义 / 触达
+   原则：① 只改"值"与"表面"，不动布局、结构与文案；
+        ② 每条都可被 Playwright 审计复测（对比度计数 / tabular / 触达尺寸）。
+   ================================================================== */
+
+/* —— A1. 浅色对比度：辅助灰与状态色加深一档，全部 ≥ 4.5:1（WCAG AA 正文） —— */
+.text-slate-400 { color: #64748b; }                 /* 2.45 → 4.76（瓷贴标签/课次列表/脚注） */
+.text-amber-600, .text-amber-500 { color: #b45309; }/* 3.19 → 5.02（云同步 等） */
+.text-emerald-600 { color: #047857; }               /* 3.77 → 5.49 */
+.text-rose-500 { color: #e11d48; }                  /* 3.67 → 4.70 */
+.text-\[color\:var\(--brand\)\] { color: var(--brand-strong); } /* 3.65 → 5.60（小号品牌字/图标） */
+
+/* —— A2. 暗色对比度：浅底家族 → 深色 tint（修复"白字压浅底"），深字家族 → 浅字 —— */
+.dark :is([class~="bg-slate-50"], [class~="bg-slate-50/80"], [class~="bg-slate-50/60"],
+          [class~="bg-slate-100"], [class~="bg-slate-100/80"]) { background-color: rgba(255, 255, 255, 0.06); }
+.dark :is([class~="bg-rose-50"], [class~="bg-rose-50/80"], [class~="bg-rose-50/60"],
+          [class~="bg-rose-100"], [class~="bg-red-50"], [class~="bg-red-100"]) { background-color: rgba(244, 63, 94, 0.14); }
+.dark :is([class~="bg-emerald-50"], [class~="bg-emerald-50/80"], [class~="bg-emerald-50/90"],
+          [class~="bg-emerald-100"], [class~="bg-green-50"], [class~="bg-green-100"]) { background-color: rgba(16, 185, 129, 0.14); }
+.dark :is([class~="bg-amber-50"], [class~="bg-amber-50/70"], [class~="bg-amber-50/60"],
+          [class~="bg-amber-100"], [class~="bg-amber-100/70"], [class~="bg-orange-100"]) { background-color: rgba(245, 158, 11, 0.16); }
+.dark :is([class~="bg-blue-50"], [class~="bg-blue-100"]) { background-color: rgba(59, 130, 246, 0.16); }
+.dark :is([class~="bg-sky-50"]) { background-color: rgba(14, 165, 233, 0.16); }
+.dark :is([class~="bg-violet-50"], [class~="bg-violet-100"]) { background-color: rgba(139, 92, 246, 0.16); }
+
+/* 深字 → 浅字（放在卡片整体浅字规则之后，按家族保留语义色） */
+.dark .text-slate-400 { color: #94a3b8; }
+.dark .text-slate-500 { color: #a3b3c7; }
+.dark .text-slate-600 { color: #c3d0de; }
+.dark .text-slate-700 { color: #dde6f0; }
+.dark :is(.text-amber-500, .text-amber-600, .text-amber-700) { color: #fcd34d; }
+.dark :is(.text-emerald-600, .text-emerald-700) { color: #6ee7b7; }
+.dark :is(.text-green-600, .text-green-700) { color: #86efac; }
+.dark :is(.text-rose-500, .text-rose-600, .text-rose-700) { color: #fda4af; }
+.dark :is(.text-red-500, .text-red-700) { color: #fca5a5; }
+.dark :is(.text-blue-600, .text-blue-700, .text-sky-600) { color: #93c5fd; }
+.dark :is(.text-orange-600, .text-orange-700) { color: #fdba74; }
+/* 暗色下 ink 令牌补偿：弱化文本换浅色实现（浅色下已加深一档） */
+.dark { --ink-3: #b6b6bc; --ink-4: #a3a3a9; }
+
+/* —— B. 数字排版：表格与报告的数字统一等宽对齐（tabular-nums） —— */
+.data-table { font-variant-numeric: tabular-nums; }
+.report-container { font-variant-numeric: tabular-nums; }
+
+/* —— C. 触屏触达：小图标按钮热区扩到 ≥40px（仅粗指针设备，不改视觉尺寸） —— */
+@media (pointer: coarse) {
+  button.p-1, a.p-1 { position: relative; }
+  button.p-1::after, a.p-1::after { content: ''; position: absolute; inset: -9px; }
+}
+
+/* —— D. 顶栏按钮键盘焦点环（此前被 .liquid-glass-header 的 inset 阴影覆盖） —— */
+.liquid-glass-header button:focus-visible,
+.liquid-glass-header a:focus-visible {
+  box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.40) !important;
+}
+/* 暗色下品牌文字还原为亮品牌色（浅色下的加深不带到暗色） */
+.dark .text-\[color\:var\(--brand\)\] { color: rgb(var(--brand-rgb)); }
+.data-table thead th { color: #5b6b80; } /* 表头在浅灰底上补齐 4.5:1（主题版式的 !important 覆盖不受影响） */
+/* 分数单元格：小数分数（如 13.8）曾被 px-3 内边距裁成"13."，收窄内边距保证完整显示 */
+.score-cell .score-input { padding-left: 4px; padding-right: 4px; }
+
+/* —— E. 链接色令牌：浅色用加深品牌色（4.5:1），暗色还原亮品牌色 —— */
+:root { --link: var(--brand-strong); }
+.dark { --link: rgb(var(--brand-rgb)); }
+/* 危险红在暗色下用浅红（#d92c20 在深底上过暗） */
+.dark .text-\[\#d92c20\] { color: #f87171; }

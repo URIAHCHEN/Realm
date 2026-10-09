@@ -7,10 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
-  CircleAlert, RotateCcw, Send, Sparkles, Table2 } from 'lucide-react';
+  CircleAlert, RotateCcw, Send, Sparkles, Table2, Lightbulb } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
+import { computeStudentReportStats } from '@/lib/reportStats';
+import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
 
 /**
@@ -41,6 +43,8 @@ interface FeedbackGeneratorProps {
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
   /** 口语等附加项的档位判定配置（用于【口语评价】模板参数）；缺省用默认档位 */
   oralRating?: OralRatingConfig;
+  /** 班级课次配置表：学习建议要跨课次聚合（与个人报告同口径） */
+  lessonConfigs?: { [lesson: string]: LessonConfig };
   libraryLinks?: string[];
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 点击群发列表中的姓名弹出该生学情报告 */
@@ -57,6 +61,7 @@ export function FeedbackGenerator({
   getNickname,
   calculateClassStats,
   oralRating,
+  lessonConfigs = {},
   libraryLinks = [],
   onSaveLessonConfig,
   onViewStudent
@@ -117,9 +122,9 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating);
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' });
     }
-    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating);
+    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, { '【学习建议】': adviceMap[name] || '' });
   };
 
   // 模板草稿改动：若当前学生已有生成内容，实时重算预览
@@ -230,6 +235,50 @@ export function FeedbackGenerator({
     toast.success('已重置复制状态');
   };
 
+  // 学习建议（精简版）：与个人报告「学习建议」同口径（该生全部课次记录），
+  // 供三个入口使用 —— 行内一键复制 / 批量复制 / 模板参数【学习建议】
+  const adviceMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    const opts = {
+      attendanceOptions: lessonConfig.attendanceOptions || [],
+      homeworkOptions: lessonConfig.homeworkOptions || [],
+      listeningOptions: lessonConfig.listeningOptions || [],
+    };
+    students.forEach(name => {
+      const srs = records.filter(r => r.studentName === name).sort((a, b) => a.lessonNumber - b.lessonNumber);
+      if (srs.length === 0) { map[name] = ''; return; }
+      const st = computeStudentReportStats(srs, lessonConfigs, opts);
+      map[name] = buildCondensedAdvice(getNickname(name), srs, st, lessonConfigs);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, records, lessonConfigs, lessonConfig]);
+
+  // 一键复制某生的学习建议（精简版）
+  const handleCopyAdvice = async (name: string) => {
+    const rec = recordOf(name);
+    if (!rec || isAbsentRecord(rec)) { toast.error('本课无有效记录，无法生成学习建议'); return; }
+    const text = adviceMap[name];
+    if (!text) { toast.error('暂无可复制的学习建议'); return; }
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(`已复制 ${getNickname(name)} 的学习建议（精简版）`);
+    else toast.error('复制失败，请手动选择复制');
+  };
+
+  // 一键复制全班学习建议（学生 | 学习建议 两列表格）
+  const handleCopyAdviceBatch = async () => {
+    const rows = students
+      .map(name => ({ name, rec: recordOf(name) }))
+      .filter(x => x.rec && !isAbsentRecord(x.rec))
+      .map(x => ({ name: x.name, text: adviceMap[x.name] || '' }))
+      .filter(x => x.text);
+    if (rows.length === 0) { toast.error('没有可复制的学习建议（本课暂无到课学员）'); return; }
+    const text = buildTsvTable(['学生姓名', '学习建议'], rows.map(r => [getNickname(r.name), r.text]));
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(`已复制 ${rows.length} 位学员的学习建议（两列表格）`);
+    else toast.error('复制失败，请手动选择复制');
+  };
+
   // 群发预览：仅含有记录且非请假/缺勤的学员；内容按当前模板（课次配置/默认/界面修改后的草稿）实时生成
   // 注意：withMaterials 必须进依赖 —— 否则取消勾选「附参考教辅」后群发预览仍带旧文本（历史缺陷）
   const batchRows = useMemo(() => {
@@ -256,9 +305,9 @@ export function FeedbackGenerator({
     }
     const rows = batchRows.map(r => {
       const rec = recordOf(r.name);
-      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating) : '';
+      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }) : '';
       const fourInOneText = rec
-        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating)
+        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
         : '';
       return [getNickname(r.name), privateText, fourInOneText];
     });
@@ -287,8 +336,8 @@ export function FeedbackGenerator({
       const rec = recordOf(r.name);
       const text = rec
         ? (isFour
-          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating)
-          : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating))
+          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
+          : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }))
         : '';
       return [getNickname(r.name), text];
     });
@@ -405,6 +454,11 @@ export function FeedbackGenerator({
                 <Copy className="w-4 h-4" />
                 仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}（两列）
               </Button>
+              <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyAdviceBatch}
+                title="学生 | 学习建议（精简版）两列表格，粘贴进 Excel / 腾讯文档即成对照表">
+                <Lightbulb className="w-4 h-4" />
+                复制学习建议（两列）
+              </Button>
               <Button variant="ghost" className="h-9 px-3 text-sm rounded-[var(--r-md)] gap-1.5 text-[color:var(--ink-4)]" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里">
                 <ClipboardList className="w-4 h-4" />
                 复制纯文本
@@ -501,10 +555,13 @@ export function FeedbackGenerator({
                     const tone = statusTone(s);
                     const isActive = selected === s;
                     return (
-                      <button
+                      <div
                         key={s}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleSelect(s)}
-                        className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(s); } }}
+                        className={`group w-full cursor-pointer flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
                           isActive
                             ? 'bg-[rgb(var(--brand-rgb)/0.1)] ring-1 ring-[rgb(var(--brand-rgb)/0.35)]'
                             : 'hover:bg-black/[0.04]'
@@ -526,6 +583,15 @@ export function FeedbackGenerator({
                             {hasRecord ? `${recordOf(s)!.totalScore}分 · 第${recordOf(s)!.rank}名` : '本课无记录'}
                           </span>
                         </span>
+                        {/* 一键复制学习建议（精简版）—— 与「四个一」复制的同级快捷入口 */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleCopyAdvice(s); }}
+                          title="复制学习建议（精简版，可直接发家长）"
+                          className="p-1.5 rounded-lg text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.08)] flex-shrink-0 transition-opacity"
+                        >
+                          <Lightbulb className="w-4 h-4" />
+                        </button>
                         {tone === 'copied' ? (
                           <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                         ) : tone === 'generated' ? (
@@ -533,7 +599,7 @@ export function FeedbackGenerator({
                         ) : (
                           <span className="w-2 h-2 rounded-full bg-slate-200 flex-shrink-0" />
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -644,6 +710,7 @@ export function FeedbackGenerator({
                   { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
                   { key: '【成绩详情】', desc: '' }, { key: '【总分】', desc: '' }, { key: '【满分】', desc: '' },
                   { key: '【排名】', desc: '' }, { key: '【正确率】', desc: '' }, { key: '【薄弱项】', desc: '' },
+                  { key: '【学习建议】', desc: '' },
                   { key: '【作业内容】', desc: '' },
                   ...dynamicVars,
                 ]).map(v => (

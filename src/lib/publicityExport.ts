@@ -2,7 +2,8 @@
 // 排版策略：table-layout:fixed 固定列宽 + 全居中 + 等宽数字 + 统一徽章尺寸，保证截图整齐美观
 import type { Class, QuestionType, StudentRecord, CustomField, OralRatingConfig } from '@/types';
 import type { ExportStyle } from '@/lib/displaySettings';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isQuizAssessed } from '@/lib/attendance';
+import { optionTone, optionToneLevel } from '@/lib/optionTone';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
 import { buildOralRatings, oralKey, oralToneColor } from '@/lib/oralRating';
 
@@ -159,15 +160,15 @@ export function buildPublicityHTML(
   oralRating?: OralRatingConfig
 ): string {
   const p = PALETTES[style] || PALETTES.gradient;
-  // 公示只列出到课学员：请假/缺勤者不出现在名单中（平均分本就不计入）
-  const sorted = [...records].filter(r => !isAbsentRecord(r)).sort((a, b) => b.totalScore - a.totalScore);
+  // 公示只列「当次在课且参与小测」的学员：请假/缺勤/调课一体排除（不进名单、不进平均）
+  const sorted = [...records].filter(r => isQuizAssessed(r)).sort((a, b) => b.totalScore - a.totalScore);
   const fullScore =
     questionTypes.reduce((sum, qt) => (qt.excludeFromTotal ? sum : sum + qt.fullScore), 0) +
     customFields.reduce((sum, cf) => sum + (cf.kind === 'number' && cf.includeInTotal ? (cf.fullScore || 0) : 0), 0);
   const hasData = sorted.length > 0;
 
   // 班级平均值（口径与学情表一致：请假/缺勤学员不计入平均分）
-  const presentRecords = records.filter(r => !isAbsentRecord(r));
+  const presentRecords = records.filter(r => isQuizAssessed(r));
   const avg = (nums: number[]) => nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length * 10) / 10 : 0;
   const avgTotal = presentRecords.length > 0 ? avg(presentRecords.map(r => r.totalScore)) : 0;
   const avgRate = presentRecords.length > 0 ? avg(presentRecords.map(r => r.correctRate)) : 0;
@@ -196,7 +197,10 @@ export function buildPublicityHTML(
 
   // 排名徽章：前三名金银铜渐变高亮（按真实名次着色，非位置；同分并列 → 同色同号，如四个金色「1」）
   // 固定尺寸块级圆（html2canvas 对齐安全）
-  const rankBadge = (rank: number) => {
+  const rankBadge = (rank: number | string) => {
+    if (typeof rank === 'string') {
+      return `<span style="display:block;line-height:28px;text-align:center;color:${p.muted};font-size:13.5px">${rank}</span>`;
+    }
     if (rank === 1 || rank === 2 || rank === 3) {
       const grad = rank === 1 ? 'linear-gradient(135deg,#fcd34d,#f0a92c)'
         : rank === 2 ? 'linear-gradient(135deg,#e5eaf0,#a9b4c3)'
@@ -209,24 +213,21 @@ export function buildPublicityHTML(
 
   // 统一单元格样式：全居中、固定行高、底部细分隔线；溢出裁剪，保证固定列宽不错位
   const td = 'padding:9px 8px;border-bottom:1px solid ' + p.rowBorder + ';text-align:center;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;';
-  // 负面状态（未完成/未交/缺勤/迟到…）整格高亮：浅底 + 同色系加深文字（一张表里最该被看见的就是这些）
-  // 2026-10-09 按用户要求升级：从"只标红文字"改为"整格高亮突出"，底色取同色系的浅tint、文字再加深一档
-  const NEG = /未完成|未交|未做|未带|没带|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+  // 三态列（考勤/课堂练习/课后任务）：v3「照搬学情表」—— 语义色圆胶囊（与表内 optionTone 同一份配色），
+  // 不再用整格方底（用户反馈"红色方格突兀、要圆一些"）。深色导出样式用对应浅色系。
   const isDarkStyle = style === 'dark';
-  // v2 降噪（2026-10-09 用户反馈"红方格突兀"）：底色只留极浅水洗（几乎无色温），
-  // 重点靠文字本身（加深一档 + 加粗）；与表内高亮同一口径。
-  const stateCell = (text: string): { css: string; cellBg: string } => {
-    if (/请假|调课/.test(text)) {
-      return isDarkStyle
-        ? { css: 'font-size:13px;color:#93c5fd;font-weight:700;', cellBg: 'rgba(59,130,246,0.09)' }
-        : { css: 'font-size:13px;color:#1d4ed8;font-weight:700;', cellBg: 'rgba(59,130,246,0.055)' };
-    }
-    if (NEG.test(text)) {
-      return isDarkStyle
-        ? { css: 'font-size:13px;color:#fda4af;font-weight:800;', cellBg: 'rgba(244,63,94,0.10)' }
-        : { css: 'font-size:13px;color:#b91c1c;font-weight:800;', cellBg: 'rgba(244,63,94,0.055)' };
-    }
-    return { css: `font-size:13px;color:${p.text};`, cellBg: '' };
+  const PILL_TONES: Record<string, { fg: string; bg: string; border: string }> = isDarkStyle ? {
+    good: { fg: '#6ee7b7', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.38)' },
+    warn: { fg: '#fcd34d', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.38)' },
+    bad: { fg: '#fda4af', bg: 'rgba(244,63,94,0.15)', border: 'rgba(244,63,94,0.40)' },
+    info: { fg: '#93c5fd', bg: 'rgba(59,130,246,0.15)', border: 'rgba(59,130,246,0.38)' },
+    muted: { fg: '#cbd5e1', bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.16)' },
+  } : {};
+  /** 语义圆胶囊：toneValue 决定配色（与学情表 optionTone 同为关键词判定），display 为展示文本 */
+  const statePill = (toneValue: string, display: string): string => {
+    const level = optionToneLevel(toneValue);
+    const t = isDarkStyle ? PILL_TONES[level] : optionTone(toneValue);
+    return `<span style="display:inline-block;white-space:nowrap;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.35;color:${t.fg};background:${t.bg};border:1px solid ${t.border}">${esc(display)}</span>`;
   };
 
   // 排名独立重算（同分并列 + 后一名按并列数后移）：不依赖落库里的历史 rank，
@@ -234,19 +235,19 @@ export function buildPublicityHTML(
   const rankSnap = classSnapshotOfLesson(records, lessonNumber);
   const rows = sorted.map((r, i) => {
     const ratePct = r.correctRate || 0;
-    const rankVal = rankSnap.rankById.get(r.id) ?? (r.rank || i + 1);
+    const rankVal: number | string = rankSnap.rankById.get(r.id) ?? '-';
     // 正确率：<80 红色，≥80 绿色
     const rateColor = ratePct < 80 ? '#dc2626' : (style === 'dark' ? p.text : '#16a34a');
-    const att = stateCell(r.attendance || '');
-    const hw = stateCell(r.homeworkStatus || '');
-    const ls = stateCell(r.listeningStatus === '具体分数' ? '完成' : (r.listeningStatus || ''));
-    const cellBg = (st: { cellBg: string }) => st.cellBg ? `background:${st.cellBg};` : '';
+    const attPill = statePill(r.attendance || '', attendanceEmoji(r.attendance));
+    const hwPill = statePill(r.homeworkStatus || '', homeworkEmoji(r.homeworkStatus));
+    const lsTone = r.listeningStatus === '具体分数' ? '完成' : (r.listeningStatus || '');
+    const lsPill = statePill(lsTone, r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : (r.listeningStatus || '-'));
     return `<tr style="${i % 2 === 1 ? 'background:' + p.altRowBg + ';' : ''}">
       <td style="${td}font-weight:600">${esc(getNickname(r.studentName))}</td>
       <td style="${td}white-space:nowrap">${seasonChips(r.seasons || [])}</td>
-      <td style="${td}white-space:nowrap;${att.css}${cellBg(att)}">${esc(attendanceEmoji(r.attendance))}</td>
-      <td style="${td}white-space:nowrap;${hw.css}${cellBg(hw)}">${esc(homeworkEmoji(r.homeworkStatus))}</td>
-      <td style="${td}white-space:nowrap;${ls.css}${cellBg(ls)}">${r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : esc(r.listeningStatus || '-')}</td>
+      <td style="${td}white-space:nowrap">${attPill}</td>
+      <td style="${td}white-space:nowrap">${hwPill}</td>
+      <td style="${td}white-space:nowrap">${lsPill}</td>
       ${questionTypes.map(qt => {
         const raw = r.scores[qt.id];
         const isOptional = !!qt.excludeFromTotal;
@@ -293,7 +294,7 @@ export function buildPublicityHTML(
   // 固定列宽：保证任何数据量下列对齐一致。
   // 2026-10-09：成长轨迹列 96 → 136 —— 四个季节 chip（4×28px）此前会被列宽裁掉/挤出错位，
   // 且表头宽度曾与 colgroup 不一致（100 vs 96）；现在表头与 colgroup 同源，不会再错。
-  const baseCols = [96, 136, 92, 92, 96];
+  const baseCols = [96, 132, 100, 100, 104];
   // 附加项（口语等）比小测题型多一行档位徽章 → 列宽给足，避免挤压换行
   const qtCols = questionTypes.map(qt => (qt.excludeFromTotal ? 100 : 78));
   const customCols = customFields.map(() => 90);

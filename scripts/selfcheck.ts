@@ -6,8 +6,9 @@ import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
-import { buildDynamicVariables, generatePersonalFeedback, generatePraise } from '@/lib/feedbackTemplates';
+import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
+import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -372,6 +373,46 @@ check(hw.excellent === 2 && hw.good === 0, '完成✅ 计 excellent 且不重复
 check(hw.excellent + hw.good + hw.average + hw.poor === 3, '四档相加=记录数（分母不重计，优秀率可达峰）');
 const hwPraise = generatePraise(1, hwRecs, { questionTypes: [] } as unknown as LessonConfig, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'comprehensive');
 check(hwPraise.includes('【作业超赞】') && hwPraise.includes('A'), '表彰【作业超赞】命中现行选项 完成✅（原硬编码"超赞完成"恒空）');
+
+// ============ 学习建议（精简三句式 + 模板参数合并） ============
+group('学习建议（精简版）');
+{
+  const cfg2 = {
+    lessonNumber: 1,
+    questionTypes: [
+      { id: 'v1', name: '校内词汇', fullScore: 30, order: 0 },
+      { id: 'v2', name: '阅读理解', fullScore: 10, order: 1 },
+    ],
+    customFields: [],
+    attendanceOptions: ['准时👍', '请假🏫'],
+    homeworkOptions: ['完成✅', '未完成❌'],
+    listeningOptions: ['很棒哦👏'],
+  } as unknown as LessonConfig;
+  const srs = [
+    rec({ id: 's1', studentName: '甲', lessonNumber: 1, totalScore: 28, correctRate: 70, homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', scores: { v1: 20, v2: 8 } }),
+    rec({ id: 's2', studentName: '甲', lessonNumber: 2, totalScore: 34, correctRate: 85, homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', scores: { v1: 26, v2: 8 } }),
+  ];
+  const st = computeStudentReportStats(srs, { '1': cfg2, '2': cfg2 }, { attendanceOptions: ['准时👍', '请假🏫'], homeworkOptions: ['完成✅', '未完成❌'], listeningOptions: ['很棒哦👏'] })!;
+  const adv = buildCondensedAdvice('甲', srs, st, { '1': cfg2, '2': cfg2 });
+  check(adv.startsWith('甲，'), `学习建议带名字前缀（${adv.slice(0, 12)}…）`);
+  check(adv.length <= 170, `学习建议长度受护栏约束 = ${adv.length} 字`);
+  check(!/%/.test(adv), '学习建议不堆砌百分比数字（去数字化）');
+  check(adv.includes('这块，'), '含重点题型的行动句（带题型名定位）');
+
+  const passed2 = generatePersonalFeedback(
+    rec({ id: 's1', studentName: '甲', lessonNumber: 1, totalScore: 28, correctRate: 70, scores: { v1: 20, v2: 8 } }),
+    cfg2, { avgScores: {}, maxScores: {}, minScores: {}, passRate: 0, excellentRate: 0, registeredCounts: {} } as unknown as ClassStats,
+    '甲', '评语：\n【学习建议】\n结束', undefined, { '【学习建议】': 'ADV_MARK' }
+  );
+  check(passed2.includes('ADV_MARK') && !passed2.includes('【学习建议】'), '私发模板【学习建议】参数被正确注入（无残留占位符）');
+
+  const four = generateFourInOne(
+    rec({ id: 's1', studentName: '甲', lessonNumber: 1, totalScore: 28, correctRate: 70, scores: { v1: 20, v2: 8 } }),
+    cfg2, { avgScores: {}, maxScores: {}, minScores: {}, passRate: 0, excellentRate: 0, registeredCounts: {} } as unknown as ClassStats,
+    '甲', false, [], 0, undefined, 'daily', true, undefined, { '【学习建议】': 'ADV_MARK' }
+  );
+  check(!four.includes('【学习建议】'), '四个一模板【学习建议】参数不残留占位符');
+}
 
 console.log('');
 if (failures.length) {

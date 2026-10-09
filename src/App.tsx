@@ -1032,6 +1032,7 @@ function App() {
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
               oralRating={appConfig.oralRating}
+              lessonConfigs={currentClass?.lessonConfigs || {}}
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
               onViewStudent={handleViewStudentAnalysis}

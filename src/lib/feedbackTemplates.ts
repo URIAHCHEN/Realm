@@ -29,7 +29,7 @@ export interface TemplateVar { key: string; desc: string }
 
 const FIXED_VAR_NAMES = new Set([
   '学生昵称', '学生短昵称', '课次', '考勤', '课堂表现', '作业', '课后任务', '乐听说',
-  '成绩详情', '总分', '满分', '排名', '正确率', '薄弱项', '作业内容', '表彰类型', '表彰内容',
+  '成绩详情', '总分', '满分', '排名', '正确率', '薄弱项', '作业内容', '学习建议', '表彰类型', '表彰内容',
 ]);
 
 export function buildDynamicVariables(cfg: LessonConfig | undefined | null): TemplateVar[] {
@@ -166,7 +166,9 @@ export function generatePersonalFeedback(
   nickname: string,
   templateOverride?: string,
   /** 口语等附加项的档位判定配置；缺省用默认档位 */
-  oralCfg?: OralRatingConfig
+  oralCfg?: OralRatingConfig,
+  /** 扩展变量（如 【学习建议】），由调用方按生成口径计算后注入 */
+  extraVars?: Record<string, string>
 ): string {
   if (isAbsentRecord(record)) {
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
@@ -255,7 +257,8 @@ export function generatePersonalFeedback(
     .replace(/【满分】/g, fullScore.toString())
     .replace(/【排名】/g, record.rank.toString())
     .replace(/【正确率】/g, record.correctRate.toString())
-    .replace(/【作业内容】/g, lessonConfig.homeworkText);
+    .replace(/【作业内容】/g, lessonConfig.homeworkText)
+    .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
 
   // 模板未引用、但已填写的自定义列 → 末尾自动附上，保证“直接可用”
   const leftover = customFields.filter(cf => {
@@ -294,6 +297,7 @@ export const FOUR_IN_ONE_VARIABLES: { key: string; desc: string }[] = [
   { key: '【优秀表现】', desc: '自动：本讲亮点' },
   { key: '【待提升】', desc: '自动：薄弱板块 / 作业 / 考勤' },
   { key: '【下一步】', desc: '自动：巩固动作' },
+  { key: '【学习建议】', desc: '自动：三句式学习建议（精简版，可直接发家长）' },
   { key: '【素材】', desc: '课堂照片 / 视频链接' },
   { key: '【新学员补充】', desc: '勾选「新学员」时自动补一句，否则留空' },
   { key: '【参考教辅】', desc: '教辅推荐清单（3 行），可通过「附参考教辅」开关整块隐藏' },
@@ -383,7 +387,9 @@ export function generateFourInOne(
   /** 是否附「参考教辅」清单（关闭时整行移除） */
   withMaterials = true,
   /** 口语等附加项的档位判定配置；缺省用默认档位 */
-  oralCfg?: OralRatingConfig
+  oralCfg?: OralRatingConfig,
+  /** 扩展变量（如 【学习建议】），由调用方按生成口径计算后注入 */
+  extraVars?: Record<string, string>
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
@@ -505,7 +511,8 @@ export function generateFourInOne(
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
     .replace(/【结尾】/g, closing)
     .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '')
-    .replace(/【参考教辅】/g, withMaterials ? `\n${FOUR_IN_ONE_MATERIALS}` : '');
+    .replace(/【参考教辅】/g, withMaterials ? `\n${FOUR_IN_ONE_MATERIALS}` : '')
+    .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
 }
 
 // 生成班群表彰

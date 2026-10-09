@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -483,29 +483,30 @@ export function Leaderboard({
 
   // 渲染主内容
   const renderContent = () => {
-    // 风云榜：按用户指定方案 —— 模板整页压缩成一张底图内置，仅 3 个名字槽动态替换为当日小测前 3 名。
-    // 底图由模板 1:1 重建（奖杯插画 / 标题 / 三枚奖牌 / congratulations / 人偶全部保留），
-    // 名字槽坐标与模板占位文本框一致（895.4,476.3 / 598.9 / 711.3 @2000×1125）。
+    // 风云榜：底图 = 用户提供的正式模板 PNG（红幕/奖杯/人偶全保留），人名与奖牌动态叠加。
+    // 名次规则：同分并列同牌；若并列第 1 的人数 ≥5（含满分大丰收），只显示 2 行（不展示铜牌位）。
     if (mode === 'fengyun') {
-      const top3 = entranceRankings.slice(0, 3);
+      const tieCountAt1 = entranceRankings.filter(r => r.rank === 1).length;
+      const shown = entranceRankings.slice(0, tieCountAt1 >= 5 ? 2 : 3);
+      const medalOf = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `第${rank}名`;
       return (
         <div className="fengyun-wrap">
           <div className="fengyun-poster">
             <img src={fengyunPoster} alt="本次测试风云榜" className="fengyun-bg" />
-            {top3.map((r, i) => (
-              <Fragment key={r.id}>
-                <span className={`fengyun-medal fengyun-medal-${i + 1}`}>
-                  {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `第${r.rank}名`}
-                </span>
-                <span className={`fengyun-name fengyun-slot-${i + 1}`}>{r.nickname}</span>
-              </Fragment>
-            ))}
+            <div className={`fengyun-slots slots-${shown.length}`}>
+              {shown.map((r, i) => (
+                <div key={r.id} className={`fengyun-row row-${i + 1}`}>
+                  <span className="fengyun-medal">{medalOf(r.rank)}</span>
+                  <span className="fengyun-name">{r.nickname}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <p className="fengyun-hint">
-            {top3.length === 0
+            {shown.length === 0
               ? '当日小测暂无到课学员数据'
-              : top3.length < 3
-                ? `当日到课 ${top3.length} 人，空位留白`
+              : shown.length < 3
+                ? (tieCountAt1 >= 5 ? `并列第一 ${tieCountAt1} 人，展示前 2 名` : `当日到课 ${shown.length} 人，空位留白`)
                 : '名单随当日小测成绩自动更新 · 同分并列' }
           </p>
         </div>

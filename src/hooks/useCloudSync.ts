@@ -79,6 +79,19 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     setAction('pushing');
     pushInFlight.current = true;
     try {
+      // 乐观锁（CAS）：推送前比对云端哈希。若他人/他设备已把云端推进到 ≠ 本地基线，
+      // 直接 upsert 会丢对方数据 → 暂停本次上传并转 conflict，由同步中心二选一。
+      const baseMeta = loadSyncMeta();
+      if (baseMeta.lastPushedHash) {
+        const cloudNow = await fetchCloudState(cfg);
+        if (cloudNow.hash && cloudNow.hash !== baseMeta.lastPushedHash) {
+          setStatus('conflict');
+          statusRef.current = 'conflict';
+          setMessage('云端已被其他设备更新；为避免覆盖，本次上传已暂停，请在同步中心选择保留哪一边');
+          if (!silent) toast.error('云端有他人新改动，本次上传已暂停（防覆盖）');
+          return false;
+        }
+      }
       // 关键：固定"本次真正上传的那份快照"。
       // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
       // 用新内容当 lastPushedHash 会让下次对账误判"云端有更新"→ 拉取覆盖刚录的分数。

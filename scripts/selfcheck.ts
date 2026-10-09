@@ -7,6 +7,7 @@ import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback, generatePraise } from '@/lib/feedbackTemplates';
+import { computeStudentReportStats } from '@/lib/reportStats';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -337,6 +338,20 @@ const statusOnly = [
 const statusOnlyOut = generatePraise(3, statusOnly, praiseCfg, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'listening');
 check(statusOnlyOut.includes('A') && statusOnlyOut.includes('B') && statusOnlyOut.includes('C'), '全班仅定性状态无数值分 → 名单非空（按总分兜底排序）');
 check(statusOnlyOut.indexOf('A') < statusOnlyOut.indexOf('B') && statusOnlyOut.indexOf('B') < statusOnlyOut.indexOf('C'), '无数值分时按总分降序兜底');
+
+// ============ lib 审查 P0：作业四档互斥 + 表彰作业超赞命中现行选项 ============
+group('lib 审查 P0（作业四档互斥 / 作业超赞）');
+const hwRecs = [
+  rec({ id: 'h1', studentName: 'A', homeworkStatus: '完成✅' }),
+  rec({ id: 'h2', studentName: 'B', homeworkStatus: '完成✅' }),
+  rec({ id: 'h3', studentName: 'C', homeworkStatus: '未完成❌' }),
+];
+const hwCfg = { '1': { questionTypes: [] } } as unknown as { [k: string]: LessonConfig };
+const hw = computeStudentReportStats(hwRecs, hwCfg, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] }).homeworkStats;
+check(hw.excellent === 2 && hw.good === 0, '完成✅ 计 excellent 且不重复计 good（四档互斥）');
+check(hw.excellent + hw.good + hw.average + hw.poor === 3, '四档相加=记录数（分母不重计，优秀率可达峰）');
+const hwPraise = generatePraise(1, hwRecs, { questionTypes: [] } as unknown as LessonConfig, { avgScore: 0 } as unknown as ClassStats, (n) => n, 'comprehensive');
+check(hwPraise.includes('【作业超赞】') && hwPraise.includes('A'), '表彰【作业超赞】命中现行选项 完成✅（原硬编码"超赞完成"恒空）');
 
 console.log('');
 if (failures.length) {

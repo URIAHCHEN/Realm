@@ -3,6 +3,7 @@ import { isAbsentRecord, isTransferRecord, attendanceKind } from '@/lib/attendan
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { rateOralScore } from '@/lib/oralRating';
+import { optionToneLevel } from '@/lib/optionTone';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -246,7 +247,9 @@ export function generatePersonalFeedback(
     .replace(/【考勤】/g, record.attendance || '')
     .replace(/【课堂表现】/g, record.classPerformance || '')
     .replace(/【作业】/g, record.homeworkStatus || '')
-    .replace(/【课后任务】|【乐听说】/g, record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus)
+    .replace(/【课后任务】|【乐听说】/g, Number(record.listeningScore) > 0
+      ? `${record.listeningScore}分`
+      : (record.listeningStatus && record.listeningStatus !== '具体分数' ? record.listeningStatus : ''))
     .replace(/【成绩详情】/g, scoreDetails)
     .replace(/【总分】/g, record.totalScore.toString())
     .replace(/【满分】/g, fullScore.toString())
@@ -397,8 +400,11 @@ export function generateFourInOne(
     .filter(x => x.avg > 0 && isQtStrong(x.qt, x.s, x.avg))
     .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
   const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
-  const homeworkGood = record.homeworkStatus === '超赞完成';
-  const homeworkBad = record.homeworkStatus === '未完成' || record.homeworkStatus === '没带';
+  // 作业好/坏按语义色调判定（修复 P0：原硬编码 '超赞完成'/'未完成'/'没带' 为 v1 旧值，
+  // 现行选项已迁移为 完成✅/未完成❌/按要求❗ → 恒 false，家长话术错档）
+  const hwTone = optionToneLevel(record.homeworkStatus);
+  const homeworkGood = hwTone === 'good';
+  const homeworkBad = hwTone === 'bad';
   const attendKind = attendanceKind(record.attendance);
   const attendBad = attendKind === 'absent' ? '缺勤' : attendKind === 'late' ? '迟到' : attendKind === 'leave' ? '请假' : '';
 
@@ -562,7 +568,9 @@ export function generatePraise(
       const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌'];
       listeningRanked.forEach((r, i) => {
         const nickname = getNickname(r.studentName);
-        const tail = scoreOf(r) > 0 ? `${scoreOf(r)}分` : String(r.listeningStatus || '完成');
+        const tail = scoreOf(r) > 0
+          ? `${scoreOf(r)}分`
+          : (r.listeningStatus && r.listeningStatus !== '具体分数' ? String(r.listeningStatus) : '完成');
         praiseContent += `${rankIcons[i]} ${nickname}：${tail}\n`;
       });
       praiseContent += '\n';
@@ -572,7 +580,7 @@ export function generatePraise(
   if (praiseType === 'comprehensive') {
     // 作业优秀
     const homeworkExcellent = records
-      .filter(r => r.homeworkStatus === '超赞完成' && !isAbsentRecord(r))
+      .filter(r => optionToneLevel(r.homeworkStatus) === 'good' && !isAbsentRecord(r))
       .map(r => getNickname(r.studentName));
     
     if (homeworkExcellent.length > 0) {

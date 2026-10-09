@@ -109,10 +109,13 @@ export function computeStudentReportStats(
       absent: studentAttKinds.filter(k => k === 'absent' || k === 'leave').length
     };
 
-    // 按语义分级统计（兼容任意选项文案：完成✅/超赞完成 都算优秀）
+    // 按语义分级统计（兼容任意选项文案）。四档必须互斥：
+    // 修复 P0 —— 原 excellent 与 good 同为 tone==='good'，ReportViews 把四档相加当分母
+    // → excellentRate 恒 ≤0.5，永远达不到话术阈值，每个学生都收到负面作业反馈。
+    // 现映射：good→excellent、info→good、warn→average、bad→poor（互斥、分母不重计）。
     const homeworkStats = {
       excellent: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
-      good: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
+      good: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'info').length,
       average: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
       poor: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length
     };

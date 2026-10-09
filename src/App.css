@@ -2288,3 +2288,39 @@ html[data-exporting] * { animation: none !important; }
   .praise-stat-tile { animation: none; }
   .praise-stat-tile:hover { transform: none; }
 }
+
+/* ============ 版式性格强化 v2（2026-10-09 · ink/candy/mono 更 distinct；默认玻璃与 editorial 不动） ============
+   原则：每版式自有主色与质感语言，切换一眼可辨；只改表面（配色/圆角/线/字重），不动布局与模块位置。
+   注意：上游 1866-1904 对 ink/mono 有 !important 可读性覆盖（ink=深色外壳+浅色内容、mono=统一6px），
+   本块位于其后并对需要取胜的属性显式加 !important。 */
+
+/* —— INK 墨黑：黑按钮 + 卡片黑顶线 + 黑徽标 + 墨色 accent 瓷贴（内容区保持浅色可读） —— */
+[data-theme='ink'] .ios-button, [data-theme='ink'] .liquid-glass-button, [data-theme='ink'] .theater-button {
+  background: #0f172a !important; color: #f8fafc !important; box-shadow: none !important;
+}
+[data-theme='ink'] .ios-button:hover, [data-theme='ink'] .liquid-glass-button:hover { background: #1e293b !important; filter: none !important; }
+[data-theme='ink'] [data-slot="card"], [data-theme='ink'] .liquid-glass-card { border-top: 3px solid #0f172a !important; }
+[data-theme='ink'] .praise-stat-tile { background: #f1f5f9; border-left: 3px solid #0f172a; border-radius: 0; }
+[data-theme='ink'] [data-slot="badge"] { background: #0f172a !important; color: #f8fafc !important; }
+/* ink tab 可读性修复：tab 实际落在浅色区，上游浅色字会看不见 → 改深字 + 黑色实心 active 胶囊 */
+[data-theme='ink'] .ios-tab-trigger { color: #475569 !important; }
+[data-theme='ink'] .ios-tab-trigger[data-state='active'] { background: #0f172a !important; color: #fff !important; box-shadow: none !important; }
+
+/* —— CANDY 糖果：粉紫渐变主色 + 胶囊实心 tab + 粉瓷贴 + 粉表头 + 白描边卡 —— */
+[data-theme='candy'] .ios-tab-trigger[data-state='active'] { background: linear-gradient(135deg, #f472b6, #a78bfa) !important; color: #fff !important; box-shadow: 0 6px 16px -8px rgba(244, 114, 182, 0.7) !important; }
+[data-theme='candy'] .ios-button, [data-theme='candy'] .liquid-glass-button, [data-theme='candy'] .theater-button { background: linear-gradient(135deg, #f472b6, #a78bfa) !important; border-radius: var(--r-full) !important; box-shadow: 0 8px 20px -10px rgba(167, 139, 250, 0.7) !important; }
+[data-theme='candy'] [data-slot="card"], [data-theme='candy'] .liquid-glass-card { background: rgba(255, 255, 255, 0.78) !important; border-color: rgba(244, 114, 182, 0.35) !important; }
+[data-theme='candy'] .praise-stat-tile { background: linear-gradient(160deg, rgba(244, 114, 182, 0.10), rgba(167, 139, 250, 0.10)); border-radius: var(--r-xl); }
+[data-theme='candy'] .data-table thead th { background: rgba(244, 114, 182, 0.12) !important; color: #9d174d !important; }
+[data-theme='candy'] [data-slot="badge"] { border-radius: var(--r-full) !important; }
+
+/* —— MONO 数据终端：全方角 + 黑线网格 + 反色表头 + 方黑按钮 + 描边瓷贴 —— */
+[data-theme='mono'] .ios-tabs-list { background: transparent !important; border: none !important; border-bottom: 2px solid #0f172a !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; }
+[data-theme='mono'] .ios-tab-trigger { border-radius: 0 !important; text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
+[data-theme='mono'] .ios-tab-trigger[data-state='active'] { background: transparent !important; color: #0f172a !important; box-shadow: inset 0 -3px 0 0 #0f172a !important; }
+[data-theme='mono'] .ios-button, [data-theme='mono'] .liquid-glass-button, [data-theme='mono'] .theater-button { background: #0f172a !important; border-radius: 0 !important; box-shadow: none !important; }
+[data-theme='mono'] [data-slot="card"], [data-theme='mono'] .liquid-glass-card { border-radius: 0 !important; border: 1px solid rgb(15 23 42 / 0.18) !important; border-top: 3px solid #0f172a !important; }
+[data-theme='mono'] .data-table thead th { background: #0f172a !important; color: #f8fafc !important; text-transform: uppercase; letter-spacing: .08em; border-radius: 0 !important; }
+[data-theme='mono'] .data-table tbody td, [data-theme='mono'] .data-table tbody th { border-right: 1px solid rgb(15 23 42 / 0.08); }
+[data-theme='mono'] .praise-stat-tile { background: transparent; border: 1px solid rgb(15 23 42 / 0.30); border-radius: 0 !important; }
+[data-theme='mono'] [data-slot="badge"] { border-radius: 0 !important; border: 1px solid #0f172a; background: transparent; color: #0f172a; }

@@ -22,8 +22,8 @@ export interface VersionEntry {
 }
 
 const KEY = 'versionHistory.v1';
-/** 默认保留版本数（快照较大，避免撑爆 localStorage） */
-const MAX_KEEP = 12;
+/** 默认保留版本数（快照较大，避免撑爆 localStorage）；导出供 UI 文案使用 */
+export const MAX_KEEP = 12;
 
 interface Stored {
   entries: VersionEntry[];

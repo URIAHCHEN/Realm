@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
 import { BarChart3, BookMarked, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, TrendingUp, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -143,9 +143,18 @@ function App() {
     templates: readTemplateStore(),
   }), [appConfig, classes, nicknames, schoolScores]);
 
+  // 自动版本快照（2026-10-11）：普通录入/导入/名单变更此前完全不记版本
+  //（用户反馈"新增了一个课次的记录但版本历史没有丝毫变化"）→ 补一条 debounce 自动记账
+  const autoVersionTimer = useRef<number | null>(null);
+  const suppressAutoVersionRef = useRef(false);   // 云同步拉取落地时跳过（不是本机编辑）
   const cloudSync = useCloudSync({
     snapshot: syncSnapshot,
-    onImport: (snap) => importData(snap),
+    onImport: (snap) => {
+      // 云端拉取不是本机编辑：跳过自动快照，并清掉在途的防抖计时器（避免把拉取记成"本机变更"）
+      suppressAutoVersionRef.current = true;
+      if (autoVersionTimer.current) { window.clearTimeout(autoVersionTimer.current); autoVersionTimer.current = null; }
+      importData(snap);
+    },
     enabled: isAuthenticated,
     sessionKey,
     canWrite: isAuthenticated && membership.member,
@@ -161,7 +170,7 @@ function App() {
   useEffect(() => subscribeSession(has => { if (!has) setIsAuthenticated(false); }), []);
 
   // 登录后：自举首个管理员 / 刷新成员身份
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- 未登录时需同步落回只读身份；已登录走异步请求后置 setState
+  // 注：未登录时需同步落回只读身份；已登录走异步请求后置 setState
   useEffect(() => { refreshMembership(); }, [refreshMembership, sessionKey]);
 
   // 成员身份自动刷新：被管理员加入名单后，无需刷新页面即可恢复可写
@@ -286,8 +295,16 @@ function App() {
     const lesson = currentLessonNumber;
     const snap = deleteLesson(classId, lesson);
     if (snap.records.length === 0 && !snap.config) { toast.info('本课还没有可删除的记录或配置'); return; }
-    toast.success(`已删除第${lesson}课（${snap.records.length} 条记录及课次配置），该课次可重新新增`, {
-      action: { label: '撤销', onClick: () => restoreLesson(classId, lesson, snap.records, snap.config) },
+    // 关键（2026-10-11）：同时把「当前课次」切到剩余课次 —— 课次列表 = 记录课次 ∪ 当前课次，
+    // 不切换的话被删除的课次会以"当前课次"身份继续挂在列表里（用户反馈"删了但列表还有"）
+    const remainingLessons = [...new Set((currentClass?.records || []).filter(r => r.lessonNumber !== lesson).map(r => r.lessonNumber))].sort((a, b) => a - b);
+    const fallback = remainingLessons.filter(n => n < lesson).pop() ?? remainingLessons[0] ?? 1;
+    setCurrentLessonNumber(fallback);
+    toast.success(`已删除第${lesson}课（${snap.records.length} 条记录及课次配置），已从课次列表移除`, {
+      action: {
+        label: '撤销',
+        onClick: () => { restoreLesson(classId, lesson, snap.records, snap.config); setCurrentLessonNumber(lesson); },
+      },
       duration: 8000,
     });
   };
@@ -391,6 +408,18 @@ function App() {
     const entry = recordVersion(snap, { actor, reason });
     if (entry) toast.success('已记录版本：' + reason, { description: entry.summary.slice(0, 2).join('；'), duration: 4000 });
   }, [makeSnapshot, actor]);
+
+  // 自动版本：数据快照变化后 debounce 3 秒记账（一次编辑动作合并为一版；
+  // 与上一版无差异时 recordVersion 内部自动跳过，不产生噪声；变更明细由 diffSnapshots 自动生成）
+  useEffect(() => {
+    if (suppressAutoVersionRef.current) { suppressAutoVersionRef.current = false; return; }
+    if (autoVersionTimer.current) window.clearTimeout(autoVersionTimer.current);
+    autoVersionTimer.current = window.setTimeout(() => {
+      recordVersion(makeSnapshot(), { actor, reason: '自动快照（数据变更）' });
+    }, 3000);
+    return () => { if (autoVersionTimer.current) window.clearTimeout(autoVersionTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncSnapshot]);
 
   // 未登录显示登录页面
   if (!isAuthenticated) {

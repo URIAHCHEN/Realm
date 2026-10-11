@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { History, RotateCcw, User, Clock3, FileDiff } from 'lucide-react';
-import { listVersions, clearVersions, type VersionEntry } from '@/lib/versionStore';
+import { listVersions, clearVersions, MAX_KEEP, type VersionEntry } from '@/lib/versionStore';
 import type { SyncSnapshot } from '@/lib/cloudSync';
 
 interface Props {
@@ -45,7 +45,7 @@ export function VersionHistoryDialog({ open, onClose, onRollback, actor, onRecor
             <History className="w-5 h-5 text-[color:var(--brand)]" />版本历史
           </DialogTitle>
           <DialogDescription>
-            保留最近 {versions.length} 个版本（共 {versions.length} 个）。回退会覆盖当前数据，但回退本身也会记为新版本，可再退回来。
+            共 {versions.length} 个版本（自动保留最近 {MAX_KEEP} 个，超出后最旧的自动淘汰）。回退会覆盖当前数据，但回退本身也会记为新版本，可再退回来。
           </DialogDescription>
         </DialogHeader>
 

@@ -827,11 +827,17 @@ export function useClassData() {
       const next = { ...prev };
       next[fromClassId] = { ...from, students: from.students.filter(s => s !== studentName) };
       if (toClassId && next[toClassId] && !next[toClassId].students.includes(studentName)) {
-        next[toClassId] = { ...next[toClassId], students: [...next[toClassId].students, studentName] };
+        const to = next[toClassId];
+        // 修复（2026-10-11 审查）：转入班必须记 joinLesson = 当前课次。
+        // 否则 rosterForLesson 的 joinMap[name] 为空、firstLessonByStudent 也还没有 TA，
+        // 转入生会在转入班的所有历史课次里被当成"本课次没有记录"的疑似离班学员（离班提醒误报）。
+        const joinMap = { ...(to.studentJoinLesson || {}) };
+        joinMap[studentName] = currentLessonNumber;
+        next[toClassId] = { ...to, students: [...to.students, studentName], studentJoinLesson: joinMap };
       }
       return next;
     });
-  }, []);
+  }, [currentLessonNumber]);
 
   // 将学员恢复到某班级名单（转班撤销 / 已转出学员归队）；不涉及记录
   const restoreStudentToClass = useCallback((studentName: string, classId: string) => {

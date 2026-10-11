@@ -23,6 +23,7 @@ import {
   LineChart,
   BarChart,
   ReferenceLine,
+  LabelList,
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Minus, BarChart3, Activity, School,
@@ -182,13 +183,29 @@ export function StudentAnalysis({
     return list;
   }, [records, currentClassData, getLessonConfig]);
 
-  /** 某课次某题型的得分率（用该课次自己的满分作分母）；该课次没有此题型时返回 null */
+  /**
+   * 某课次某题型的得分率（用该课次自己的满分作分母）。
+   * 返回 null 的三种情况都表示"没有有效数据"（雷达/趋势/对比会跳过，不按 0 分算）：
+   *  ① 该课次没有此题型；② 该课次满分为 0；③ 该课次的分数未录入（undefined/空串）。
+   * 修复（2026-10-11 用户反馈"最弱项 语篇填词 0%"）：原实现 `(record.scores[qt.id] || 0)`
+   * 会把"未录入"当成"考了 0 分"，导致雷达/趋势出现假 0% 并误判最弱项。
+   */
   const rateOfQt = (record: StudentRecord, qtName: string): number | null => {
     const cfg = getLessonConfig(currentClassData.classId, record.lessonNumber);
     const qt = cfg.questionTypes.find(q => q.name === qtName);
     if (!qt || !qt.fullScore) return null;
-    return Math.round(((record.scores[qt.id] || 0) / qt.fullScore) * 1000) / 10;
+    const raw = record.scores[qt.id] as unknown;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+    const v = Number(raw);
+    if (!Number.isFinite(v)) return null;
+    return Math.round((Math.max(0, v) / qt.fullScore) * 1000) / 10;
   };
+
+  /** 有实际得分数据的题型名（至少一次有效录入）—— 雷达/趋势/对比都只用这份，避免"零样本 0%"混进结论 */
+  const qtNamesWithData = useMemo(() => {
+    return qtNames.filter(name => records.some(r => rateOfQt(r, name) != null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qtNames, records, currentClassData, getLessonConfig]);
 
   // KPI 统计
   const kpis = useMemo(() => {
@@ -226,41 +243,41 @@ export function StudentAnalysis({
   // 各题型得分率对比：本人 vs 班级平均（都用各课次自己的满分作分母，跨课次取均值）
   // 用途：与雷达图配对 —— 雷达看"形状"，这里看"与班均的具体差距"，并标出 85/60 分档线
   const qtCompareData = useMemo(() => {
-    if (qtNames.length === 0) return [];
+    if (qtNamesWithData.length === 0) return [];
     const classPool = (classRecords || []).filter(r => isQuizAssessed(r));
     const avg = (a: number[]) => a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0;
-    return qtNames.map(name => {
+    return qtNamesWithData.map(name => {
       const mine = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
       const cls = classPool.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
-      return { name, 本人: avg(mine), 班均: avg(cls) };
+      return { name, 本人: avg(mine), 班均: avg(cls), mineCount: mine.length };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qtNames, records, classRecords, currentClassData, getLessonConfig]);
+  }, [qtNamesWithData, records, classRecords, currentClassData, getLessonConfig]);
 
   // 题型雷达图（跨课次按题型名取平均得分率 %）——只统计真正有该题型的课次
   const radarData = useMemo(() => {
     if (records.length === 0) return [];
-    return qtNames.map(name => {
+    return qtNamesWithData.map(name => {
       const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
       return {
         subject: name,
-        得分率: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10 : 0,
+        得分率: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10,
         课次数: pcts.length,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, qtNames, currentClassData, getLessonConfig]);
+  }, [records, qtNamesWithData, currentClassData, getLessonConfig]);
 
   // 各题型「得分率」多线趋势（统一换算成百分比，跨课次可比；
   // 原实现直接画原始分数，题型满分不同会导致曲线误导）
   const qtTrendData = useMemo(() => {
     return records.map(r => {
       const row: Record<string, string | number | null> = { name: `D${r.lessonNumber}` };
-      qtNames.forEach(name => { row[name] = rateOfQt(r, name); });
+      qtNamesWithData.forEach(name => { row[name] = rateOfQt(r, name); });
       return row;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, qtNames, currentClassData, getLessonConfig]);
+  }, [records, qtNamesWithData, currentClassData, getLessonConfig]);
 
   const trendCardRef = useRef<HTMLDivElement>(null);
   const [exportingTrend, setExportingTrend] = useState(false);
@@ -500,8 +517,10 @@ export function StudentAnalysis({
                     <div className="mt-3 pt-3 border-t border-black/5 space-y-1.5 text-xs">
                       <p className="text-slate-500">
                         最强项 <span className="font-semibold text-emerald-600">{best.name} {best.本人}%</span>
+                        <span className="text-slate-400">（{best.mineCount} 次）</span>
                         <span className="mx-2 text-slate-300">|</span>
                         最弱项 <span className="font-semibold text-rose-500">{worst.name} {worst.本人}%</span>
+                        <span className="text-slate-400">（{worst.mineCount} 次）</span>
                       </p>
                       <p className="text-slate-500">
                         与班均差距最大：
@@ -619,7 +638,7 @@ export function StudentAnalysis({
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各题型得分率趋势
-                  <span className="text-xs font-normal text-slate-400">（按题型名跨课次对齐，分母为该课次满分）</span>
+                  <span className="text-xs font-normal text-slate-400">（跨课次按题型名对齐；断点＝该课次无此题型或分数未录入，不按 0 分计）</span>
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -631,7 +650,7 @@ export function StudentAnalysis({
                       <Legend wrapperStyle={LEGEND_STYLE_SM} />
                       <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4"
                         label={{ value: '优秀 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopRight' }} />
-                      {qtNames.map((name, i) => (
+                      {qtNamesWithData.map((name, i) => (
                         <Line key={name} type="monotone" dataKey={name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                       ))}
                     </LineChart>
@@ -658,8 +677,10 @@ export function StudentAnalysis({
                         label={{ value: '优秀85', fontSize: 10, fill: '#10b981', position: 'top' }} />
                       <ReferenceLine x={60} stroke="#f59e0b" strokeDasharray="4 4"
                         label={{ value: '及格60', fontSize: 10, fill: '#f59e0b', position: 'bottom' }} />
-                      <Bar dataKey="本人" fill="rgb(var(--brand-rgb) / 0.85)" radius={[0, 5, 5, 0]} barSize={11} />
-                      <Bar dataKey="班均" fill="#cbd5e1" radius={[0, 5, 5, 0]} barSize={11} />
+                      <Bar dataKey="本人" fill="rgb(var(--brand-rgb))" radius={[0, 5, 5, 0]} barSize={11}>
+                        <LabelList dataKey="本人" position="right" style={{ fontSize: 10.5, fill: '#334155', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} formatter={(v: number) => `${v}%`} />
+                      </Bar>
+                      <Bar dataKey="班均" fill="#dfe5ec" stroke="#c2ccd9" strokeWidth={0.6} radius={[0, 5, 5, 0]} barSize={11} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

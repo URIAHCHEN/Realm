@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, Zap, X, BarChart3, Eraser } from 'lucide-react';
+import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, X, BarChart3, Eraser } from 'lucide-react';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
@@ -151,7 +151,6 @@ export function StudentTable({
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   // 批量操作状态
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
-  const [classAttendanceValue, setClassAttendanceValue] = useState('');
   const [bulkField, setBulkField] = useState<'attendance' | 'homework' | 'listeningStatus' | 'listeningScore' | 'score'>('attendance');
   const [bulkValue, setBulkValue] = useState('');
   const [bulkQtId, setBulkQtId] = useState('');
@@ -220,12 +219,6 @@ export function StudentTable({
     } else {
       onCreateRecord(studentName, { studentName, lessonNumber, ...patch });
     }
-  };
-
-  // 一键设置全班考勤
-  const handleApplyClassAttendance = () => {
-    students.forEach(s => setFieldFor(s, { attendance: classAttendanceValue }));
-    toast.success(`已将全班 ${students.length} 名学员考勤标记为「${classAttendanceValue}」`);
   };
 
   // 批量应用（多选行）
@@ -365,12 +358,6 @@ export function StudentTable({
     () => (lessonConfig.attendanceOptions?.length ? lessonConfig.attendanceOptions : DEFAULT_ATTENDANCE_OPTIONS),
     [lessonConfig.attendanceOptions]
   );
-  // 全班一键考勤初值不硬编码 v1 废弃文案（'按时出勤'）→ 不在当前选项集时兜底重置为首项
-  useEffect(() => {
-    if (attendanceOpts.length && !attendanceOpts.includes(classAttendanceValue)) {
-      setClassAttendanceValue(attendanceOpts[0]);
-    }
-  }, [attendanceOpts, classAttendanceValue]);
   const classPerfOpts = useMemo(
     () => (lessonConfig.classPerformanceOptions?.length ? lessonConfig.classPerformanceOptions : DEFAULT_CLASS_PERFORMANCE_OPTIONS),
     [lessonConfig.classPerformanceOptions]
@@ -524,9 +511,6 @@ export function StudentTable({
             <Button onClick={handleGenerateImage} variant="outline" size="sm" title="生成公示图片" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Camera className="w-4 h-4" /><span className="hidden sm:inline">生成图片</span>
             </Button>
-            <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" title="添加学员" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
-              <Plus className="w-4 h-4" /><span className="hidden sm:inline">添加学员</span>
-            </Button>
             <Button onClick={onExportExcel} variant="outline" size="sm" title="导出 Excel" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Download className="w-4 h-4" /><span className="hidden sm:inline">导出 Excel</span>
             </Button>
@@ -559,21 +543,10 @@ export function StudentTable({
           </div>
         ) : (
           <>
-            {/* 批量操作工具栏 */}
-            <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border border-[rgb(var(--brand-rgb)/0.15)] space-y-3">
+            {/* 批量操作工具栏（2026-10-11 精简：移除与「班级管理」重复的添加学员、与批量设置重复的
+                「全班一键考勤」行——用表头全选框 + 批量设置即可覆盖；批量设置行上移为唯一一行） */}
+            <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] border border-[rgb(var(--brand-rgb)/0.15)]">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--brand)]">
-                  <Zap className="w-4 h-4" />全班一键考勤
-                </span>
-                <Select value={classAttendanceValue} onValueChange={setClassAttendanceValue}>
-                  <SelectTrigger className="w-32 h-8 text-sm bg-white/80"><SelectValue /></SelectTrigger>
-                  <SelectContent>{attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-                </Select>
-                <Button size="sm" className="h-8 gap-1.5 ios-button" onClick={handleApplyClassAttendance}>
-                  <Check className="w-4 h-4" />一键标记全班
-                </Button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-[rgb(var(--brand-rgb)/0.15)]">
                 <span className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
                   批量设置
                   {someSelected && (

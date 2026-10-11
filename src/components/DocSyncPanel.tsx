@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
   CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2,
+  AlertTriangle, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +46,8 @@ export function DocSyncPanel({
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [unmatched, setUnmatched] = useState<{ name: string; suggestedFullScore: number }[]>([]);
+  // 解析提示（分数异常 / 合计不一致等）：常驻横幅展示，直到手动关闭或下次解析 —— 不再用一闪而过的 toast
+  const [parseNotices, setParseNotices] = useState<string[]>([]);
   const [targetClass, setTargetClass] = useState<string>(currentClassId || classes[0]?.id || '');
   const [targetLesson, setTargetLesson] = useState<number>(lessonNumber);
 
@@ -80,6 +83,7 @@ export function DocSyncPanel({
       setUnmatched(result.unmatchedColumns || []);
       if (result.rows.length === 0) {
         toast.error(result.errors[0] || '未解析到有效数据行');
+        setParseNotices(result.errors);
       } else {
         const clsName = classes.find(c => c.id === targetClass)?.name || '目标班级';
         // 一步导入：导入端会先按表格的分数列对齐该课次题型配置（新增/排序/满分），再写入分数
@@ -88,10 +92,11 @@ export function DocSyncPanel({
           { classId: targetClass, lessonNumber: targetLesson },
           result.scoreColumns || []
         );
-        const errNote = result.errors.length > 0 ? `，${result.errors.length} 条提示` : '';
+        const errNote = result.errors.length > 0 ? `；${result.errors.length} 条数据提示见下方横幅（常驻，核对后手动关闭）` : '';
         toast.success(`已导入 ${result.rows.length} 行到「${clsName} · 第${targetLesson}课」（匹配列：${result.matchedColumns.join('、')}${errNote}）`);
         setPasteText('');
-        result.errors.slice(0, 5).forEach(e => toast.warning(e));
+        // 异常提示改为常驻横幅：导入后是要"照着核对"的，toast 一闪而过等于没有
+        setParseNotices(result.errors);
       }
     } finally {
       setParsing(false);
@@ -184,6 +189,49 @@ export function DocSyncPanel({
               <p className="text-xs text-[color:var(--ink-4)] mt-1">
                 点「解析并导入」时会自动把它们加入本课题型（满分按列内最高分推定），无需手工补建
               </p>
+            </div>
+          )}
+          {parseNotices.length > 0 && (
+            <div className="rounded-[var(--r-md)] border border-amber-300/80 bg-amber-50 p-3" role="status" aria-live="polite">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-900">
+                    {parseNotices.length} 条数据提示（分数异常 / 合计不一致等），请核对后再发家长或生成公示
+                  </p>
+                  <ul className="mt-1.5 space-y-1 text-xs text-amber-900/90">
+                    {parseNotices.slice(0, 8).map((t, i) => (
+                      <li key={i} className="leading-5 break-words">· {t}</li>
+                    ))}
+                    {parseNotices.length > 8 && (
+                      <li className="text-amber-800/70">……另有 {parseNotices.length - 8} 条</li>
+                    )}
+                  </ul>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 px-2.5 text-xs rounded-lg border-amber-300 text-amber-800 hover:bg-amber-100"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(parseNotices.map(t => '· ' + t).join('\n')).then(
+                          () => toast.success(`已复制 ${parseNotices.length} 条提示`),
+                          () => toast.error('复制失败，请手动选择'),
+                        );
+                      }}
+                    >
+                      复制全部提示
+                    </Button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setParseNotices([])}
+                  title="关闭提示"
+                  aria-label="关闭数据提示"
+                  className="p-1 rounded-lg text-amber-700/70 hover:text-amber-900 hover:bg-amber-100 shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </CardContent>

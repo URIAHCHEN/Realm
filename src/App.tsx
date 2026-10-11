@@ -973,7 +973,9 @@ function App() {
                     if (!currentClass) return;
                     let n = 0;
                     names.forEach(nm => { n += removeStudentFromLessonOnward(currentClass.id, nm, fromLesson); });
-                    toast.success('已从第 ' + fromLesson + ' 课起移除 ' + names.length + ' 位学员（共 ' + n + ' 条记录），历史课次记录保留');
+                    toast.success(n > 0
+                      ? `已从第 ${fromLesson} 课起移除 ${names.length} 位学员（清掉 ${n} 条记录），历史课次记录保留`
+                      : `已将 ${names.length} 位移出名单（第 ${fromLesson} 课起无待删记录，历史记录保留）`);
                   }}
                   onAddStudent={handleAddStudent}
                   onRemoveStudent={handleRemoveStudent}

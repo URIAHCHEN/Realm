@@ -783,7 +783,11 @@ export function useClassData() {
       const cls = prev[classId];
       if (!cls) return prev;
       const targets = cls.records.filter(r => r.studentName === studentName && r.lessonNumber >= fromLesson);
-      if (targets.length === 0) return prev;
+      const inRoster = cls.students.includes(studentName);
+      // 修复（2026-10-11）：原先 targets 为空就直接 return，导致「本课次起没有记录的离班学员」
+      // 点「从本课次起移除」完全无效（这类学员恰恰是离班提醒里最该被移除的）。
+      // 现在：没有记录可删时，也必须把学员移出名单。
+      if (targets.length === 0 && !inRoster) return prev;
       removed = targets.length;
       const affected = new Set(targets.map(r => r.lessonNumber));
       let records = cls.records.filter(r => !(r.studentName === studentName && r.lessonNumber >= fromLesson));

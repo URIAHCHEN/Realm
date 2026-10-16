@@ -455,6 +455,7 @@ export function StudentReport({
         </CardContent>
       </Card>
 
+      <div className="report-zoom">
       {reportMode === 'personal' ? (
         <PersonalReport
           studentRecords={studentRecords}
@@ -499,6 +500,7 @@ export function StudentReport({
           />
         </div>
       )}
+      </div>
     </div>
   );
 }

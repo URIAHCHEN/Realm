@@ -59,9 +59,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 20px;
-  font-size: 14px;
+  gap: 7px;
+  /* 2026-10-16 用户要求导航 tab 再加大些 */
+  padding: 12px 24px;
+  font-size: 16px;
   font-weight: 500;
   color: #1c1c1e;
   border-radius: var(--r-md);
@@ -76,8 +77,8 @@ body {
 
 .ios-tab-trigger svg {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .ios-tab-trigger:hover {
@@ -2019,21 +2020,21 @@ body{
 .class-band [data-slot="card"] { width: 100% !important; max-width: none !important; }
 .class-band > div > * { min-width: 0; }
 
-/* 导航 tab：居中 + 放大（用户反馈"居中放大些好看"） */
+/* 导航 tab：居中 + 放大（用户反馈"居中放大些好看"；2026-10-16 再加大一档） */
 .ios-tabs-list[role="tablist"] {
   justify-content: center !important;
-  gap: 6px !important;
-  padding: 6px 0 0 !important;
+  gap: 8px !important;
+  padding: 7px 0 0 !important;
 }
 .ios-tab-trigger {
-  height: 42px !important;
-  padding: 0 18px !important;
-  font-size: 15px !important;
+  height: 46px !important;
+  padding: 0 24px !important;
+  font-size: 16px !important;
   font-weight: 600 !important;
-  gap: 8px;
+  gap: 9px;
   border-radius: var(--r-md) 12px 0 0 !important;
 }
-.ios-tab-trigger svg { width: 19px !important; height: 19px !important; }
+.ios-tab-trigger svg { width: 21px !important; height: 21px !important; }
 .ios-tab-trigger[data-state='active'] { box-shadow: inset 0 -3px 0 0 var(--brand) !important; }
 
 
@@ -2067,11 +2068,11 @@ body{
 /* 兜底：页面不再出现横向滚动（表格照旧在自己的容器里横向滚动） */
 html, body { overflow-x: hidden; }
 
-/* 报告页字号整体上调（用户："字太小了可读性很差"） */
-.report-container { font-size: 15px; }
-.report-container p { font-size: 15px; line-height: 1.75; }
-.report-container .report-section-title { font-size: 19px !important; }
-.report-container .recharts-cartesian-axis-tick text { font-size: 13px !important; }
+/* 报告页字号整体上调（用户："字太小了可读性很差"；2026-10-16 再加大一档） */
+.report-container { font-size: 16.5px; }
+.report-container p { font-size: 16.5px; line-height: 1.8; }
+.report-container .report-section-title { font-size: 21px !important; }
+.report-container .recharts-cartesian-axis-tick text { font-size: 14.5px !important; }
 
 
 /* ============ Apple 风按钮质感（2026-10-07） ============
@@ -2172,8 +2173,8 @@ html, body { overflow-x: hidden; }
   .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
 }
 /* 流体字号（clamp）：大屏不显小、小屏不溢出 */
-.ios-tab-trigger { font-size: clamp(13px, 0.95vw, 15px) !important; }
-.report-container .report-section-title { font-size: clamp(17px, 1.3vw, 20px) !important; }
+.ios-tab-trigger { font-size: clamp(14.5px, 1.1vw, 17px) !important; }
+.report-container .report-section-title { font-size: clamp(19px, 1.45vw, 22px) !important; }
 
 
 /* ============ 图片导出态（2026-10-08） ============
@@ -2725,3 +2726,23 @@ html[data-exporting] * { animation: none !important; }
   font-weight: 800; color: #3a2415; letter-spacing: 0.02em; line-height: 1.1;
 }
 .praise-root .fengyun-hint { margin-top: 12px; font-size: 12.5px; color: var(--pr-muted); }
+
+
+/* ============ 学情报告：整体字号加大（2026-10-16 用户反馈） ============
+   报告由 Tailwind 工具类拼装，用层级选择器统一上调一档，保证「整页字体更大」而不改组件结构。
+   范围仅限 .report-zoom（包裹个人/班级报告），不影响其他页面。 */
+.report-zoom { font-size: 15.5px; }
+.report-zoom [class*="text-xs"] { font-size: 13.5px; line-height: 1.6; }
+.report-zoom [class*="text-sm"] { font-size: 15.5px; line-height: 1.65; }
+.report-zoom [class*="text-base"] { font-size: 17px; }
+.report-zoom [class*="text-lg"] { font-size: 20px; }
+.report-zoom [class*="text-xl"] { font-size: 22px; }
+.report-zoom [class*="text-2xl"] { font-size: 26px; }
+.report-zoom [class*="text-3xl"] { font-size: 30px; }
+.report-zoom [class*="text-\[11px\]"] { font-size: 13px; }
+.report-zoom [class*="text-\[13px\]"] { font-size: 15px; }
+.report-zoom [class*="text-\[15px\]"] { font-size: 17px; }
+.report-zoom .report-section-title { font-size: 20px; }
+.report-zoom .report-info-label { font-size: 14px; }
+.report-zoom .report-info-value { font-size: 24px; }
+.report-zoom table td, .report-zoom table th { font-size: 14.5px; }

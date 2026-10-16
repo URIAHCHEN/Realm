@@ -2,7 +2,7 @@
 // 排版策略：table-layout:fixed 固定列宽 + 全居中 + 等宽数字 + 统一徽章尺寸，保证截图整齐美观
 import type { Class, QuestionType, StudentRecord, CustomField, OralRatingConfig } from '@/types';
 import type { ExportStyle } from '@/lib/displaySettings';
-import { isQuizAssessed } from '@/lib/attendance';
+import { attendanceKind, isQuizAssessed, transferDisplayLabel } from '@/lib/attendance';
 import { optionTone, optionToneLevel } from '@/lib/optionTone';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
 import { buildOralRatings, oralKey, oralToneColor } from '@/lib/oralRating';
@@ -85,6 +85,29 @@ const attendanceEmoji = (status: string): string => {
   if (status === '调课') return '调课 🔄';
   return status;
 };
+
+/**
+ * SVG 胶囊（2026-10-16）：导出图里「字和语义色贴不齐」的根治方案。
+ * 原因：html2canvas 对 inline-block/table-cell 的 HTML 文本基线测量有固有缺陷 —— 文字整体贴底，
+ * 且 height/line-height/padding/vertical-align 各种组合都无效（已用对照实验验证 6 种写法）。
+ * 方案：胶囊改用内联 <svg>（圆角矩形 + dominant-baseline:central 居中文字），
+ * html2canvas 会把整段 SVG 交给浏览器栅格化 → 与页面所见完全一致；文字宽度用 canvas 真实度量。
+ */
+function svgPill(text: string, fg: string, bg: string, border: string, fontSize = 12.5, height = 24): string {
+  let w = 96;
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (ctx) {
+      ctx.font = `600 ${fontSize}px -apple-system, "PingFang SC", "Helvetica Neue", sans-serif`;
+      w = Math.ceil(ctx.measureText(text).width) + 24;
+    }
+  } catch { /* 量不到就退回默认宽度 */ }
+  const cy = Math.round(height / 2 * 10) / 10;
+  return `<svg width="${w}" height="${height}" viewBox="0 0 ${w} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">`
+    + `<rect x="0.5" y="0.5" width="${w - 1}" height="${height - 1}" rx="${height / 2}" fill="${bg}" stroke="${border}"/>`
+    + `<text x="${w / 2}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family='-apple-system, "PingFang SC", "Helvetica Neue", sans-serif' font-size="${fontSize}" font-weight="600" fill="${fg}">${esc(text)}</text>`
+    + `</svg>`;
+}
 
 // 课堂练习状态 emoji 映射（对齐模板：完成✅/按要求❗/未完成❌）
 const homeworkEmoji = (status: string): string => {
@@ -224,10 +247,12 @@ export function buildPublicityHTML(
     muted: { fg: '#cbd5e1', bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.16)' },
   } : {};
   /** 语义圆胶囊：toneValue 决定配色（与学情表 optionTone 同为关键词判定），display 为展示文本 */
+  // 2026-10-16：改用 SVG 胶囊（见 svgPill 注释）—— HTML 版本的文字基线在导出时贴底，CSS 层面无法修
   const statePill = (toneValue: string, display: string): string => {
     const level = optionToneLevel(toneValue);
     const t = isDarkStyle ? PILL_TONES[level] : optionTone(toneValue);
-    return `<span style="display:inline-block;white-space:nowrap;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.35;color:${t.fg};background:${t.bg};border:1px solid ${t.border}">${esc(display)}</span>`;
+    const bg = isDarkStyle ? t.bg : t.bg;
+    return svgPill(display, t.fg, bg, t.border);
   };
 
   // 排名独立重算（同分并列 + 后一名按并列数后移）：不依赖落库里的历史 rank，
@@ -238,7 +263,10 @@ export function buildPublicityHTML(
     const rankVal: number | string = rankSnap.rankById.get(r.id) ?? '-';
     // 正确率：<80 红色，≥80 绿色
     const rateColor = ratePct < 80 ? '#dc2626' : (style === 'dark' ? p.text : '#16a34a');
-    const attPill = statePill(r.attendance || '', attendanceEmoji(r.attendance));
+    // 调课显示替换（2026-10-16）：按调入/调出规则展示「调入 ↩️ / 调出 ➡️」，配色沿用调课语义色
+    const attPill = attendanceKind(r.attendance) === 'transfer'
+      ? statePill(r.attendance || '', transferDisplayLabel(r))
+      : statePill(r.attendance || '', attendanceEmoji(r.attendance));
     const hwPill = statePill(r.homeworkStatus || '', homeworkEmoji(r.homeworkStatus));
     const lsTone = r.listeningStatus === '具体分数' ? '完成' : (r.listeningStatus || '');
     const lsPill = statePill(lsTone, r.listeningStatus === '具体分数' ? `${r.listeningScore}分` : (r.listeningStatus || '-'));
@@ -263,7 +291,7 @@ export function buildPublicityHTML(
         const c = oralToneColor(rating, oralRating);
         // 分数在上、档位在下：不用 flex（html2canvas 对 flex 列的居中渲染有缺陷 → 导出错位），
         // 块级徽章（margin auto）+ inline-block 胶囊（td 文本居中）两层都稳定
-        const pill = `<span style="display:inline-block;margin-top:3px;padding:1px 7px;border-radius:7px;font-size:11px;font-weight:600;line-height:16px;white-space:nowrap;color:${c.text};background:${c.bg};border:1px solid ${c.border}">${esc(rating.label)}</span>`;
+        const pill = `<div style="margin-top:3px">${svgPill(rating.label, c.text, c.bg, c.border, 11, 19)}</div>`;
         return `<td style="${td}">${badge}${pill}</td>`;
       }).join('')}
       ${customFields.map(cf => {

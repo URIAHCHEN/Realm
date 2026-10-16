@@ -12,7 +12,7 @@ import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camer
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import { attendanceKind, isAbsentRecord, isQuizAssessed, isTransferIn, isTransferRecord } from '@/lib/attendance';
+import { isAbsentRecord, isQuizAssessed, isTransferIn, isTransferRecord, transferDisplayLabel } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
@@ -727,6 +727,9 @@ export function StudentTable({
                       const correctRate = record?.correctRate || 0;
                       // 下拉展示取值：把导入/历史里的非标准文本对齐到配置选项，匹配不到则原样显示
                       const attendanceDisplay = resolveOptionForDisplay(record?.attendance, attendanceOpts);
+                      // 调课按规则显示为「调入 ↩️ / 调出 ➡️」（2026-10-16 用户指定；只改显示不改存储）
+                      const transferLabel = transferred && record ? transferDisplayLabel(record) : '';
+                      const attendanceShown = transferLabel || attendanceDisplay.value;
                       const classPerfDisplay = resolveOptionForDisplay(record?.classPerformance, classPerfOpts);
                       const homeworkDisplay = resolveOptionForDisplay(record?.homeworkStatus, homeworkOpts);
                       const listeningDisplay = resolveOptionForDisplay(
@@ -795,28 +798,16 @@ export function StudentTable({
                           {col('attendance') && (
                           <TableCell className="text-base tnum">
                             <div className="space-y-1">
-                              <Select value={attendanceDisplay.value} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
+                              <Select value={attendanceShown} onValueChange={(value) => handleAttendanceChange(studentName, unwrapClear(value))}>
                                 <SelectTrigger className={`w-24 h-9 text-sm rounded-lg ${optionToneClass(record?.attendance)} ${/迟到|缺勤|缺席/.test(record?.attendance || '') ? 'opt-negative' : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
+                                  {/* 调入/调出的展示项（选中即保持现状；改选其他项恢复正常考勤） */}
+                                  {transferLabel && <SelectItem value={transferLabel}>{transferLabel}</SelectItem>}
                                   {attendanceDisplay.raw && <SelectItem value={attendanceDisplay.raw}>{attendanceDisplay.raw}</SelectItem>}
                                   {attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {attendanceKind(record?.attendance) === 'transfer' && (
-                                <div className="flex items-center justify-center gap-1">
-                                  {/* 2026-10-16：调课自动判定调入/调出 —— 有小测数据=调入（参与统计），无=调出（不评） */}
-                                  <Badge
-                                    variant="outline"
-                                    title={transferIn
-                                      ? '调课且已录小测分 → 判为「调入」：分数正常登记，参与排名/班均/报告等统计'
-                                      : '调课且未录小测分 → 判为「调出」：本课小测不评（成绩以原班级为准）'}
-                                    className={`text-[11px] px-1.5 py-0 h-5 rounded-md font-medium ${transferIn ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-400 border-slate-200'}`}
-                                  >
-                                    {transferIn ? '⬅ 调入' : '➡ 调出'}
-                                  </Badge>
-                                </div>
-                              )}
                               {transferred && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
                             </div>
                           </TableCell>

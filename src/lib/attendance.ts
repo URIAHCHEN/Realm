@@ -74,6 +74,13 @@ export function isTransferIn(r: StudentRecord): boolean {
   return attendanceKind(r.attendance) === 'transfer' && hasQuizScores(r.scores);
 }
 
+/** 调课显示文案（只改显示、不改存储值）：调入 ↩️ / 调出 ➡️（2026-10-16 用户指定） */
+export const TRANSFER_IN_LABEL = '调入 ↩️';
+export const TRANSFER_OUT_LABEL = '调出 ➡️';
+export function transferDisplayLabel(r: StudentRecord): string {
+  return isTransferIn(r) ? TRANSFER_IN_LABEL : TRANSFER_OUT_LABEL;
+}
+
 /**
  * 小测是否在本次课评估：请假/缺勤不评估；调课分两种（2026-10-16 更新）：
  *  · **调入**（调课且有小测数据）→ 正常评估，参与总分/正确率/排名/班均/报告等各类统计

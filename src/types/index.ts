@@ -181,6 +181,8 @@ export interface AppConfig {
   oralRating?: OralRatingConfig;
   /** 预存反馈素材库（全局按课次） */
   savedFeedbacks?: SavedFeedback[];
+  /** 题型大类归类的人工覆盖（题型名 → 大类 key）；规则命不中的题型由登记人手动选择 */
+  qtCategoryOverrides?: Record<string, string>;
 }
 
 // 校内成绩

@@ -30,15 +30,20 @@ const CATEGORY_RULES: { category: string; keywords: string[] }[] = [
   { category: '词汇', keywords: ['词汇', '单词', '默写', '填词', '词组', '短语', '首字母', '拼写'] },
 ];
 
+/** 仅按名称推断板块（按关键词归类，兜底「其他」）—— 供报告归类层复用 */
+export function inferCategoryByName(name: string): string {
+  const n = name || '';
+  for (const rule of CATEGORY_RULES) {
+    if (rule.keywords.some(k => n.includes(k))) return rule.category;
+  }
+  return '其他';
+}
+
 /** 推断题型所属板块：优先使用手动指定的 category，否则按名称关键词归类，兜底「其他」 */
 export function inferCategory(qt: QuestionType): string {
   const custom = qt.category?.trim();
   if (custom) return custom;
-  const name = qt.name || '';
-  for (const rule of CATEGORY_RULES) {
-    if (rule.keywords.some(k => name.includes(k))) return rule.category;
-  }
-  return '其他';
+  return inferCategoryByName(qt.name || '');
 }
 
 // 板块薄弱判定阈值：学生板块得分率低于班级板块得分率超过该百分点即判为薄弱

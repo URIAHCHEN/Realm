@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
   CloudCog, Timer, HardDriveDownload, GitCompareArrows, Loader2,
-  AlertTriangle, X,
+  AlertTriangle, X, Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { buildMarkdown, buildTSV, parseClipboardTable, type ParsedRow } from '@/lib/docSync';
+import { KNOWN_CATEGORIES, unclassifiedNames } from '@/lib/qtCategories';
 import type { LessonConfig, StudentRecord, QuestionType } from '@/types';
 import type { useDisplaySettings } from '@/hooks/useDisplaySettings';
 
@@ -28,6 +29,9 @@ interface DocSyncPanelProps {
   currentClassId: string | null;
   getQuestionTypes: (classId: string, lessonNumber: number) => QuestionType[];
   knownLessons: number[];
+  /** 题型大类归类人工覆盖（导入后提示登记人选择归属） */
+  qtCategoryOverrides?: Record<string, string>;
+  onSaveQtCategory?: (name: string, categoryKey: string) => void;
   /** 导入：rows 为解析后的行，scoreColumns 为表格分数列（按顺序），导入端据此对齐该课次题型配置 */
   onImportRows: (
     rows: ParsedRow[],
@@ -42,12 +46,15 @@ const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:v
 
 export function DocSyncPanel({
   records, lessonConfig, lessonNumber, className, getNickname, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onExportExcel,
+  qtCategoryOverrides, onSaveQtCategory,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [unmatched, setUnmatched] = useState<{ name: string; suggestedFullScore: number }[]>([]);
   // 解析提示（分数异常 / 合计不一致等）：常驻横幅展示，直到手动关闭或下次解析 —— 不再用一闪而过的 toast
   const [parseNotices, setParseNotices] = useState<string[]>([]);
+  // 本次导入里「规则命不中」的新题型：提示登记人当场选择归属板块
+  const [unclassifiedQts, setUnclassifiedQts] = useState<string[]>([]);
   const [targetClass, setTargetClass] = useState<string>(currentClassId || classes[0]?.id || '');
   const [targetLesson, setTargetLesson] = useState<number>(lessonNumber);
 
@@ -84,6 +91,7 @@ export function DocSyncPanel({
       if (result.rows.length === 0) {
         toast.error(result.errors[0] || '未解析到有效数据行');
         setParseNotices(result.errors);
+        setUnclassifiedQts([]);
       } else {
         const clsName = classes.find(c => c.id === targetClass)?.name || '目标班级';
         // 一步导入：导入端会先按表格的分数列对齐该课次题型配置（新增/排序/满分），再写入分数
@@ -97,6 +105,8 @@ export function DocSyncPanel({
         setPasteText('');
         // 异常提示改为常驻横幅：导入后是要"照着核对"的，toast 一闪而过等于没有
         setParseNotices(result.errors);
+        // 新题型未归类提示（2026-10-16）：导入的分数列里规则命不中的，请登记人当场选板块
+        setUnclassifiedQts(unclassifiedNames((result.scoreColumns || []).map(c => c.name), qtCategoryOverrides));
       }
     } finally {
       setParsing(false);
@@ -231,6 +241,41 @@ export function DocSyncPanel({
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+          )}
+          {unclassifiedQts.length > 0 && (
+            <div className="rounded-[var(--r-md)] border border-[var(--brand)]/30 bg-[rgb(var(--brand-rgb)/0.05)] p-3" role="status">
+              <div className="flex items-start gap-2.5">
+                <Tag className="w-4 h-4 text-[color:var(--brand)] mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[color:var(--brand-strong)]">
+                    有 {unclassifiedQts.length} 个新题型未自动归类，请选择归属板块
+                  </p>
+                  <p className="text-xs text-[color:var(--ink-4)] mt-0.5">
+                    归入大类后，学员分析/学情报告的雷达、趋势与对比图会按板块汇总统计
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {unclassifiedQts.map(nm => (
+                      <div key={nm} className="flex items-center gap-2">
+                        <span className="text-sm text-[color:var(--ink-2)] truncate min-w-0 flex-1">{nm}</span>
+                        <Select
+                          value=""
+                          onValueChange={(v) => {
+                            onSaveQtCategory?.(nm, v);
+                            setUnclassifiedQts(prev => prev.filter(n => n !== nm));
+                            toast.success(`「${nm}」已归入「${v}」`);
+                          }}
+                        >
+                          <SelectTrigger className="w-32 h-8 text-xs rounded-lg"><SelectValue placeholder="选择板块" /></SelectTrigger>
+                          <SelectContent>
+                            {KNOWN_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

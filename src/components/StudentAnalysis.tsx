@@ -33,10 +33,11 @@ import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 import { attendanceRateOf, isQuizAssessed } from '@/lib/attendance';
 import {
   AXIS_TICK, AXIS_TICK_SM, AXIS_TICK_XS, GRID, TOOLTIP_CONTENT, TOOLTIP_LABEL,
-  LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
+  LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL,
 } from '@/lib/chartTheme';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildTrendExportHTML } from '@/lib/trendExport';
+import { aggregateByCategory } from '@/lib/qtCategories';
 import { studentLessonTrend } from '@/lib/lessonStats';
 
 interface StudentAnalysisProps {
@@ -53,10 +54,11 @@ interface StudentAnalysisProps {
    */
   classRecords?: StudentRecord[];
   getLessonConfig: (classId: string, lessonNumber: number) => LessonConfig;
+  /** 题型大类归类的人工覆盖（雷达/趋势/对比按大类统计） */
+  qtCategoryOverrides?: Record<string, string>;
 }
 
 // 图表统一主题（lib/chartTheme）：字体/刻度/网格/tooltip/图例/语义色全站一致
-const CHART_COLORS = CHART_SERIES;
 const tooltipStyle = TOOLTIP_CONTENT;
 
 // 选项着色：按语义关键词判断，不再硬编码旧版选项文本
@@ -160,7 +162,8 @@ export function StudentAnalysis({
   allRecords,
   schoolScores,
   classRecords,
-  getLessonConfig
+  getLessonConfig,
+  qtCategoryOverrides
 }: StudentAnalysisProps) {
   const [selectedClassIndex, setSelectedClassIndex] = useState(0);
 
@@ -207,6 +210,18 @@ export function StudentAnalysis({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qtNames, records, currentClassData, getLessonConfig]);
 
+  /** 逐题型明细（得分率 + 样本数）→ 大类聚合（语法/词汇/阅读/听说/写作），全部分析图共用 */
+  const qtDetailItems = useMemo(() => {
+    return qtNamesWithData.map(name => {
+      const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      return { name, rate: pcts.length ? Math.round((pcts.reduce((a, b) => a + b, 0) / pcts.length) * 10) / 10 : 0, count: pcts.length };
+    }).filter(x => x.count > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qtNamesWithData, records, currentClassData, getLessonConfig]);
+
+  /** 板块聚合结果（类别名/颜色/板块得分率/样本数/成员题型） */
+  const categories = useMemo(() => aggregateByCategory(qtDetailItems, qtCategoryOverrides), [qtDetailItems, qtCategoryOverrides]);
+
   // KPI 统计
   const kpis = useMemo(() => {
     if (records.length === 0) return null;
@@ -242,42 +257,52 @@ export function StudentAnalysis({
 
   // 各题型得分率对比：本人 vs 班级平均（都用各课次自己的满分作分母，跨课次取均值）
   // 用途：与雷达图配对 —— 雷达看"形状"，这里看"与班均的具体差距"，并标出 85/60 分档线
+  // 板块得分率对比（2026-10-16 按大类聚合）：本人 vs 班级平均
   const qtCompareData = useMemo(() => {
     if (qtNamesWithData.length === 0) return [];
     const classPool = (classRecords || []).filter(r => isQuizAssessed(r));
     const avg = (a: number[]) => a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0;
-    return qtNamesWithData.map(name => {
-      const mine = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
-      const cls = classPool.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
-      return { name, 本人: avg(mine), 班均: avg(cls), mineCount: mine.length };
-    });
+    const mineItems = qtNamesWithData.map(name => {
+      const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      return { name, rate: avg(pcts), count: pcts.length };
+    }).filter(x => x.count > 0);
+    const clsItems = qtNamesWithData.map(name => {
+      const pcts = classPool.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
+      return { name, rate: avg(pcts), count: pcts.length };
+    }).filter(x => x.count > 0);
+    const mineAgg = aggregateByCategory(mineItems, qtCategoryOverrides);
+    const clsAgg = aggregateByCategory(clsItems, qtCategoryOverrides);
+    return mineAgg.map(m => ({
+      key: m.key, name: m.name, color: m.color, members: m.members,
+      本人: m.rate, 班均: clsAgg.find(c => c.key === m.key)?.rate ?? 0, mineCount: m.count,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qtNamesWithData, records, classRecords, currentClassData, getLessonConfig]);
+  }, [qtNamesWithData, records, classRecords, currentClassData, getLessonConfig, qtCategoryOverrides]);
 
-  // 题型雷达图（跨课次按题型名取平均得分率 %）——只统计真正有该题型的课次
+  // 能力维度雷达（2026-10-16：按大题型板块归类 —— 轴=语法/词汇/阅读/听说/写作）
   const radarData = useMemo(() => {
     if (records.length === 0) return [];
-    return qtNamesWithData.map(name => {
-      const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
-      return {
-        subject: name,
-        得分率: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10,
-        课次数: pcts.length,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, qtNamesWithData, currentClassData, getLessonConfig]);
+    return categories.map(c => ({
+      subject: c.name,
+      得分率: c.rate,
+      课次数: c.count,
+    }));
+  }, [records.length, categories]);
 
   // 各题型「得分率」多线趋势（统一换算成百分比，跨课次可比；
   // 原实现直接画原始分数，题型满分不同会导致曲线误导）
   const qtTrendData = useMemo(() => {
     return records.map(r => {
       const row: Record<string, string | number | null> = { name: `D${r.lessonNumber}` };
-      qtNamesWithData.forEach(name => { row[name] = rateOfQt(r, name); });
+      // 该课次逐题型得分率 → 大类加权聚合（断点＝该课次无此板块数据）
+      const items = qtNamesWithData
+        .map(name => { const v = rateOfQt(r, name); return v == null ? null : { name, rate: v, count: 1 }; })
+        .filter((x): x is { name: string; rate: number; count: number } => x != null);
+      aggregateByCategory(items, qtCategoryOverrides).forEach(c => { row[c.name] = c.rate; });
       return row;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, qtNamesWithData, currentClassData, getLessonConfig]);
+  }, [records, qtNamesWithData, currentClassData, getLessonConfig, qtCategoryOverrides]);
 
   const trendCardRef = useRef<HTMLDivElement>(null);
   const [exportingTrend, setExportingTrend] = useState(false);
@@ -492,7 +517,8 @@ export function StudentAnalysis({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-[color:var(--brand)]" />题型能力雷达（平均得分率）
+                  <Activity className="w-4 h-4 text-[color:var(--brand)]" />能力维度雷达
+                  <span className="text-xs font-normal text-slate-400">（按板块：语法/词汇/阅读/听说/写作）</span>
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -516,11 +542,11 @@ export function StudentAnalysis({
                   return (
                     <div className="mt-3 pt-3 border-t border-black/5 space-y-1.5 text-xs">
                       <p className="text-slate-500">
-                        最强项 <span className="font-semibold text-emerald-600">{best.name} {best.本人}%</span>
-                        <span className="text-slate-400">（{best.mineCount} 次）</span>
+                        最强板块 <span className="font-semibold text-emerald-600">{best.name} {best.本人}%</span>
+                        <span className="text-slate-400">（{best.mineCount} 次 · {best.members.slice(0, 3).join('、')}）</span>
                         <span className="mx-2 text-slate-300">|</span>
-                        最弱项 <span className="font-semibold text-rose-500">{worst.name} {worst.本人}%</span>
-                        <span className="text-slate-400">（{worst.mineCount} 次）</span>
+                        最弱板块 <span className="font-semibold text-rose-500">{worst.name} {worst.本人}%</span>
+                        <span className="text-slate-400">（{worst.mineCount} 次 · {worst.members.slice(0, 3).join('、')}）</span>
                       </p>
                       <p className="text-slate-500">
                         与班均差距最大：
@@ -637,8 +663,8 @@ export function StudentAnalysis({
 
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各题型得分率趋势
-                  <span className="text-xs font-normal text-slate-400">（跨课次按题型名对齐；断点＝该课次无此题型或分数未录入，不按 0 分计）</span>
+                  <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />各板块得分率趋势
+                  <span className="text-xs font-normal text-slate-400">（已按大类归类：语法/词汇/阅读/听说/写作；断点＝该课次无此板块数据）</span>
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -648,10 +674,10 @@ export function StudentAnalysis({
                       <YAxis domain={[0, 100]} unit="%" tick={AXIS_TICK} />
                       <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(v: number) => `${v}%`} />
                       <Legend wrapperStyle={LEGEND_STYLE_SM} />
-                      <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4"
+                      <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" strokeWidth={1.6}
                         label={{ value: '优秀 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopRight' }} />
-                      {qtNamesWithData.map((name, i) => (
-                        <Line key={name} type="monotone" dataKey={name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      {categories.map(c => (
+                        <Line key={c.key} type="monotone" dataKey={c.name} stroke={c.color} strokeWidth={2.2} dot={{ r: 3.5 }} connectNulls />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -662,8 +688,8 @@ export function StudentAnalysis({
                   并标出 85 优秀 / 60 及格 两条分档线；补上这一张后成绩总览为 2×2 对称布局 */}
               <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-[color:var(--brand)]" />题型得分率对比
-                  <span className="text-xs font-normal text-slate-400">（本人 vs 班级平均 · 跨课次均值 · 绿=优秀85 黄=及格60）</span>
+                  <Target className="w-4 h-4 text-[color:var(--brand)]" />板块得分率对比
+                  <span className="text-xs font-normal text-slate-400">（本人 vs 班级平均 · 按大类归类 · 绿=优秀85 黄=及格60）</span>
                 </p>
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -680,7 +706,8 @@ export function StudentAnalysis({
                       <Bar dataKey="本人" fill="rgb(var(--brand-rgb))" radius={[0, 5, 5, 0]} barSize={11}>
                         <LabelList dataKey="本人" position="right" style={{ fontSize: 10.5, fill: '#334155', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} formatter={(v: number) => `${v}%`} />
                       </Bar>
-                      <Bar dataKey="班均" fill="#dfe5ec" stroke="#c2ccd9" strokeWidth={0.6} radius={[0, 5, 5, 0]} barSize={11} />
+                      {/* 班均改黄色（2026-10-16 用户指定）：与品牌蓝形成最大对比 */}
+                      <Bar dataKey="班均" fill="#f59e0b" radius={[0, 5, 5, 0]} barSize={11} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

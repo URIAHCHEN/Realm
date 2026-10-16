@@ -18,6 +18,7 @@ import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildOralRatings, oralDistribution, oralKey, type OralRating } from '@/lib/oralRating';
 import { } from '@/lib/optionTone';
 import { computeStudentReportStats, computeClassReportStats } from '@/lib/reportStats';
+import { aggregateByCategory, categoryOf, KNOWN_CATEGORIES } from '@/lib/qtCategories';
 import { } from '@/components/ui/checkbox';
 import { } from '@/components/ui/label';
 
@@ -30,6 +31,8 @@ interface StudentReportProps {
   currentClassName: string;
   /** 口语等附加项的档位判定配置；缺省用默认档位（见 lib/oralRating） */
   oralRating?: OralRatingConfig;
+  /** 题型大类归类的人工覆盖（报告按大类统计；规则命不中的由登记人手动指定） */
+  qtCategoryOverrides?: Record<string, string>;
 }
 
 
@@ -44,7 +47,6 @@ function collectOptions(configs: { [lesson: string]: LessonConfig }, key: 'atten
 }
 
 import { PersonalReportView as PersonalReport, ClassReportView as ClassReport } from '@/components/report/ReportViews';
-import { COLORS } from '@/components/report/palette';
 
 export function StudentReport({
   students,
@@ -53,7 +55,8 @@ export function StudentReport({
   lessonConfigs,
   getNickname,
   currentClassName,
-  oralRating
+  oralRating,
+  qtCategoryOverrides
 }: StudentReportProps) {
   const [reportMode, setReportMode] = useState<'personal' | 'class'>('personal');
   const [selectedStudent, setSelectedStudent] = useState<string>(students[0] || '');
@@ -170,30 +173,60 @@ export function StudentReport({
     [classReportRecords, lessonConfigs, attendanceOptions, homeworkOptions, listeningOptions]
   );
 
-  // 饼图数据 - 题型得分分布
+  // 饼图数据 - 题型得分分布（2026-10-16：按大题型板块归类，避免十几个题型挤成一片）
   const pieData = useMemo(() => {
     if (!studentStats) return [];
-    return studentStats.avgQuestionTypeScores.map((qt, index) => ({
-      name: qt.name,
-      value: qt.avgScore,
-      color: COLORS[index % COLORS.length]
-    }));
-  }, [studentStats]);
+    const acc = new Map<string, { name: string; color: string; sum: number; full: number }>();
+    studentStats.avgQuestionTypeScores.forEach(qt => {
+      const full = Number(qt.fullScore) || 0;
+      if (full <= 0) return;
+      const def = categoryOf(qt.name, qtCategoryOverrides);
+      const cur = acc.get(def.name) || { name: def.name, color: def.color, sum: 0, full: 0 };
+      cur.sum += Number(qt.avgScore) || 0;
+      cur.full += full;
+      acc.set(def.name, cur);
+    });
+    const order = KNOWN_CATEGORIES;
+    return [...acc.values()]
+      .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
+      .map(c => ({
+        name: c.name,
+        value: Math.round(c.sum * 10) / 10,
+        color: c.color,
+        full: Math.round(c.full * 10) / 10,
+        rate: c.full > 0 ? Math.round((c.sum / c.full) * 1000) / 10 : 0,
+      }));
+  }, [studentStats, qtCategoryOverrides]);
 
   // 柱状图数据 - 各课次成绩（支持排序切换）
+  // 2026-10-16：附加「大题型板块」分项得分 —— 图表做成分板块堆叠柱，把板块构成合并进来
   const barData = useMemo(() => {
-    const list = studentRecords.map(r => ({
-      lesson: `第${r.lessonNumber}课`,
-      lessonNum: r.lessonNumber,
-      score: r.totalScore,
-      correctRate: r.correctRate,
-      // 各课次真实满分（题型配置动态变化，非固定值）
-      fullMark: getLessonFullScore(lessonConfigs[r.lessonNumber]) || 100
-    }));
-    if (scoreSort === 'asc') list.sort((a, b) => a.score - b.score);
-    if (scoreSort === 'desc') list.sort((a, b) => b.score - a.score);
+    const list = studentRecords.map(r => {
+      const row: Record<string, number | string> = {
+        lesson: `第${r.lessonNumber}课`,
+        lessonNum: r.lessonNumber,
+        score: r.totalScore,
+        correctRate: r.correctRate,
+        // 各课次真实满分（题型配置动态变化，非固定值）
+        fullMark: getLessonFullScore(lessonConfigs[r.lessonNumber]) || 100,
+      };
+      const cfg = lessonConfigs[r.lessonNumber];
+      const acc = new Map<string, number>();
+      (cfg?.questionTypes || []).filter(qt => !qt.excludeFromTotal).forEach(qt => {
+        const v = r.scores?.[qt.id] as unknown;
+        if (v == null || String(v).trim() === '') return;
+        const num = Number(v);
+        if (!Number.isFinite(num)) return;
+        const def = categoryOf(qt.name, qtCategoryOverrides);
+        acc.set(def.name, (acc.get(def.name) || 0) + num);
+      });
+      acc.forEach((v, name) => { row[name] = Math.round(v * 10) / 10; });
+      return row;
+    });
+    if (scoreSort === 'asc') list.sort((a, b) => Number(a.score) - Number(b.score));
+    if (scoreSort === 'desc') list.sort((a, b) => Number(b.score) - Number(a.score));
     return list;
-  }, [studentRecords, scoreSort, lessonConfigs]);
+  }, [studentRecords, scoreSort, lessonConfigs, qtCategoryOverrides]);
 
   // 口语类统计行：个人报告用（选中学生）/ 班级报告用（全班）
   const optionalStudentRows = useMemo(
@@ -231,39 +264,47 @@ export function StudentReport({
       const sameLesson = classPresent.filter(x => x.lessonNumber === r.lessonNumber);
       const rates = sameLesson.map(x => x.correctRate);
       const avg = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : 0;
-      return {
+      const row: Record<string, number | string | null> = {
         lesson: `第${r.lessonNumber}课`,
         学生正确率: r.correctRate,
         班级平均: avg,
         班级最高: rates.length ? Math.max(...rates) : 0,
         班级排名: r.rank,
       };
+      // 2026-10-16：把「大题型板块」得分率合并进趋势图（该课次：板块成员合计得分 ÷ 合计满分）
+      const cfg = lessonConfigs[r.lessonNumber];
+      const acc = new Map<string, { s: number; f: number }>();
+      (cfg?.questionTypes || []).filter(qt => !qt.excludeFromTotal).forEach(qt => {
+        const v = r.scores?.[qt.id] as unknown;
+        if (v == null || String(v).trim() === '') return;
+        const num = Number(v);
+        if (!Number.isFinite(num)) return;
+        const def = categoryOf(qt.name, qtCategoryOverrides);
+        const b = acc.get(def.name) || { s: 0, f: 0 };
+        b.s += num;
+        b.f += Number(qt.fullScore) || 0;
+        acc.set(def.name, b);
+      });
+      acc.forEach((b, name) => { row[name] = b.f > 0 ? Math.round((b.s / b.f) * 1000) / 10 : null; });
+      return row;
     });
-  }, [studentRecords, records]);
+  }, [studentRecords, records, lessonConfigs, qtCategoryOverrides]);
 
 
   // 雷达图数据 - 能力维度（坐标轴上限取各题型真实满分，而非写死 100）
   const radarData = useMemo(() => {
     if (!studentStats) return [];
-    // 根因修复：原来 A 是**原始分**（如 12/15），而半径上限取各题型满分最大值
-    // （口语 100）→ 小测题型全被压到圆心，雷达图看起来"没有内容"。
-    // 改为统一换算成**得分率 0–100**：各轴可比，半径上限恒为 100。
-    // 同时按题型名去重（历史上出现过同名题型各占一轴）
-    const acc = new Map<string, { sum: number; n: number; full: number }>();
-    studentStats.avgQuestionTypeScores.forEach(qt => {
-      const full = Number(qt.fullScore) || 0;
-      if (full <= 0) return;
-      const cur = acc.get(qt.name) || { sum: 0, n: 0, full };
-      cur.sum += Number(qt.avgScore) || 0;
-      cur.n += 1;
-      acc.set(qt.name, cur);
-    });
-    return [...acc.entries()].map(([subject, v]) => ({
-      subject,
-      A: Math.round((v.sum / v.n / v.full) * 1000) / 10,   // 得分率 %
+    // 2026-10-16：能力维度（雷达）按大题型板块归类 —— 轴=语法/词汇/阅读/听说/写作，
+    // 轴值=板块得分率（成员合计得分 ÷ 合计满分），口径与分布图一致
+    const items = studentStats.avgQuestionTypeScores
+      .filter(qt => (Number(qt.fullScore) || 0) > 0)
+      .map(qt => ({ name: qt.name, rate: (Number(qt.avgScore) || 0) / (Number(qt.fullScore) || 1) * 100 }));
+    return aggregateByCategory(items, qtCategoryOverrides).map(c => ({
+      subject: c.name,
+      A: c.rate,       // 板块得分率 %
       fullMark: 100,
     }));
-  }, [studentStats]);
+  }, [studentStats, qtCategoryOverrides]);
 
   // 校内成绩表格数据
   const examTableData = useMemo(() => {
@@ -445,6 +486,7 @@ export function StudentReport({
       ) : (
         <div ref={classReportRef} className="space-y-6 bg-white p-6 rounded-2xl">
           <ClassReport
+            qtCategoryOverrides={qtCategoryOverrides}
             currentClassName={currentClassName}
             selectedLesson={selectedLesson}
             classStats={classStats}

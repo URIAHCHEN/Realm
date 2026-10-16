@@ -10,6 +10,8 @@ import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, gen
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { buildTrendExportHTML } from '@/lib/trendExport';
+import { categoryOf, aggregateByCategory, unclassifiedNames } from '@/lib/qtCategories';
+import { parseClipboardTable } from '@/lib/docSync';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -435,6 +437,51 @@ group('入门测趋势导出');
   check((html.match(/<polyline/g) || []).length === 3, '折线图正好 3 条序列（最高/平均/本人）');
   check(html.includes('10/26') && html.includes('20/28'), '包含个人名次/班级人数');
   check(!/【[^】]+】/.test(html), '导出模板无未替换的占位符');
+}
+
+// ============ 题型板块归类（报告聚合层） ============
+group('题型板块归类');
+{
+  // 规则归类：与 weakPoints 同一套规则（单项/语法运用 → 语法；默写/填词 → 词汇）
+  const c1 = categoryOf('语法运用');
+  const c2 = categoryOf('笔记默写');
+  const c3 = categoryOf('阅读理解');
+  check(c1.name === '语法', `「语法运用」→ ${c1.name}`);
+  check(c2.name === '词汇', `「笔记默写」→ ${c2.name}`);
+  check(c3.name === '阅读', `「阅读理解」→ ${c3.name}`);
+  // 人工覆盖优先
+  const c4 = categoryOf('偏门题型ABC', { '偏门题型ABC': '写作' });
+  check(c4.name === '写作', '人工覆盖优先于规则');
+  check(unclassifiedNames(['偏门题型ABC'], {}).length === 1, '未归类名单能识别规则兜不住的题型');
+  check(unclassifiedNames(['偏门题型ABC'], { '偏门题型ABC': '写作' }).length === 0, '已人工指定后不再提示');
+  // 聚合：加权平均 + 成员收集
+  const agg = aggregateByCategory([
+    { name: '语法选择', rate: 80, count: 2 },
+    { name: '单项选择', rate: 50, count: 1 },
+    { name: '笔记默写', rate: 60, count: 1 },
+  ], {});
+  const grammar = agg.find(a => a.name === '语法');
+  check(!!grammar && grammar.rate === 70, `语法板块加权均值 = ${grammar?.rate}（期望 70）`);
+  check(!!grammar && grammar.members.length === 2, '语法板块含 2 个成员题型');
+}
+
+// ============ 导入口径：口语等非小测列不计入总分校验 ============
+group('导入口径（口语不计入小测总分）');
+{
+  const qts = [
+    { id: 'g1', name: '语法选择', fullScore: 10, order: 0 },
+    { id: 'o1', name: '口语得分', fullScore: 100, order: 1, excludeFromTotal: true },
+  ] as unknown as import('@/types').QuestionType[];
+  const text = [
+    '姓名\t考勤\t语法选择\t口语得分\t总分',
+    '甲\t准时👍\t8\t90\t8',
+    '乙\t准时👍\t7\t很棒哦👏\t7',
+  ].join('\n');
+  const parsed = parseClipboardTable(text, qts);
+  const mismatch = parsed.errors.filter(e => e.includes('合计'));
+  check(mismatch.length === 0, `口语分不计入合计校验（got ${mismatch.length} 条"合计不一致"）`);
+  const invalidNote = parsed.errors.filter(e => e.includes('不是有效分数'));
+  check(invalidNote.length === 0, '非小测列里的评价值（很棒哦）静默跳过，不再报"不是有效分数"');
 }
 
 console.log('');

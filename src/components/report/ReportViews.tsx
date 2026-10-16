@@ -15,13 +15,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ReportCustomFields } from '@/components/ReportCustomFields';
-import { COLORS } from '@/components/report/palette';
 import { TeachingAdvice } from '@/components/report/TeachingAdvice';
 import { splitSegments, type StudentReportStats, type ClassReportStats } from '@/lib/reportStats';
 import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
   CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
 } from '@/lib/chartTheme';
+import { aggregateByCategory, categoryColor } from '@/lib/qtCategories';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { 
@@ -107,15 +107,45 @@ const TONE_BADGE: Record<string, string> = {
   muted: 'bg-black/[0.06] text-[color:var(--ink-2)]',
 };
 
+/**
+ * 选项词云（2026-10-16）：只渲染出现过的选项，字号随出现次数放大 —— 替代"整片 0 次占位"的磁贴墙。
+ * 用于班级报告的出勤/作业/课后任务概况。
+ */
+function OptionCloud({ items, emptyText }: { items: { option: string; count: number }[]; emptyText: string }) {
+  const present = items.filter(x => (x.count || 0) > 0).sort((a, b) => b.count - a.count);
+  if (present.length === 0) {
+    return <p className="text-sm text-[color:var(--ink-4)] text-center py-2">{emptyText}</p>;
+  }
+  const max = Math.max(...present.map(x => x.count));
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2.5 py-1">
+      {present.map(({ option, count }) => {
+        const lv = optionToneLevel(option);
+        const color = lv === 'good' ? 'text-green-600' : lv === 'warn' ? 'text-yellow-600'
+          : lv === 'bad' ? 'text-red-500' : lv === 'info' ? 'text-blue-500' : 'text-[color:var(--ink-2)]';
+        const size = count >= max * 0.5 ? 'text-2xl' : count >= max * 0.2 ? 'text-lg' : 'text-sm';
+        const weight = count >= max * 0.2 ? 'font-bold' : 'font-medium';
+        return (
+          <span key={option} className={`${size} ${weight} ${color} leading-tight`}>
+            {option}
+            <span className="ml-1 text-[11px] font-semibold opacity-60 tnum">{count}次</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 // 个人报告组件
 export interface PersonalReportProps {
   studentRecords: StudentRecord[];
   /** 统计结果类型直接取自 lib/reportStats，避免视图再声明一份接口导致字段漂移 */
   studentStats: StudentReportStats | null;
   examTableData: { examName: string; date: string; score: number; totalScore: number; rate: number; classRank?: number; gradeRank?: number; classSize?: number }[];
-  pieData: { name: string; value: number; color: string }[];
-  barData: { lesson: string; lessonNum: number; score: number; correctRate: number; fullMark: number }[];
-  comboTrend: { lesson: string; 学生正确率: number; 班级平均: number; 班级最高: number; 班级排名: number }[];
+  // 2026-10-16：分布/趋势/成绩三图统一按大题型板块归类（pieData.full/rate = 板块合计与得分率）
+  pieData: { name: string; value: number; color: string; full?: number; rate?: number }[];
+  barData: Record<string, number | string>[];
+  comboTrend: Record<string, number | string | null>[];
   optionalRows: OptionalFieldRow[];
   radarData: { subject: string; A: number; fullMark: number }[];
   currentClassName: string;
@@ -134,6 +164,19 @@ export interface PersonalReportProps {
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
   customFields: import('@/types').CustomField[];
   personalReportRef?: React.RefObject<HTMLDivElement | null>;
+}
+
+// 从组合趋势行里推导出「出现过的板块」（用于趋势图的分类折线）
+function categoriesFromRows(rows: Record<string, unknown>[], fixedKeys: string[]): { name: string; color: string }[] {
+  const fixed = new Set(fixedKeys);
+  const names: string[] = [];
+  rows.forEach(row => {
+    Object.keys(row).forEach(k => {
+      if (fixed.has(k) || row[k] == null || row[k] === '') return;
+      if (!names.includes(k)) names.push(k);
+    });
+  });
+  return names.map(n => ({ name: n, color: categoryColor(n) }));
 }
 
 export function PersonalReportView({
@@ -162,6 +205,15 @@ export function PersonalReportView({
   customFields,
   personalReportRef
 }: PersonalReportProps) {
+  // 板块序列从数据推导：趋势图用 comboTrend 的动态键；堆叠柱用 barData 的动态键
+  const trendCategories = useMemo(
+    () => categoriesFromRows(comboTrend as unknown as Record<string, unknown>[], ['lesson', '学生正确率', '班级平均', '班级最高', '班级排名']),
+    [comboTrend],
+  );
+  const scoreCategories = useMemo(
+    () => categoriesFromRows(barData as unknown as Record<string, unknown>[], ['lesson', 'lessonNum', 'score', 'correctRate', 'fullMark']),
+    [barData],
+  );
   const [isExportingImage, setIsExportingImage] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
@@ -308,9 +360,9 @@ export function PersonalReportView({
         <h2 className="report-section-title">
           <TrendingUp className="w-5 h-5 inline mr-2" />
           学习趋势分析
-          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=本生正确率，线=班级平均/最高，红线=目标 80%）</span>
+          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=本生正确率，粗线=班级平均/最高，彩虚线=各板块得分率·按大类归类，红线=目标 80%）</span>
         </h2>
-        <div className="report-chart-container" style={{ height: 300 }}>
+        <div className="report-chart-container" role="img" aria-label="学习趋势分析：柱为本生正确率，含班级平均/最高线与各大题型板块得分率虚线" style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={comboTrend}>
               <CartesianGrid {...GRID} />
@@ -324,6 +376,11 @@ export function PersonalReportView({
               <Legend />
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
               <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
+              {/* 大题型板块得分率（2026-10-16 并入）：按板块大类逐课次展开（类别从数据推导） */}
+              {trendCategories.map(cat => (
+                <Line key={cat.name} type="monotone" dataKey={cat.name} name={`${cat.name}得分率`} stroke={cat.color}
+                  strokeWidth={1.8} strokeDasharray="5 3" dot={{ r: 2.5 }} connectNulls legendType="plainline" />
+              ))}
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
               {trendType === 'bar' && <Bar dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
               {trendType === 'line' && <Line type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
@@ -340,16 +397,11 @@ export function PersonalReportView({
         <h2 className="report-section-title">
           <BarChart3 className="w-5 h-5 inline mr-2" />
           各课次成绩分布
+          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=得分按大题型板块拆解堆叠，线=正确率%）</span>
         </h2>
-        <div className="report-chart-container" style={{ height: 300 }}>
+        <div className="report-chart-container" role="img" aria-label="各课次成绩分布：堆叠柱为各板块得分构成，折线为正确率" style={{ height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={barData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.95} />
-                  <stop offset="100%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.35} />
-                </linearGradient>
-              </defs>
               <CartesianGrid {...GRID} />
               <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
               <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
@@ -357,12 +409,13 @@ export function PersonalReportView({
               <Tooltip
                 contentStyle={TOOLTIP_CONTENT}
                 labelStyle={TOOLTIP_LABEL}
+                formatter={(v: number | string, n: string) => [n === '正确率%' ? `${v}%` : `${v} 分`, n]}
               />
               <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
               {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
-              <Bar yAxisId="l" dataKey="score" name="得分" fill="url(#scoreFill)" radius={[6, 6, 0, 0]} maxBarSize={38}>
-                <LabelList dataKey="score" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} />
-              </Bar>
+              {scoreCategories.map(cat => (
+                <Bar key={cat.name} yAxisId="l" dataKey={cat.name} name={cat.name} stackId="score" fill={cat.color} maxBarSize={38} />
+              ))}
               {showCorrectRate && (
                 <Line yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#0ea5e9" strokeWidth={2.5}
                   dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}>
@@ -405,9 +458,9 @@ export function PersonalReportView({
                         position="right"
                         content={(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; index?: number; value?: number | string }) => {
                           const i = props.index ?? 0;
-                          const max = studentStats?.avgQuestionTypeScores.find(q => q.name === pieData[i]?.name)?.fullScore || 0;
+                          const categoryFull = pieData[i]?.full || 0;
                           const v = Number(props.value || 0);
-                          const rate = max > 0 ? Math.round((v / max) * 100) : 0;
+                          const rate = categoryFull > 0 ? Math.round((v / categoryFull) * 100) : (pieData[i]?.rate ?? 0);
                           const x = Number(props.x || 0) + Number(props.width || 0) + 6;
                           const y = Number(props.y || 0) + Number(props.height || 0) / 2 + 4;
                           return (
@@ -434,18 +487,19 @@ export function PersonalReportView({
               </ResponsiveContainer>
             </div>
             <div className="space-y-2.5">
-              {studentStats?.avgQuestionTypeScores.map((qt, index) => {
-                const rate = qt.fullScore > 0 ? Math.round((Number(qt.avgScore) / qt.fullScore) * 100) : 0;
+              {/* 2026-10-16：按大题型板块归类（语法/词汇/阅读/听说/写作/其他），不再逐个题型铺满 */}
+              {pieData.map(cat => {
+                const rate = cat.rate ?? 0;
                 const tone = rate >= 85 ? '#10b981' : rate >= 70 ? '#3b82f6' : rate >= 60 ? '#f59e0b' : '#ef4444';
                 return (
-                  <div key={qt.id} className="px-3 py-2.5 rounded-xl bg-black/[0.03]">
+                  <div key={cat.name} className="px-3 py-2.5 rounded-xl bg-black/[0.03]">
                     <div className="flex items-center justify-between gap-3">
                       <span className="flex items-center gap-2 text-[13px] font-medium text-[color:var(--ink)] min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="truncate">{qt.name}</span>
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                        <span className="truncate">{cat.name}</span>
                       </span>
                       <span className="text-[13px] font-bold shrink-0 tnum" style={{ color: tone }}>
-                        {qt.avgScore}<span className="text-[11px] font-normal text-[color:var(--ink-4)]">/{qt.fullScore}</span>
+                        {cat.value}<span className="text-[11px] font-normal text-[color:var(--ink-4)]">/{cat.full ?? 0}</span>
                         <span className="ml-1.5 text-[11px] font-semibold">{rate}%</span>
                       </span>
                     </div>
@@ -491,15 +545,21 @@ export function PersonalReportView({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {(studentStats?.attendanceBreakdown || []).map(({ option, count }) => (
-                <div key={option} className="flex justify-between items-center">
-                  <span className="text-[color:var(--ink-2)]">{option}</span>
-                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
-                </div>
-              ))}
-              {(studentStats?.attendanceBreakdown || []).length === 0 && (
-                <p className="text-sm text-[color:var(--ink-4)]">本课次暂无考勤记录</p>
+            {/* 2026-10-16 磁贴化：大数字 + 语义底色，扫一眼就能看出哪项多、哪项少 */}
+            <div className="grid grid-cols-2 gap-3">
+              {(studentStats?.attendanceBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
+                const lv = optionToneLevel(option);
+                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                  : lv === 'bad' ? 'bg-red-50 text-red-700' : lv === 'info' ? 'bg-blue-50 text-blue-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                return (
+                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
+                    <p className="text-2xl font-bold tnum">{count}</p>
+                    <p className="text-xs mt-0.5">{option}</p>
+                  </div>
+                );
+              })}
+              {(studentStats?.attendanceBreakdown || []).filter(x => x.count > 0).length === 0 && (
+                <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无考勤记录</p>
               )}
             </div>
           </CardContent>
@@ -514,20 +574,32 @@ export function PersonalReportView({
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {(studentStats?.homeworkBreakdown || []).map(({ option, count }) => (
-                <div key={option} className="flex justify-between items-center">
-                  <span className="text-[color:var(--ink-2)]">{option}</span>
-                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
-                </div>
-              ))}
-              {(studentStats?.listeningBreakdown || []).map(({ option, count }) => (
-                <div key={'l-' + option} className="flex justify-between items-center">
-                  <span className="text-[color:var(--ink-2)]">课后任务 · {option}</span>
-                  <Badge className={TONE_BADGE[optionToneLevel(option)]}>{count} 次</Badge>
-                </div>
-              ))}
-              {(studentStats?.homeworkBreakdown || []).length === 0 && (studentStats?.listeningBreakdown || []).length === 0 && (
-                <p className="text-sm text-[color:var(--ink-4)]">本课次暂无课堂练习/课后任务记录</p>
+              <div className="grid grid-cols-2 gap-3">
+                {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
+                  const lv = optionToneLevel(option);
+                  const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                    : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                  return (
+                    <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
+                      <p className="text-2xl font-bold tnum">{count}</p>
+                      <p className="text-xs mt-0.5">{option}</p>
+                    </div>
+                  );
+                })}
+                {(studentStats?.listeningBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
+                  const lv = optionToneLevel(option);
+                  const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
+                    : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
+                  return (
+                    <div key={'l-' + option} className={`p-3 rounded-xl text-center ${box}`}>
+                      <p className="text-2xl font-bold tnum">{count}</p>
+                      <p className="text-xs mt-0.5">课后任务 · {option}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).length === 0 && (studentStats?.listeningBreakdown || []).filter(x => x.count > 0).length === 0 && (
+                <p className="text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
               )}
               {optionalRows.length > 0 && (
                 <div className="pt-2 mt-1 border-t border-black/5 space-y-2">
@@ -668,9 +740,10 @@ export interface ClassReportProps {
   getNickname: (name: string) => string;
   customFields: import('@/types').CustomField[];
   lessonConfigs: { [lessonNumber: string]: LessonConfig };
+  qtCategoryOverrides?: Record<string, string>;
 }
 
-export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields, lessonConfigs }: ClassReportProps) {
+export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields, lessonConfigs, qtCategoryOverrides }: ClassReportProps) {
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
   // 口径：按正确率（各课次满分不同，绝对分不可比）+ 仅统计已评估小测的记录
   const lowScoreStudents = useMemo(() => {
@@ -827,29 +900,36 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
         </div>
       </div>
 
-      {/* 薄弱题型 Top3 */}
+      {/* 薄弱板块 Top3（2026-10-16：按大题型板块归类后再取最弱，避免十几个题型各占一坑） */}
       <div className="report-section">
         <h2 className="report-section-title">
           <AlertTriangle className="w-5 h-5 inline mr-2" />
-          薄弱题型 Top3
+          薄弱板块 Top3
+          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（按大题型板块归类：语法/词汇/阅读/听说/写作）</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {classStats.weakPoints.length > 0 ? classStats.weakPoints.map((qt, i) => (
-            <Card key={qt.id} className="border-rose-100 bg-gradient-to-br from-rose-50 to-orange-50">
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-rose-700 font-medium">Top {i + 1}</span>
-                  <Badge className="bg-rose-100 text-rose-700 border-0">{qt.correctRate}%</Badge>
-                </div>
-                <p className="text-lg font-bold text-[color:var(--ink)]">{qt.name}</p>
-                <p className="text-sm text-[color:var(--ink-4)] mt-1">班均 {qt.avgScore} / {qt.fullScore} 分</p>
-              </CardContent>
-            </Card>
-          )) : (
-            <div className="col-span-3 text-center py-8 text-[color:var(--ink-4)] bg-black/[0.04] rounded-xl">
-              暂无题型数据
-            </div>
-          )}
+          {(() => {
+            const agg = aggregateByCategory(
+              classStats.weakPoints.map(w => ({ name: w.name, rate: Number(w.correctRate) || 0, count: Math.max(1, Number(w.fullScore) || 1) })),
+              qtCategoryOverrides,
+            );
+            const top3 = [...agg].sort((a, b) => a.rate - b.rate).slice(0, 3);
+            if (top3.length === 0) {
+              return <div className="col-span-3 text-center py-8 text-[color:var(--ink-4)] bg-black/[0.04] rounded-xl">暂无板块数据</div>;
+            }
+            return top3.map((cat, i) => (
+              <Card key={cat.key} className="border-rose-100 bg-gradient-to-br from-rose-50 to-orange-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-rose-700 font-medium">Top {i + 1}</span>
+                    <Badge className="bg-rose-100 text-rose-700 border-0">{cat.rate}%</Badge>
+                  </div>
+                  <p className="text-lg font-bold text-[color:var(--ink)]">{cat.name}</p>
+                  <p className="text-sm text-[color:var(--ink-4)] mt-1">含 {cat.members.slice(0, 4).join('、')}{cat.members.length > 4 ? ' 等' : ''} · {cat.count} 次样本</p>
+                </CardContent>
+              </Card>
+            ));
+          })()}
         </div>
       </div>
 
@@ -899,20 +979,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {classStats.attendanceBreakdown.map(({ option, count }) => {
-                const lv = optionToneLevel(option);
-                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                  : lv === 'bad' ? 'bg-red-50 text-red-700' : lv === 'info' ? 'bg-blue-50 text-blue-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                return (
-                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
-                    <p className="text-2xl font-bold">{count}</p>
-                    <p className="text-xs">{option}</p>
-                  </div>
-                );
-              })}
-              {classStats.attendanceBreakdown.length === 0 && <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无考勤记录</p>}
-            </div>
+            <OptionCloud items={classStats.attendanceBreakdown} emptyText="暂无考勤记录" />
           </CardContent>
         </Card>
 
@@ -924,39 +991,13 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {classStats.homeworkBreakdown.map(({ option, count }) => {
-                const lv = optionToneLevel(option);
-                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                  : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                return (
-                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
-                    <p className="text-2xl font-bold">{count}</p>
-                    <p className="text-xs">{option}</p>
-                  </div>
-                );
-              })}
-              {classStats.listeningBreakdown.length > 0 && (
-                <div className="col-span-2 pt-1">
-                  <p className="text-xs text-[color:var(--ink-4)] mb-2">课后任务完成情况</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {classStats.listeningBreakdown.map(({ option, count }) => {
-                      const lv = optionToneLevel(option);
-                      const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                        : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                      return (
-                        <div key={'l-' + option} className={`p-3 rounded-xl text-center ${box}`}>
-                          <p className="text-2xl font-bold">{count}</p>
-                          <p className="text-xs">{option}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {classStats.homeworkBreakdown.length === 0 && classStats.listeningBreakdown.length === 0 && (
-                <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
-              )}
+            <OptionCloud items={classStats.homeworkBreakdown} emptyText="暂无课堂练习记录" />
+            {classStats.listeningBreakdown.some(x => x.count > 0) && (
+              <div className="pt-2 mt-2 border-t border-black/5">
+                <p className="text-xs text-[color:var(--ink-4)] mb-1.5">课后任务完成情况</p>
+                <OptionCloud items={classStats.listeningBreakdown} emptyText="暂无课后任务记录" />
+              </div>
+            )}
               {optionalRows.length > 0 && (
                 <div className="col-span-2 pt-2 mt-1 border-t border-black/5">
                   <p className="text-xs text-[color:var(--ink-4)] mb-2">口语类（作业成绩，不计入小测总分；仅统计已登记）</p>
@@ -980,7 +1021,6 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                   </div>
                 </div>
               )}
-            </div>
           </CardContent>
         </Card>
       </div>

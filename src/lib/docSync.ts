@@ -314,7 +314,11 @@ export function parseClipboardTable(
     qtIdx.forEach(({ qt, idx }) => {
       const parsed = parseScoreCell(cells[idx]);
       if (parsed.invalid) {
-        errors.push(`第 ${i + 2} 行（${name || '未署名'}）· ${qt.name}：「${String(cells[idx]).trim()}」不是有效分数，已跳过`);
+        // 非小测科目（口语/朗读等）列里的「未完成⭕ / 很棒哦👏」是作业评价而不是分数：
+        // 静默跳过即可（它们本就不计入小测总分），不再逐行提示"不是有效分数"
+        if (!isNonQuizColumn(qt.name)) {
+          errors.push(`第 ${i + 2} 行（${name || '未署名'}）· ${qt.name}：「${String(cells[idx]).trim()}」不是有效分数，已跳过`);
+        }
         return;
       }
       if (parsed.value != null) {
@@ -323,10 +327,14 @@ export function parseClipboardTable(
       }
     });
     // 校验：有总分列时，若题型列齐全则校验和
+    // 修复（2026-10-16 用户反馈）：口语/朗读等「非小测科目」列（作业成绩，口径=课后任务）
+    // 不计入合计 —— 原实现把口语分也算进 sum，导致"题型分合计与总分不一致"的误报（总分不对）
     if (totalIdx >= 0 && qtIdx.length > 0) {
-      const sum = qtIdx.reduce((acc, { idx }) => acc + (parseFloat(cells[idx]) || 0), 0);
+      const quizQtIdx = qtIdx.filter(({ qt }) => !isNonQuizColumn(qt.name));
+      const expectedQuizCols = questionTypes.filter(q => !isNonQuizColumn(q.name)).length;
+      const sum = quizQtIdx.reduce((acc, { idx }) => acc + (parseFloat(cells[idx]) || 0), 0);
       const total = parseFloat(cells[totalIdx]);
-      if (!isNaN(total) && Math.abs(sum - total) > 1 && qtIdx.length === questionTypes.length) {
+      if (!isNaN(total) && Math.abs(sum - total) > 1 && quizQtIdx.length === expectedQuizCols) {
         errors.push(`第 ${i + 2} 行（${name}）：题型分合计 ${sum} 与总分 ${total} 不一致，请核对`);
       }
     }

@@ -421,6 +421,26 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncSnapshot]);
 
+  // 题型大类归类（2026-10-16）：登记人为新题型指定归属板块，报告按大类统计
+  const handleSaveQtCategory = useCallback((name: string, categoryKey: string) => {
+    updateAppConfig({ qtCategoryOverrides: { ...(appConfig.qtCategoryOverrides || {}), [name]: categoryKey } });
+  }, [updateAppConfig, appConfig.qtCategoryOverrides]);
+
+  // 题型 → 板块 的「有效覆盖表」：课次配置里的「板块」字段（老机制，按题型跨课次生效）
+  // + 导入提示里选择的全局覆盖（新机制，后者优先）；两份归并后统一下发给报告与提示逻辑
+  const effectiveQtCategories = useMemo(() => {
+    const fromConfigs: Record<string, string> = {};
+    Object.values(classes).forEach(cls => {
+      Object.values(cls.lessonConfigs || {}).forEach(cfg => {
+        (cfg.questionTypes || []).forEach(qt => {
+          const c = (qt.category || '').trim();
+          if (c && qt.name) fromConfigs[qt.name] = c;
+        });
+      });
+    });
+    return { ...fromConfigs, ...(appConfig.qtCategoryOverrides || {}) };
+  }, [classes, appConfig.qtCategoryOverrides]);
+
   // 未登录显示登录页面
   if (!isAuthenticated) {
     return (
@@ -1121,6 +1141,7 @@ function App() {
             <ErrorBoundary label="学情报告">
             <Suspense fallback={<ModuleLoading label="学情报告" />}>
               <StudentReport
+                qtCategoryOverrides={effectiveQtCategories}
                 students={currentClass?.students || []}
                 records={currentClass?.records || []}
                 schoolScores={schoolScores}
@@ -1150,6 +1171,8 @@ function App() {
                 <>
                   {/* 顶部显眼位：推送 / 导入 并排双卡 */}
                   <DocSyncPanel
+                    qtCategoryOverrides={effectiveQtCategories}
+                    onSaveQtCategory={handleSaveQtCategory}
                     records={currentClass?.records.filter(r => r.lessonNumber === currentLessonNumber) || []}
                     lessonConfig={currentLessonConfig}
                     lessonNumber={currentLessonNumber}
@@ -1241,6 +1264,7 @@ function App() {
         <Suspense fallback={<ModuleLoading label="学生分析" />}>
 
           <StudentAnalysis
+            qtCategoryOverrides={effectiveQtCategories}
             isOpen={!!analysisStudent}
             onClose={() => setAnalysisStudent(null)}
             studentName={analysisStudent}

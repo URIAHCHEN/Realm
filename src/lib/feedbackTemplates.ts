@@ -1,5 +1,5 @@
 import type { StudentRecord, ClassStats, LessonConfig, OralRatingConfig } from '@/types';
-import { isAbsentRecord, isTransferRecord, attendanceKind } from '@/lib/attendance';
+import { isAbsentRecord, isTransferIn, isTransferRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { rateOralScore } from '@/lib/oralRating';
@@ -173,8 +173,8 @@ export function generatePersonalFeedback(
   if (isAbsentRecord(record)) {
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
   }
-  if (isTransferRecord(record)) {
-    // 调课：本次课的小测在原班级完成，本班只记录考勤/作业/口头表现
+  if (isTransferRecord(record) && !isTransferIn(record)) {
+    // 调出（无小测数据）：本次课的小测在原班级完成，本班只记录考勤/作业/口头表现
     const hw = record.homeworkStatus ? `本班这边记到的作业情况是「${record.homeworkStatus}」。` : '';
     return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，入门测在调课班级完成，成绩以原班级为准。${hw}\n有需要我协调的随时找我～`;
   }

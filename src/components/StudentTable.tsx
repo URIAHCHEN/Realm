@@ -12,7 +12,7 @@ import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camer
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import { attendanceKind, isAbsentRecord, isQuizAssessed, isTransferRecord } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord, isQuizAssessed, isTransferIn, isTransferRecord } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
@@ -711,15 +711,17 @@ export function StudentTable({
                   <TableBody>
                     {orderedStudents.map((studentName) => {
                       const record = getStudentRecord(studentName);
-                      // 本次课未在读（请假/缺勤/调课）：分数与判定列显示 "-"，且不参与任何计算
-                      // 三种不显示分数、且不进小测计算的情形（统一渲染 -）：
+                      // 本次课未在读（请假/缺勤/调课-调出）：分数与判定列显示 "-"，且不参与任何计算
+                      // 不显示分数、不进小测计算的情形（统一渲染 -）：
                       //  · 请假/缺勤 → 整行都不评
-                      //  · 调课 → 小测不评（成绩以原班级为准），但作业/口头照常
+                      //  · 调课-调出（无小测数据）→ 小测不评（成绩以原班级为准），但作业/口头照常
+                      //  · 调课-调入（有小测数据，2026-10-16 新增）→ **正常显示分数并参与统计**
                       //  · 本课次尚无记录（中途新加入的学员）→ 不能显示成 0 分
                       const enrolledAbsent = !!record && isAbsentRecord(record);
                       const transferred = !!record && isTransferRecord(record);
+                      const transferIn = !!record && isTransferIn(record);
                       const noRecord = !record;
-                      const quizDash = enrolledAbsent || transferred || noRecord;
+                      const quizDash = enrolledAbsent || (transferred && !transferIn) || noRecord;
                       const weakPoints = record && !quizDash ? getWeakPoints(record) : [];
                       const totalScore = record?.totalScore || 0;
                       const correctRate = record?.correctRate || 0;
@@ -801,7 +803,21 @@ export function StudentTable({
                                   {attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {attendanceKind(record?.attendance) === 'transfer' && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
+                              {attendanceKind(record?.attendance) === 'transfer' && (
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* 2026-10-16：调课自动判定调入/调出 —— 有小测数据=调入（参与统计），无=调出（不评） */}
+                                  <Badge
+                                    variant="outline"
+                                    title={transferIn
+                                      ? '调课且已录小测分 → 判为「调入」：分数正常登记，参与排名/班均/报告等统计'
+                                      : '调课且未录小测分 → 判为「调出」：本课小测不评（成绩以原班级为准）'}
+                                    className={`text-[11px] px-1.5 py-0 h-5 rounded-md font-medium ${transferIn ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-400 border-slate-200'}`}
+                                  >
+                                    {transferIn ? '⬅ 调入' : '➡ 调出'}
+                                  </Badge>
+                                </div>
+                              )}
+                              {transferred && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
                             </div>
                           </TableCell>
                           )}
@@ -919,7 +935,8 @@ export function StudentTable({
                                   value={String(record?.customValues?.[cf.id] ?? '')}
                                   onValueChange={(v) => handleCustomChange(studentName, cf.id, unwrapClear(v))}
                                 >
-                                  <SelectTrigger className="w-24 h-9 text-sm border-slate-200 rounded-lg bg-white truncate" style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
+                                  {/* 2026-10-16：自定义字段套用与内置列相同的语义底色（导入的新字段不再是一片白） */}
+                                  <SelectTrigger className={`w-24 h-9 text-sm rounded-lg truncate ${optionToneClass(String(record?.customValues?.[cf.id] ?? ''))}`} style={optStyleOf(`cf:${cf.id}`, String(record?.customValues?.[cf.id] ?? ''))}><SelectValue placeholder="—" /></SelectTrigger>
                                   <SelectContent>
                                     {CLEAR_ITEM}
                                     {(cf.options || []).map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}

@@ -54,11 +54,35 @@ export function isTransferRecord(r: StudentRecord): boolean {
 }
 
 /**
- * 小测是否在本次课评估：请假/缺勤/调课都不评估。
- * 用于总分、正确率、排名、过关判定、薄弱项、小测题型班均。
+ * 「有小测数据」= 至少一个题型分是有效数字（含 0）。
+ * 用于区分调课＝调入/调出（2026-10-16 用户口径）：
+ *  · 考勤=调课 且 有小测数据 → **调入**（从别班调进来／本班补测）→ 分数正常登记、参与各类统计
+ *  · 考勤=调课 且 无小测数据 → **调出**（到别的时间段上课，成绩以原班级为准）→ 本课小测不评
+ */
+export function hasQuizScores(scores: { [key: string]: unknown } | undefined | null): boolean {
+  if (!scores) return false;
+  return Object.values(scores).some(v => {
+    if (v === undefined || v === null) return false;
+    const str = String(v).trim();
+    if (str === '') return false;
+    return Number.isFinite(Number(str));
+  });
+}
+
+/** 调课细分：调入（有小测数据）→ 正常参与统计；否则为调出 */
+export function isTransferIn(r: StudentRecord): boolean {
+  return attendanceKind(r.attendance) === 'transfer' && hasQuizScores(r.scores);
+}
+
+/**
+ * 小测是否在本次课评估：请假/缺勤不评估；调课分两种（2026-10-16 更新）：
+ *  · **调入**（调课且有小测数据）→ 正常评估，参与总分/正确率/排名/班均/报告等各类统计
+ *  · **调出**（调课且未录分）→ 不评估
  * 注意：作业（课堂练习/课后任务）与口头（口语得分等附加项）不受此限制 ——
  * 调课学生这些照常记录，也要进对应统计（由各调用点按需选择）。
  */
 export function isQuizAssessed(r: StudentRecord): boolean {
-  return !isAbsentRecord(r) && !isTransferRecord(r);
+  if (isAbsentRecord(r)) return false;
+  if (isTransferRecord(r)) return isTransferIn(r);
+  return true;
 }

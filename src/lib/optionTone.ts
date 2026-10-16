@@ -24,8 +24,9 @@ export function optionTone(value: string | undefined | null): Tone {
   if (!v) return TONES.muted;
   if (/请假|调课/.test(v)) return TONES.info;
   if (/缺勤|未完成|未做完|没带/.test(v)) return TONES.bad;
-  if (/迟到|补发|按要求|不过关|欠缺|走神|内向|需要|留意/.test(v)) return TONES.warn;
-  if (/完成|准时|很棒|优秀|认真|积极|超赞|圆满|参与|细心|进步/.test(v)) return TONES.good;
+  // 评价类关键词（2026-10-16：导入的判断型字段如「正确率低，要提高」也要有着色）
+  if (/迟到|补发|按要求|不过关|欠缺|走神|内向|需要|留意|正确率低|薄弱|待提升|需加强|欠佳|不足|加油/.test(v)) return TONES.warn;
+  if (/完成|准时|很棒|优秀|认真|积极|超赞|圆满|参与|细心|进步|扎实|稳定|突出|优异/.test(v)) return TONES.good;
   return TONES.muted;
 }
 

@@ -9,7 +9,7 @@ import type {
   ClassStats,
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
-import { isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
+import { hasQuizScores,  isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
@@ -186,8 +186,12 @@ function computeTotals(
   // 原来只清零"请假"，先录分后标缺勤的记录仍会带着分数参与排名，
   // 与 lessonStats / 报告口径（把两者都排除）矛盾。
   const kind = attendanceKind(attendance);
-  // 请假 / 缺勤 / 调课：本次课不评估 → 总分与正确率都清零（不参与排名与班均）
-  if (kind === 'leave' || kind === 'absent' || kind === 'transfer') {
+  // 请假 / 缺勤：本次课不评估 → 总分与正确率都清零（不参与排名与班均）
+  if (kind === 'leave' || kind === 'absent') {
+    return { totalScore: 0, correctRate: 0 };
+  }
+  // 调课分两种（2026-10-16 用户口径）：有小测数据＝调入 → 正常计算参与统计；无数据＝调出 → 清零
+  if (kind === 'transfer' && !hasQuizScores(scores)) {
     return { totalScore: 0, correctRate: 0 };
   }
   const total =

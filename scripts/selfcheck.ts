@@ -11,6 +11,9 @@ import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { buildTrendExportHTML } from '@/lib/trendExport';
 import { categoryOf, aggregateByCategory, unclassifiedNames } from '@/lib/qtCategories';
+import { isQuizAssessed, isTransferIn, hasQuizScores } from '@/lib/attendance';
+import { optionToneLevel } from '@/lib/optionTone';
+import type { StudentRecord } from '@/types';
 import { parseClipboardTable } from '@/lib/docSync';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
@@ -482,6 +485,30 @@ group('导入口径（口语不计入小测总分）');
   check(mismatch.length === 0, `口语分不计入合计校验（got ${mismatch.length} 条"合计不一致"）`);
   const invalidNote = parsed.errors.filter(e => e.includes('不是有效分数'));
   check(invalidNote.length === 0, '非小测列里的评价值（很棒哦）静默跳过，不再报"不是有效分数"');
+}
+
+// ============ 调课：调入 / 调出 判定（2026-10-16） ============
+group('调课调入/调出');
+{
+  const base = {
+    id: 'x1', studentName: '甲', lessonNumber: 1, seasons: [], attendance: '调课👩',
+    homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', listeningScore: 0, classPerformance: '认真积极',
+    scores: {} as { [k: string]: number }, totalScore: 0, correctRate: 0, rank: 0, date: '2026-10-16',
+  };
+  const outRec = { ...base } as unknown as StudentRecord;
+  const inRec = { ...base, scores: { v1: 8 } } as unknown as StudentRecord;
+  check(!isQuizAssessed(outRec), '调课无分 → 调出：不参与小测统计');
+  check(isQuizAssessed(inRec), '调课有分 → 调入：正常参与统计');
+  check(isTransferIn(inRec) && !isTransferIn(outRec), '调入/调出判定正确');
+  check(hasQuizScores({ v1: 0 }), '录了 0 分也算有小测数据（真实参与）');
+  check(!hasQuizScores({ v1: '未完成⭕' as unknown as number }), '评价文本不算小测数据');
+}
+
+// 评价类字段值的语义底色（自定义字段底色的基础）
+group('评价类关键词着色');
+{
+  check(optionToneLevel('正确率低，要提高') === 'warn', '「正确率低」→ 警示色');
+  check(optionToneLevel('基础扎实，稳定发挥') === 'good', '「扎实/稳定」→ 正向色');
 }
 
 console.log('');

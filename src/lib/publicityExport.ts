@@ -160,7 +160,7 @@ export function buildPublicityHTML(
   oralRating?: OralRatingConfig
 ): string {
   const p = PALETTES[style] || PALETTES.gradient;
-  // 公示只列「当次在课且参与小测」的学员：请假/缺勤/调课一体排除（不进名单、不进平均）
+  // 公示只列「当次在课且参与小测」的学员：请假/缺勤不列；调课-调出（无分）不列，调课-调入（有分）正常上榜（2026-10-16）
   const sorted = [...records].filter(r => isQuizAssessed(r)).sort((a, b) => b.totalScore - a.totalScore);
   const fullScore =
     questionTypes.reduce((sum, qt) => (qt.excludeFromTotal ? sum : sum + qt.fullScore), 0) +

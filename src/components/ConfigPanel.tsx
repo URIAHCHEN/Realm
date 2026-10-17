@@ -160,13 +160,22 @@ export function ConfigPanel({
   const defaultFeedbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   const defaultPraiseTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 回填规则（2026-10-17 修正）：只在「换了课次 / 首次挂载」时把外部配置灌进本地草稿。
+  // 旧实现依赖 lessonConfig 引用变化就全量回填——反馈页保存模板、云端拉取等都会换引用，
+  // 导致这里没点保存的编辑被静默清空。
+  const lastSyncKeyRef = useRef<string>('');
   useEffect(() => {
-    setLocalAppConfig(appConfig);
-  }, [appConfig]);
+    const key = `lesson:${lessonNumber}`;
+    if (lastSyncKeyRef.current !== key) {
+      lastSyncKeyRef.current = key;
+      setLocalLessonConfig(lessonConfig);
+    }
+  }, [lessonNumber, lessonConfig]);
 
   useEffect(() => {
-    setLocalLessonConfig(lessonConfig);
-  }, [lessonConfig]);
+    // 全局默认模板随云端/其他入口更新时同步；课次草稿不受影响
+    setLocalAppConfig(appConfig);
+  }, [appConfig]);
 
   // 插入变量到文本框
   const insertVariable = (textareaRef: React.RefObject<HTMLTextAreaElement | null>, variable: string, isLessonConfig: boolean) => {

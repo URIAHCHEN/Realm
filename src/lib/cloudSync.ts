@@ -153,7 +153,12 @@ interface CloudRow {
 async function backendFetch(url: string, init: RequestInit): Promise<Response> {
   try {
     // 注意：这里必须用原生 fetch，不能调自身（否则递归）
-    const res = await fetch(url, init);
+    // 加超时（2026-10-17）：弱网下请求悬挂会让 pushInFlight 永不复位 →
+    // 后续所有推送被静默吞掉，表现为「改动一直不上云」。
+    const signal = init.signal ?? (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+      ? AbortSignal.timeout(15_000)
+      : undefined);
+    const res = await fetch(url, { ...init, signal });
     if (isTransientBackendFailure(res.status)) {
       markBackendOffline(`云端返回 ${res.status}`);
     } else {

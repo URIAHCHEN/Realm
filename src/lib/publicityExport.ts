@@ -197,12 +197,28 @@ export function buildPublicityHTML(
   const avgRate = presentRecords.length > 0 ? avg(presentRecords.map(r => r.correctRate)) : 0;
   const avgQtScores: { [qtId: string]: number } = {};
   questionTypes.forEach(qt => {
-    avgQtScores[qt.id] = presentRecords.length > 0 ? avg(presentRecords.map(r => r.scores[qt.id] || 0).filter(s => s > 0)) : 0;
+    // 口径与学情表（calculateClassStats）一致：
+    //  · 计入总分的题型：到课学员的 0 分也计入（不能 filter(s>0)，否则班均虚高）
+    //  · 附加项（口语等）：只统计已登记的值
+    const nums = qt.excludeFromTotal
+      ? presentRecords.map(r => r.scores[qt.id]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+      : presentRecords.map(r => {
+          const v = r.scores[qt.id];
+          return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+        });
+    avgQtScores[qt.id] = nums.length > 0 ? avg(nums) : 0;
   });
   const avgCustomScores: { [cfId: string]: number } = {};
   customFields.forEach(cf => {
     if (cf.kind === 'number') {
-      avgCustomScores[cf.id] = presentRecords.length > 0 ? avg(presentRecords.map(r => Number(r.customValues?.[cf.id]) || 0).filter(s => s > 0)) : 0;
+      const nums = cf.includeInTotal
+        ? presentRecords.map(r => {
+            const v = Number(r.customValues?.[cf.id]);
+            return Number.isFinite(v) ? v : 0;
+          })
+        : presentRecords.map(r => Number(r.customValues?.[cf.id]))
+            .filter(v => Number.isFinite(v));
+      avgCustomScores[cf.id] = nums.length > 0 ? avg(nums) : 0;
     }
   });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   Class,
   StudentRecord,
@@ -500,6 +500,9 @@ export function useClassData() {
   const [schoolScores, setSchoolScores] = useState<{ [studentName: string]: SchoolScore[] }>(() => {
     return safeParse('schoolScores', {});
   });
+  // 校内成绩最新值镜像：导入需要同步读快照做查重（setState updater 不能同步读）
+  const schoolScoresRef = useRef(schoolScores);
+  useEffect(() => { schoolScoresRef.current = schoolScores; }, [schoolScores]);
 
   // 保存到 localStorage
   // 性能：录入分数时 classes 每次击键都变化，旧实现会即时全量 JSON.stringify
@@ -898,7 +901,9 @@ export function useClassData() {
       const lessonConfig = withLessonDefaults(baseCfg, appConfig);
 
       const existingIndex = classData.records.findIndex(
-        r => r.studentName === record.studentName && r.lessonNumber === record.lessonNumber
+        // 必须用上面回退后的 lessonNumber：调用方省略 lessonNumber 时，
+        // 用 record.lessonNumber(undefined) 会匹配不到已有记录 → 同人同课重复新建（2026-10-17 修正）
+        r => r.studentName === record.studentName && r.lessonNumber === lessonNumber
       );
 
       let newRecords;
@@ -1418,9 +1423,10 @@ export function useClassData() {
 
   // 批量导入校内成绩（从Excel）
   // xlsx 为大体积依赖，改为解析时动态加载，首屏不再携带 vendor-xlsx
-  const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[] }> => {
+  const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped: number }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      reader.onerror = () => reject(new Error('文件读取失败，请重试或换一个文件'));
       reader.onload = async (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
@@ -1431,7 +1437,7 @@ export function useClassData() {
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
 
           if (jsonData.length < 2) {
-            resolve({ success: 0, failed: 0, errors: ['文件格式不正确'], unmatched: [] });
+            resolve({ success: 0, failed: 0, errors: ['文件格式不正确'], unmatched: [], skipped: 0 });
             return;
           }
 
@@ -1439,8 +1445,11 @@ export function useClassData() {
 
           let success = 0;
           let failed = 0;
+          let skipped = 0;
           const errors: string[] = [];
           const unmatchedSet = new Set<string>();
+          // 查重快照：同一份 Excel 导入两次不应让成绩翻倍（注释承诺过、实现曾缺失）
+          const scoreSnapshot: { [k: string]: SchoolScore[] } = { ...schoolScoresRef.current };
 
           // 学生姓名匹配：精确匹配 -> 忽略空格匹配 -> 模糊匹配（包含关系）
           const matchStudentName = (inputName: string): string | null => {
@@ -1509,6 +1518,17 @@ export function useClassData() {
                 school: row[22]?.toString()
               };
 
+              // 去重：同学生 + 同考试名 + 同日期 + 同分数 + 同总分 + 同科目 → 视为重复导入，跳过
+              const dupKey = `${matchedName}|${newScore.examName}|${newScore.date}|${newScore.score}|${newScore.totalScore}|${newScore.subject || ''}`;
+              const existing = scoreSnapshot[matchedName] || [];
+              const isDup = existing.some(s =>
+                `${matchedName}|${s.examName}|${s.date}|${s.score}|${s.totalScore}|${s.subject || ''}` === dupKey
+              );
+              if (isDup) {
+                skipped++;
+                return;
+              }
+              scoreSnapshot[matchedName] = [...existing, newScore];
               setSchoolScores(prev => ({
                 ...prev,
                 [matchedName]: [...(prev[matchedName] || []), newScore]
@@ -1521,7 +1541,7 @@ export function useClassData() {
             }
           });
 
-          resolve({ success, failed, errors, unmatched: Array.from(unmatchedSet) });
+          resolve({ success, failed, errors, unmatched: Array.from(unmatchedSet), skipped });
         } catch (err) {
           reject(err);
         }

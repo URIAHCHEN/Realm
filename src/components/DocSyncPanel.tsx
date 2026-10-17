@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
@@ -108,10 +108,25 @@ export function DocSyncPanel({
         // 新题型未归类提示（2026-10-16）：导入的分数列里规则命不中的，请登记人当场选板块
         setUnclassifiedQts(unclassifiedNames((result.scoreColumns || []).map(c => c.name), qtCategoryOverrides));
       }
+    } catch (e) {
+      // 解析/导入抛错必须有可见反馈，否则点完没反应（2026-10-17 补）
+      toast.error('导入失败：' + (e instanceof Error ? e.message : String(e)));
+      setParseNotices([e instanceof Error ? e.message : String(e)]);
     } finally {
       setParsing(false);
     }
   };
+
+  // 跟随外部班级 / 课次切换：用户没手动改过目标时同步更新（避免切课后仍导入到旧课次）
+  const lastTargetRef = useRef<string>(`${currentClassId || ''}:${lessonNumber}`);
+  useEffect(() => {
+    const key = `${currentClassId || ''}:${lessonNumber}`;
+    if (lastTargetRef.current !== key) {
+      lastTargetRef.current = key;
+      setTargetClass(currentClassId || classes[0]?.id || '');
+      setTargetLesson(lessonNumber);
+    }
+  }, [currentClassId, lessonNumber, classes]);
 
   return (
     // 顶部并排双卡：推送（左）/ 导入（右），宽屏两列、窄屏单列

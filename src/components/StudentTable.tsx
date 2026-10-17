@@ -122,6 +122,14 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 
   const handleBlur = () => {
     setFocused(false);
+    if (text.trim() === '') {
+      // 空文本区分两种情形：
+      //  · 原本未录入 → 保持「未录入」，不提交（若提交 0，hasQuizScores 会把调出学生误判成调入并进统计）
+      //  · 原本有分数、用户主动清空 → 仍按 0 分提交，保留原有的「清零」能力
+      if (value > 0) onCommit(0);
+      setText('');
+      return;
+    }
     const n = clamp(parseFloat(text));
     setText(n > 0 ? String(n) : '');
     onCommit(n);
@@ -802,8 +810,10 @@ export function StudentTable({
                                 <SelectTrigger className={`w-24 h-9 text-sm rounded-lg ${optionToneClass(record?.attendance)} ${/迟到|缺勤|缺席/.test(record?.attendance || '') ? 'opt-negative' : ''}`} style={optStyleOf('attendance', record?.attendance)}><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {CLEAR_ITEM}
-                                  {/* 调入/调出的展示项（选中即保持现状；改选其他项恢复正常考勤） */}
-                                  {transferLabel && <SelectItem value={transferLabel}>{transferLabel}</SelectItem>}
+                                  {/* 调入/调出的展示项：仅用于显示当前状态，禁止选中——
+                                      选中会把「调入 ↩️」写进存储，attendanceKind 归一化后变 unknown，
+                                      该生会被当成正常到课计入统计（2026-10-17 修正） */}
+                                  {transferLabel && <SelectItem value={transferLabel} disabled>{transferLabel}</SelectItem>}
                                   {attendanceDisplay.raw && <SelectItem value={attendanceDisplay.raw}>{attendanceDisplay.raw}</SelectItem>}
                                   {attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                 </SelectContent>
@@ -860,8 +870,10 @@ export function StudentTable({
                             // 附加项（如口语得分）并非每次课都登记：未登记时使用「—」占位，
                             // 不与"真实 0 分"混淆
                             const quizOptional = !!qt.excludeFromTotal;
-                            // 附加项（口语）只在请假/缺勤时隐藏；调课与无记录时仍可登记
-                            const hideCell = enrolledAbsent || noRecord || (transferred && !quizOptional);
+                            // 附加项（口语）只在请假/缺勤时隐藏；调课与无记录时仍可登记。
+                            // 调课要区分「调入/调出」：调入（有小测数据）分数正常显示并可编辑，
+                            // 只有调出才隐藏——与上面 quizDash 的口径必须一致（2026-10-17 修正）。
+                            const hideCell = enrolledAbsent || noRecord || (transferred && !transferIn && !quizOptional);
                             const rawScore = hideCell ? undefined : record?.scores?.[qt.id];
                             const isOptional = !!qt.excludeFromTotal;
                             const score = typeof rawScore === 'number' ? rawScore : 0;
@@ -1067,7 +1079,12 @@ export function StudentTable({
           <div className="space-y-4 mt-4">
             <Input placeholder="输入学生姓名" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddStudent()} className="liquid-glass-input" />
             <Button onClick={handleAddStudent} className="w-full liquid-glass-button">添加</Button>
-          
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 离班提醒：必须挂在「添加学员」Dialog 之外——否则它只在外层弹窗打开时才存在于 DOM，
+          进入课次的自动提醒永远不出现（2026-10-17 修正） */}
       <Dialog open={leaveHintOpen} onOpenChange={setLeaveHintOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
@@ -1092,9 +1109,6 @@ export function StudentTable({
         </DialogContent>
       </Dialog>
 
-    </div>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }

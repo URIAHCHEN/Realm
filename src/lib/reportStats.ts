@@ -61,16 +61,19 @@ export function computeStudentReportStats(
   const { attendanceOptions, homeworkOptions, listeningOptions } = opts;
   if (studentRecords.length === 0) return null;
 
-    if (studentRecords.length === 0) return null;
-
     const totalLessons = studentRecords.length;
-    const avgScore = studentRecords.reduce((sum, r) => sum + r.totalScore, 0) / totalLessons;
-    const maxScore = Math.max(...studentRecords.map(r => r.totalScore));
-    const minScore = Math.min(...studentRecords.map(r => r.totalScore));
+    // 成绩类指标只统计「实际参与评估」的课次（请假/缺勤/调出不计入）：
+    // 与班级口径（computeClassReportStats 用 isQuizAssessed 过滤）保持一致，
+    // 否则一次请假就会把个人均分与题型均分拉成 0 分点（2026-10-17 修正）。
+    const scoredRecords = studentRecords.filter(isQuizAssessed);
+    const scoredBase = scoredRecords.length > 0 ? scoredRecords : studentRecords;
+    const avgScore = scoredBase.reduce((sum, r) => sum + r.totalScore, 0) / scoredBase.length;
+    const maxScore = Math.max(...scoredBase.map(r => r.totalScore));
+    const minScore = Math.min(...scoredBase.map(r => r.totalScore));
     
     const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullScore: number } } = {};
     
-    studentRecords.forEach(record => {
+    scoredBase.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
         // 附加项（口语等）不属于小测科目，不参与题型均分/正确率统计
@@ -94,7 +97,8 @@ export function computeStudentReportStats(
       fullScore: data.fullScore
     }));
 
-    const learningTrajectory = studentRecords.map(r => ({
+    // 学习轨迹只画参与评估的课次，避免缺勤课次出现 0 分断崖
+    const learningTrajectory = scoredBase.map(r => ({
       lesson: r.lessonNumber,
       score: r.totalScore,
       correctRate: r.correctRate,
@@ -228,13 +232,25 @@ export function computeClassReportStats(
       hwTotal: hwRecords.length,
       /** 质量类统计的分母：填过课堂练习或课后任务的记录数（去重） */
       qualityTotal: qualityPool.length,
+      // 四档必须互斥（2026-10-17 修正）：
+      // excellent = 作业或课后任务任一为 good；其余三档只在 hwRecords 内取，
+      // 且排除已计入 excellent 的记录——否则同一条记录会同时落进两档。
       excellent: qualityPool.filter(r =>
         optionToneLevel(r.homeworkStatus) === 'good'
         || (hasHomeworkOption(r.listeningStatus) && optionToneLevel(r.listeningStatus) === 'good')).length,
-      good: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
-      average: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
-      poor: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length,
-      notBring: hwRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length,
+      good: hwRecords.filter(r =>
+        optionToneLevel(r.homeworkStatus) === 'info'
+        && optionToneLevel(r.listeningStatus) !== 'good').length,
+      average: hwRecords.filter(r =>
+        optionToneLevel(r.homeworkStatus) === 'warn'
+        && optionToneLevel(r.listeningStatus) !== 'good').length,
+      poor: hwRecords.filter(r =>
+        optionToneLevel(r.homeworkStatus) === 'bad'
+        && optionToneLevel(r.listeningStatus) !== 'good').length,
+      // 历史字段：语义与 poor 相同（「没带」按 bad 档计），保留兼容，勿再新增消费方
+      notBring: hwRecords.filter(r =>
+        optionToneLevel(r.homeworkStatus) === 'bad'
+        && optionToneLevel(r.listeningStatus) !== 'good').length,
     };
 
     // 动态维度：以「当前配置里出现过的选项」为准统计，选项改文案后无需改代码

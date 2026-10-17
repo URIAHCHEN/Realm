@@ -23,7 +23,7 @@ interface SchoolScorePanelProps {
   scores: SchoolScore[];
   onAddScore: (score: Omit<SchoolScore, 'id'>) => void;
   onDeleteScore: (studentName: string, scoreId: string) => void;
-  onImportExcel: (file: File) => Promise<{ success: number; failed: number; errors: string[]; unmatched: string[] }>;
+  onImportExcel: (file: File) => Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number }>;
   getNickname: (name: string) => string;
 }
 
@@ -53,7 +53,7 @@ export function SchoolScorePanel({
 }: SchoolScorePanelProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; failed: number; errors: string[]; unmatched: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeView, setActiveView] = useState<'list' | 'progress' | 'compare'>('list');
   const [isTrendDialogOpen, setIsTrendDialogOpen] = useState(false);
@@ -101,12 +101,17 @@ export function SchoolScorePanel({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const result = await onImportExcel(file);
-    setImportResult(result);
-    setIsImportDialogOpen(true);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      const result = await onImportExcel(file);
+      setImportResult(result);
+      setIsImportDialogOpen(true);
+    } catch (err) {
+      // 导入失败必须有提示，且文件输入要复位（否则重选同一个文件无反应）
+      toast.error('导入失败：' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -453,6 +458,12 @@ export function SchoolScorePanel({
                     <div className="text-2xl font-bold text-rose-600">{importResult.failed}</div>
                     <div className="text-sm text-rose-700">导入失败</div>
                   </div>
+                  {(importResult.skipped || 0) > 0 && (
+                    <div className="flex-1 bg-amber-50 p-4 rounded-xl text-center">
+                      <div className="text-2xl font-bold text-amber-600">{importResult.skipped}</div>
+                      <div className="text-sm text-amber-700">重复跳过</div>
+                    </div>
+                  )}
                 </div>
                 {(importResult.unmatched || []).length > 0 && (
                   <div className="bg-amber-50 p-4 rounded-xl">

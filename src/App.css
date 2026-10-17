@@ -2746,3 +2746,52 @@ html[data-exporting] * { animation: none !important; }
 .report-zoom .report-info-label { font-size: 14px; }
 .report-zoom .report-info-value { font-size: 24px; }
 .report-zoom table td, .report-zoom table th { font-size: 14.5px; }
+
+
+/* ==================== 审美精修 v3（2026-10-17 · 视觉迭代，不改功能位置）====================
+   现有视觉（轻玻璃 + 4 主题 + 多版式）已经过 3 轮调优，本轮不做重写，只补三件"手感"层面的事：
+   ① 触感：所有可点按控件按下即微缩，让点击有物理反馈（用独立 scale 属性，不覆盖 transform 定位）；
+   ② 节奏：统计数字统一等宽 + 微收字距，扫读时形成数字锚点；
+   ③ 一致：输入类控件的键盘焦点环与按钮统一（此前只有部分输入框有）；
+   另给暗色模式补滚动条配色（浅色已做、暗色漏掉）。
+   全部为低特异性叠加规则，不改动任何布局与功能位置。 */
+
+/* ① 触感反馈 */
+button:not(:disabled):active,
+[role="tab"]:active,
+[role="button"]:not([aria-disabled="true"]):active {
+  scale: 0.985;
+}
+button, [role="tab"], [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role="tab"]:active,
+  [role="button"]:not([aria-disabled="true"]):active { scale: 1; }
+}
+
+/* ② 数字锚点：等宽数字 + 微收字距 */
+.tabular-nums, .tnum, .tnum input, td.num, .stat-value {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+}
+
+/* ③ 焦点一致：输入类补齐与按钮同款的品牌焦点环 */
+input:focus-visible,
+textarea:focus-visible,
+[role="combobox"]:focus-visible {
+  outline: none;
+  border-color: rgb(var(--brand-rgb) / 0.75);
+  box-shadow: 0 0 0 3px rgb(var(--brand-rgb) / 0.14);
+}
+
+/* ④ 暗色模式滚动条（浅色已有细窄配色，暗色此前是系统默认亮条，割裂） */
+.dark ::-webkit-scrollbar { width: 8px; height: 8px; }
+.dark ::-webkit-scrollbar-track { background: transparent; }
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); }

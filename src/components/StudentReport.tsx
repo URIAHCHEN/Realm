@@ -334,7 +334,6 @@ export function StudentReport({
         width: __w, height: classReportRef.current.scrollHeight,
         windowWidth: __w, windowHeight: classReportRef.current.scrollHeight, scrollX: 0, scrollY: 0,
       });
-      document.documentElement.removeAttribute('data-exporting');
       const link = document.createElement('a');
       link.download = `${currentClassName}_学情报告_${selectedLesson === 'all' ? '全部课次' : `第${selectedLesson}课`}.png`;
       link.href = canvas.toDataURL('image/png');
@@ -342,6 +341,9 @@ export function StudentReport({
     } catch (err) {
       console.error('导出图片失败:', err);
       toast.error('导出图片失败：' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      // 无论成败都要清掉导出态：失败时残留会让全站淡入动画停在强制展开态（2026-10-17 修正）
+      document.documentElement.removeAttribute('data-exporting');
     }
   };
 

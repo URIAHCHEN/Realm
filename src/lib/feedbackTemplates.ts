@@ -654,8 +654,15 @@ export function exportToCSV(
 ): string {
   const customFields = lessonConfig.customFields || [];
   const headers = ['学生姓名', '课次', '学习轨迹', '考勤', '课堂表现', '书面作业', '课后任务', ...lessonConfig.questionTypes.map(qt => qt.name), ...customFields.map(cf => cf.name), '总分', '正确率', '排名'];
-  
-  let csv = headers.join(',') + '\n';
+
+  // RFC4180 转义：单元格含逗号 / 引号 / 换行时用双引号包裹并转义内部引号。
+  // 考勤、课堂表现、自定义列里出现「,」很常见，不转义会让整行列错位（2026-10-17 修正）。
+  const esc = (v: unknown): string => {
+    const s = v == null ? '' : String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  let csv = headers.map(esc).join(',') + '\n';
   
   records.forEach(record => {
     const row = [
@@ -672,7 +679,7 @@ export function exportToCSV(
       `${record.correctRate}%`,
       `第${record.rank}名`
     ];
-    csv += row.join(',') + '\n';
+    csv += row.map(esc).join(',') + '\n';
   });
   
   return '\ufeff' + csv;

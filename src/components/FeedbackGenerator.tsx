@@ -84,8 +84,14 @@ export function FeedbackGenerator({
   const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
   const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
   const [isNewStudent, setIsNewStudent] = useState(false);
-  // 是否附「参考教辅」清单（默认附上，可一键隐藏，避免消息过长）
-  const [withMaterials, setWithMaterials] = useState(true);
+  // 是否附「参考教辅」清单（默认不附——四个一以正文为主，需要时再勾选，避免消息过长）
+  const [withMaterials, setWithMaterials] = useState(false);
+  // 教师精灵表导出配置（2026-10-17）：默认「B 姓名 + C 私发反馈」两列；
+  // C 列内容可换（私发 / 四个一 / 学习建议），需要时可勾选再追加一列 D 列
+  const [elfOpen, setElfOpen] = useState(false);
+  const [elfColC, setElfColC] = useState<'private' | 'fourInOne' | 'advice'>('private');
+  const [elfWithD, setElfWithD] = useState(false);
+  const [elfColD, setElfColD] = useState<'private' | 'fourInOne' | 'advice'>('fourInOne');
   const [variant, setVariant] = useState(0);
   const SCENARIOS: { value: 'daily' | 'afterclass' | 'comm'; label: string }[] =
     FOUR_IN_ONE_SCENARIOS.map(s => ({ value: s.key, label: s.label }));
@@ -291,8 +297,13 @@ export function FeedbackGenerator({
       // 2026-10-17：批量复制/群发只保留「在课」学员 —— 请假/缺勤排除；调课按调入/调出分流，调出（无小测数据）也排除
       .filter(x => x.record && isQuizAssessed(x.record))
       .map(x => ({ name: x.name, text: generateFor(x.name) ?? '' }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, withMaterials, lessonConfig]);
+    // 依赖必须覆盖所有内容源（2026-10-17 补全）：else 改模板/资料库/昵称后
+    // 群发预览与教师精灵表导出的文本还是旧值。
+    // · adviceMap 随 lessonConfigs 变化（【学习建议】来源）
+    // · libraryLinks 由父级内联生成（每次新数组），用内容指纹比较避免每次都重算
+    // · getNickname 是父级内联箭头函数，直接放依赖会让 memo 永久失效，
+    //   但输入模板时本就每次重算，额外成本可忽略；不加则改名后导出仍是旧昵称
+  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, withMaterials, lessonConfig, adviceMap, oralRating, getNickname, libraryLinks.join('\u0001')]);
 
   // 自动排除「不在课」学员并在复制后明确提示，避免漏发：
   //   请假/缺勤 + 调课-调出（无小测数据，成绩以原班级为准）；调课-调入照常复制
@@ -366,24 +377,41 @@ export function FeedbackGenerator({
   };
 
   // 导出教师精灵（企鹅教师助手）个性化文本模板（2026-10-17）
-  // 范围与「复制对照表」完全一致：只含在课学员（请假/缺勤/调课调出排除）；B 列姓名 / C 列私发 / D 列四个一
+  // 范围与「复制对照表」完全一致：只含在课学员（请假/缺勤/调课调出排除）。
+  // 默认 B 列姓名 + C 列私发反馈两列；C/D 列内容可换，内容按当前模板草稿实时生成。
+  const ELF_KIND_LABEL: Record<'private' | 'fourInOne' | 'advice', string> = {
+    private: '私发反馈', fourInOne: '四个一反馈', advice: '学习建议',
+  };
+  const buildElfText = (name: string, kind: 'private' | 'fourInOne' | 'advice'): string => {
+    if (kind === 'advice') return adviceMap[name] || '';
+    const rec = recordOf(name);
+    if (!rec) return '';
+    const adviceRef = { '【学习建议】': adviceMap[name] || '' };
+    return kind === 'fourInOne'
+      ? generateFourInOne(rec, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, adviceRef)
+      : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef);
+  };
   const handleExportTeacherElf = async () => {
     if (batchRows.length === 0) {
       toast.error('没有可导出的反馈（本课暂无在课学员记录）');
       return;
     }
+    if (elfWithD && elfColD === elfColC) {
+      toast.error('C 列与 D 列选了同一种内容，请换一个');
+      return;
+    }
     try {
-      const rows = batchRows.map(r => {
-        const rec = recordOf(r.name);
-        const text1 = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }) : '';
-        const text2 = rec
-          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
-          : '';
-        return { name: getNickname(r.name), text1, text2 };
-      });
-      const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows });
+      const rows = batchRows.map(r => ({
+        name: getNickname(r.name),
+        text1: buildElfText(r.name, elfColC),
+        text2: elfWithD ? buildElfText(r.name, elfColD) : undefined,
+      })).filter(r => r.text1 || r.text2);
+      const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows, includeText2: elfWithD });
+      const colDesc = elfWithD
+        ? `B-D 列 = 学生姓名 / ${ELF_KIND_LABEL[elfColC]} / ${ELF_KIND_LABEL[elfColD]}`
+        : `B-C 列 = 学生姓名 / ${ELF_KIND_LABEL[elfColC]}`;
       const notes = [
-        `B-D 列 = 学生姓名 / 私发反馈 / 四个一反馈，共 ${rows.length} 人`,
+        `${colDesc}，共 ${rows.length} 人`,
         excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',
         truncated ? `${truncated} 条文本超过模板 1000 字上限，已截断` : '',
       ].filter(Boolean).join('；');
@@ -491,9 +519,9 @@ export function FeedbackGenerator({
               </Button>
               <Button
                 variant="outline"
-                className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"
-                onClick={handleExportTeacherElf}
-                title="按教师精灵（企鹅教师助手）模板导出：B 列学生姓名、C 列私发反馈、D 列四个一反馈"
+                className={`h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] ${elfOpen ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}
+                onClick={() => setElfOpen(v => !v)}
+                title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 导出教师精灵表
@@ -530,6 +558,47 @@ export function FeedbackGenerator({
               </Button>
             </div>
           </div>
+
+          {/* 教师精灵表导出配置（默认 B 姓名 + C 私发 两列；C/D 列内容可选，实时按当前模板生成） */}
+          {elfOpen && (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-[var(--r-md)] border border-[rgb(var(--brand-rgb)/0.25)] bg-[rgb(var(--brand-rgb)/0.05)] px-3.5 py-2.5">
+              <span className="text-xs font-semibold text-[color:var(--ink-2)]">教师精灵表</span>
+              <span className="text-xs text-[color:var(--ink-4)]">B 列 = 学生姓名</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--ink-2)]">
+                C 列 =
+                <Select value={elfColC} onValueChange={(v) => setElfColC(v as typeof elfColC)}>
+                  <SelectTrigger className="h-8 w-32 text-xs rounded-[var(--r-md)] bg-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="private">私发反馈</SelectItem>
+                    <SelectItem value="fourInOne">四个一反馈</SelectItem>
+                    <SelectItem value="advice">学习建议</SelectItem>
+                  </SelectContent>
+                </Select>
+              </span>
+              <label className="inline-flex items-center gap-1.5 text-xs text-[color:var(--ink-2)] cursor-pointer select-none">
+                <input type="checkbox" checked={elfWithD} onChange={(e) => setElfWithD(e.target.checked)} className="accent-[color:var(--brand)]" />
+                再加一列 D
+              </label>
+              {elfWithD && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--ink-2)]">
+                  D 列 =
+                  <Select value={elfColD} onValueChange={(v) => setElfColD(v as typeof elfColD)}>
+                    <SelectTrigger className="h-8 w-32 text-xs rounded-[var(--r-md)] bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="private">私发反馈</SelectItem>
+                      <SelectItem value="fourInOne">四个一反馈</SelectItem>
+                      <SelectItem value="advice">学习建议</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </span>
+              )}
+              <Button size="sm" className="h-8 px-3 text-xs rounded-[var(--r-md)] gap-1.5 bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90" onClick={handleExportTeacherElf}>
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                立即导出
+              </Button>
+              <span className="text-[11px] text-[color:var(--ink-4)]">内容按当前模板草稿实时生成；请假 / 缺勤 / 调课调出自动排除</span>
+            </div>
+          )}
 
           {/* 反馈模式 */}
           <div className="mt-4 flex flex-wrap items-center gap-3">

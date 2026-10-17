@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { attendanceKind } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -101,8 +102,16 @@ export function PraiseGenerator({
     if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } else {
+      // 剪贴板失败要可见（此前静默，用户以为复制成功）
+      toast.error('复制失败，请手动选择表彰文本复制');
     }
   };
+
+  // 切课次后清空上一次生成的表彰，避免把上一课的文本发到本课班群（2026-10-17 修正）
+  useEffect(() => {
+    setPraise('');
+  }, [lessonNumber]);
 
   return (
     <Card className="ios-glass-card border-0">

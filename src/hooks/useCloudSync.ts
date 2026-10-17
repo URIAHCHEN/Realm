@@ -10,7 +10,7 @@ import {
   hashSnapshot,
   loadSyncConfig,
   loadSyncMeta,
-  pushSnapshot,
+  pushSnapshotConditional,
   saveSyncConfig,
   saveSyncMeta,
 } from '@/lib/cloudSync';
@@ -79,24 +79,37 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     setAction('pushing');
     pushInFlight.current = true;
     try {
-      // 乐观锁（CAS）：推送前比对云端哈希。若他人/他设备已把云端推进到 ≠ 本地基线，
-      // 直接 upsert 会丢对方数据 → 暂停本次上传并转 conflict，由同步中心二选一。
+      // 乐观锁（CAS）：把基线 hash 作为**写请求的条件**（PATCH ?snapshot_hash=eq.<base>），
+      // 由数据库原子判断——不再「先 fetch 比对再 upsert」，那段窗口里他端写入会被静默覆盖。
+      // 0 行受影响 = 云端已被其他设备推进 → 暂停本次上传并转 conflict，由同步中心二选一。
       const baseMeta = loadSyncMeta();
-      if (baseMeta.lastPushedHash) {
-        const cloudNow = await fetchCloudState(cfg);
-        if (cloudNow.hash && cloudNow.hash !== baseMeta.lastPushedHash) {
+      // 关键：固定"本次真正上传的那份快照"。
+      // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
+      // 用新内容当 lastPushedHash 会让下次对账误判"云端有更新"→ 拉取覆盖刚录的分数。
+      const pushed = snapshotRef.current;
+      const outcome = await pushSnapshotConditional(cfg, pushed, baseMeta.lastPushedHash || null);
+      if (!outcome.ok) {
+        if (outcome.reason === 'conflict') {
           setStatus('conflict');
           statusRef.current = 'conflict';
           setMessage('云端已被其他设备更新；为避免覆盖，本次上传已暂停，请在同步中心选择保留哪一边');
           if (!silent) toast.error('云端有他人新改动，本次上传已暂停（防覆盖）');
           return false;
         }
+        if (outcome.reason === 'missing') {
+          setStatus('error');
+          statusRef.current = 'error';
+          setMessage('云端数据表不存在：请先在 Supabase 执行建表 SQL');
+          if (!silent) toast.error('云端数据表不存在，请先执行建表 SQL');
+          return false;
+        }
+        // auth：登录态失效或无权写入
+        setStatus('error');
+        statusRef.current = 'error';
+        setMessage('无权写入云端：请重新登录，或确认账号在成员名单内');
+        if (!silent) toast.error('无权写入云端，请重新登录');
+        return false;
       }
-      // 关键：固定"本次真正上传的那份快照"。
-      // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
-      // 用新内容当 lastPushedHash 会让下次对账误判"云端有更新"→ 拉取覆盖刚录的分数。
-      const pushed = snapshotRef.current;
-      await pushSnapshot(cfg, pushed);
       const pushedHash = hashSnapshot(pushed);
       // 若期间本地又变了，哈希照实记录"已上传的那份"，本地差异会在下一次自动推送里补上
       const meta = { lastPushedAt: Date.now(), lastPushedHash: pushedHash };
@@ -320,12 +333,31 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     if (!config) return;
     setAction('pushing');
     try {
-      const cloud = await fetchCloudState(config);
-      const baseSnap = cloud.snapshot;
-      if (!baseSnap) { toast.error('云端还没有基础数据，请先让管理员上传一版'); return; }
       const item = makePendingVersion(snapshotRef.current, ACTOR_OR_SELF(), note);
-      const merged = mergePending(baseSnap.pendingVersions, item);
-      await pushSnapshot(config, { ...baseSnap, pendingVersions: merged });
+      // 多人同时提交时「读队列 → 合并 → 整体写回」会互相覆盖（后到者把先到者的条目冲掉）。
+      // 改为条件写：写失败（hash 变了）就重新取最新队列再合并，最多 3 轮（2026-10-17）
+      let merged: import('@/lib/pendingReview').PendingVersion[] | null = null;
+      let failReason: 'conflict' | 'missing' | 'auth' | '' = '';
+      for (let attempt = 0; attempt < 3 && !merged; attempt++) {
+        const cloud = await fetchCloudState(config);
+        const baseSnap = cloud.snapshot;
+        if (!baseSnap) { toast.error('云端还没有基础数据，请先让管理员上传一版'); return; }
+        const next = mergePending(baseSnap.pendingVersions, item);
+        const outcome = await pushSnapshotConditional(config, { ...baseSnap, pendingVersions: next }, cloud.hash || null);
+        if (outcome.ok) { merged = next; break; }
+        failReason = outcome.reason;
+        // 只有「云端刚被改过」值得重读重试；其余（无表/无权限）直接失败
+        if (outcome.reason !== 'conflict') break;
+      }
+      if (!merged) {
+        setStatus('error'); statusRef.current = 'error';
+        const msg = failReason === 'conflict'
+          ? '多人同时提交，队列刚被更新，请再点一次提交'
+          : failReason === 'auth' ? '无权写入云端：请重新登录或确认在成员名单内'
+          : '云端数据表不存在，请先执行建表 SQL';
+        setMessage(msg); toast.error(msg);
+        return;
+      }
       setPending(merged);
       setStatus('connected'); statusRef.current = 'connected';
       setMessage('已提交审核，等待管理员批准');
@@ -351,8 +383,16 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const approvePending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
     if (!config) return;
     try {
-      const rest = removePending(pending, item.id);
-      await pushSnapshot(config, { ...item.snapshot, pendingVersions: rest });
+      // 条件写：批准前先取云端当前 hash 作基线，若期间他端写入则放弃本次批准（不覆盖别人）
+      const cloud = await fetchCloudState(config);
+      const rest = removePending(cloud.snapshot?.pendingVersions || pending, item.id);
+      const outcome = await pushSnapshotConditional(config, { ...item.snapshot, pendingVersions: rest }, cloud.hash || null);
+      if (!outcome.ok) {
+        toast.error(outcome.reason === 'conflict'
+          ? '云端刚被其他设备更新，请刷新待审列表后再批准'
+          : '批准失败：无权写入云端或数据表不存在');
+        return;
+      }
       onImport(item.snapshot);
       setPending(rest);
       saveSyncMeta({ lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(item.snapshot) });
@@ -366,9 +406,13 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const rejectPending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
     if (!config) return;
     try {
-      const rest = removePending(pending, item.id);
       const cloud = await fetchCloudState(config);
-      await pushSnapshot(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest });
+      const rest = removePending(cloud.snapshot?.pendingVersions || pending, item.id);
+      const outcome = await pushSnapshotConditional(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest }, cloud.hash || null);
+      if (!outcome.ok) {
+        toast.error('云端刚被其他设备更新，请刷新待审列表后重试');
+        return;
+      }
       setPending(rest);
       setMessage('已驳回 ' + item.by + ' 的修订');
     } catch (e) {

@@ -21,6 +21,7 @@ import {
   oralDistribution, oralToneClass, oralToneColor, oralKey, DEFAULT_ORAL_RATING,
 } from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
+import { pushSnapshotConditional } from '@/lib/cloudSync';
 
 let passed = 0;
 const failures: string[] = [];
@@ -509,6 +510,53 @@ group('评价类关键词着色');
 {
   check(optionToneLevel('正确率低，要提高') === 'warn', '「正确率低」→ 警示色');
   check(optionToneLevel('基础扎实，稳定发挥') === 'good', '「扎实/稳定」→ 正向色');
+}
+
+// 云端条件推送（CAS）：同步层最容易「改坏了看不出来」的地方 —— 必须具备
+// 「带 hash 条件才写、条件不满足判冲突、首次插入不覆盖」三条护栏。
+group('云端条件推送 CAS');
+{
+  const calls: { url: string; method: string; body?: string }[] = [];
+  let next: { status: number; json?: unknown; text?: string } = { status: 200, json: [{}] };
+  const g = globalThis as unknown as { fetch?: unknown };
+  const origFetch = g.fetch;
+  g.fetch = async (url: unknown, init: { method?: string; body?: string } = {}) => {
+    calls.push({ url: String(url), method: init.method || 'GET', body: init.body });
+    const status = next.status ?? 200;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => next.json ?? [],
+      text: async () => next.text ?? '',
+    } as unknown;
+  };
+  try {
+    const cfg = { supabaseUrl: 'https://demo.supabase.co', supabaseKey: 'anon', autoSync: true } as never;
+    const snap = { appConfig: {}, classes: {}, nicknames: {}, schoolScores: {}, templates: {} } as never;
+
+    next = { status: 200, json: [{ id: 'x' }] };
+    let r = await pushSnapshotConditional(cfg, snap, 'base123');
+    const last1 = calls[calls.length - 1];
+    check(r.ok === true, 'CAS：条件命中 → 推送成功');
+    check(last1.method === 'PATCH', 'CAS：有基线时走 PATCH 而非无条件 upsert');
+    check(/snapshot_hash=eq\.base123/.test(last1.url), 'CAS：写请求带 snapshot_hash 条件');
+
+    next = { status: 200, json: [] };
+    r = await pushSnapshotConditional(cfg, snap, 'base123');
+    check(r.ok === false && !r.ok && r.reason === 'conflict', 'CAS：0 行受影响 → 判为冲突，不覆盖');
+
+    next = { status: 201, json: [{ id: 'x' }] };
+    r = await pushSnapshotConditional(cfg, snap, null);
+    const last2 = calls[calls.length - 1];
+    check(r.ok === true && last2.method === 'POST', 'CAS：无基线 → POST 插入');
+    check(!/on_conflict/.test(last2.url), 'CAS：首次插入不带 on_conflict（不静默覆盖已有行）');
+
+    next = { status: 409, text: 'duplicate key value' };
+    r = await pushSnapshotConditional(cfg, snap, null);
+    check(r.ok === false && !r.ok && r.reason === 'conflict', 'CAS：首次插入撞已有行 → 判为冲突');
+  } finally {
+    g.fetch = origFetch;
+  }
 }
 
 console.log('');

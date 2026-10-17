@@ -254,7 +254,9 @@ export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudSta
   };
 }
 
-// 推送本地快照到云端（upsert）
+// 推送本地快照到云端（无条件 upsert）
+// @deprecated 多端场景请用 pushSnapshotConditional —— 这里的 upsert 不带条件，会覆盖他端改动。
+// 目前保留仅供脚本/排障使用，业务代码不再调用（2026-10-17）。
 export async function pushSnapshot(config: CloudSyncConfig, snapshot: SyncSnapshot): Promise<CloudState> {
   await ensureFreshToken();
   const hash = hashSnapshot(snapshot);
@@ -280,6 +282,69 @@ export async function pushSnapshot(config: CloudSyncConfig, snapshot: SyncSnapsh
     hash,
     updatedAt: rows?.[0]?.updated_at || new Date().toISOString(),
   };
+}
+
+// ============ 条件推送（真正的 CAS，2026-10-17） ============
+//
+// 原实现是「先 fetch 比对 hash → 再 upsert」的 check-then-act：
+// 两个设备在 fetch 与 push 之间的几毫秒里同时写入，后到者会静默覆盖先到者。
+// 现在改为在**写请求本身**带条件（PostgREST filter），由数据库保证原子性：
+//   · 云端已有行 + 已知基线 hash → PATCH ?id=eq.<id>&snapshot_hash=eq.<base>
+//     受影响 0 行 = 云端已被他端改过 → 冲突，不写
+//   · 首次上传（无基线）→ POST 插入；命中主键冲突（409）→ 视为冲突
+// 全部走 PostgREST 内置能力，**不需要改表结构或加数据库函数**。
+export type PushOutcome =
+  | { ok: true }
+  | { ok: false; reason: 'conflict' | 'missing' | 'auth' };
+
+export async function pushSnapshotConditional(
+  config: CloudSyncConfig,
+  snapshot: SyncSnapshot,
+  baseHash: string | null,
+): Promise<PushOutcome> {
+  await ensureFreshToken();
+  const hash = hashSnapshot(snapshot);
+  const payload = {
+    data: snapshot,
+    snapshot_hash: hash,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (baseHash) {
+    // 条件更新：只有云端 hash 仍等于我上次推送的基线时才允许写
+    const res = await backendFetch(
+      restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&snapshot_hash=eq.${encodeURIComponent(baseHash)}`),
+      {
+        method: 'PATCH',
+        headers: apiHeaders(config, { Prefer: 'return=representation' }),
+        body: JSON.stringify(payload),
+      }
+    );
+    if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth' };
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      if (text.includes('does not exist')) return { ok: false, reason: 'missing' };
+      throw new Error(`HTTP_${res.status}`);
+    }
+    const rows = await res.json().catch(() => []);
+    // 0 行 = 条件不满足：云端已被他端更新（或行被删）→ 冲突，交由上层处理
+    return Array.isArray(rows) && rows.length > 0 ? { ok: true } : { ok: false, reason: 'conflict' };
+  }
+
+  // 首次上传：插入而不合并——若已存在则由数据库报 409，避免"新设备直接覆盖云端"
+  const res = await backendFetch(restUrl(config, ''), {
+    method: 'POST',
+    headers: apiHeaders(config, { Prefer: 'return=representation' }),
+    body: JSON.stringify({ id: getStateId(config), ...payload }),
+  });
+  if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth' };
+  if (res.status === 409) return { ok: false, reason: 'conflict' };
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    if (text.includes('does not exist')) return { ok: false, reason: 'missing' };
+    throw new Error(`HTTP_${res.status}`);
+  }
+  return { ok: true };
 }
 
 // 测试连接：检查网络、密钥、登录态与建表情况

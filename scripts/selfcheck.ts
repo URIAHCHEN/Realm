@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
+import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
 import { categoryOf, aggregateByCategory, unclassifiedNames } from '@/lib/qtCategories';
 import { isQuizAssessed, isTransferIn, hasQuizScores } from '@/lib/attendance';
@@ -557,6 +558,41 @@ group('云端条件推送 CAS');
   } finally {
     g.fetch = origFetch;
   }
+}
+
+// ============ 反馈模板：空值占位符不得泄露（2026-10-17 用户反馈「有人薄弱项是【薄弱项】字面量」） ============
+group('反馈占位符兜底');
+{
+  const qts = [
+    { id: 'v1', name: '语法选择', fullScore: 10, order: 0 },
+    { id: 'v2', name: '笔记默写', fullScore: 10, order: 1 },
+  ];
+  const cfg = {
+    questionTypes: qts, customFields: [], homeworkOptions: ['完成✅'], listeningOptions: ['很棒哦👏'],
+    attendanceOptions: ['准时👍'], classPerformanceOptions: ['认真积极'], homeworkText: '', passThreshold: 80,
+    feedbackTemplate: '【昵称】家长好：\n薄弱项：【薄弱项】\n课堂表现：【课堂表现】\n作业内容：【作业内容】\n学习建议：【学习建议】',
+  };
+  const stats = { avgScores: { v1: 8, v2: 8 }, registeredCounts: { v1: 3, v2: 3 } };
+  // ① 无薄弱项（全高于班均）+ 三个可选字段全空 → 任何占位符都不得原样漏出
+  const noWeak = generatePersonalFeedback(
+    { id: 'x1', studentName: '测试生', lessonNumber: 3, seasons: [], attendance: '准时👍', homeworkStatus: '', listeningStatus: '', listeningScore: 0, classPerformance: '', scores: { v1: 10, v2: 10 }, totalScore: 20, correctRate: 100, rank: 1, date: '2026-10-17' } as unknown as StudentRecord,
+    cfg as unknown as import('@/types').LessonConfig,
+    stats as unknown as import('@/types').ClassStats,
+    '测试生', undefined, undefined, {}
+  );
+  check(!noWeak.includes('【薄弱项】'), '无薄弱项：不漏【薄弱项】字面量');
+  check(noWeak.includes('暂未发现明显弱项'), '无薄弱项：给正向兜底文案');
+  check(!noWeak.includes('【课堂表现】'), '课堂表现为空：不漏字面量');
+  check(!noWeak.includes('【作业内容】'), '作业内容为空：不漏字面量');
+  check(!noWeak.includes('【学习建议】'), '学习建议为空：不漏字面量');
+  // ② 有薄弱项 → 正常替换成板块文案
+  const withWeak = generatePersonalFeedback(
+    { id: 'x2', studentName: '测试生', lessonNumber: 3, seasons: [], attendance: '准时👍', homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', listeningScore: 10, classPerformance: '认真积极', scores: { v1: 2, v2: 2 }, totalScore: 4, correctRate: 20, rank: 3, date: '2026-10-17' } as unknown as StudentRecord,
+    cfg as unknown as import('@/types').LessonConfig,
+    stats as unknown as import('@/types').ClassStats,
+    '测试生', undefined, undefined, {}
+  );
+  check(withWeak.includes('语法') && !withWeak.includes('【薄弱项】'), '有薄弱项：正常替换为板块文案');
 }
 
 console.log('');

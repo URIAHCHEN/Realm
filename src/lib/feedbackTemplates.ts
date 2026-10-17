@@ -73,6 +73,19 @@ function dropLineIfLabelOnly(text: string, label: string, value: string, fieldNa
 }
 
 /**
+ * 变量填充的统一入口（2026-10-17 修「空值占位符字面泄露」）：
+ *  · 有值 → 替换占位符；
+ *  · 无值 → 先删掉「剥掉占位符与字段名后只剩标点」的行，再把残留占位置换成空串。
+ * 背景：原来多个可选变量（课堂表现/作业内容/学习建议…）在无值时直接 .replace(…, '')，
+ * 但模板行里带字段名标签（如「薄弱项：【薄弱项】」）时行不会被删 → 家长收到【薄弱项】字面量。
+ */
+function fillVar(template: string, placeholder: string, value: string, fieldName?: string): string {
+  if (value !== '') return template.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+  return dropLineIfLabelOnly(template, placeholder, '', fieldName)
+    .replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+}
+
+/**
  * 附加项评价参数（【口语得分评价】）的行首候选写法。
  * 老师可能写「口语评价：」「口语：」「口语得分档位：」——都得能在无判定时整行删掉，
  * 否则家长会收到一行只有前缀没有内容的空壳。
@@ -207,29 +220,16 @@ export function generatePersonalFeedback(
   // 生成短昵称
   const shortNickname = generateShortNickname(nickname);
   
-  // 课堂表现缺失时，删掉该行（避免留下"🙋 课堂表现："这种空标签）
-  if (!record.classPerformance || !String(record.classPerformance).trim()) {
-    // 只删除"去掉该占位符后就没有内容"的行；
-    // 原实现用 /.*【课堂表现】.*/ 会把"考勤：【考勤】 课堂表现：【课堂表现】"整行删掉，考勤信息跟着丢
-    template = template
-      .split('\n')
-      .filter(line => !(line.includes('【课堂表现】') && line.replace('【课堂表现】', '').replace(/[\s:：|｜·—\-*]/g, '') === ''))
-      .join('\n');
-  }
+  // 课堂表现缺失时删掉该行（避免留下"🙋 课堂表现："这种空标签）—— 用统一的 dropLineIfLabelOnly，
+  // 字段名标签（"课堂表现"）也要一起剥掉才算空，否则行删不掉、占位符原样漏给家长
+  template = dropLineIfLabelOnly(template, '【课堂表现】', (record.classPerformance || '').trim(), '课堂表现');
 
-  // 处理薄弱项 - 如果没有薄弱项，删除【薄弱项】占位
-  if (weakPoints.length === 0) {
-    // 与上面「课堂表现」同一口径：只删「剥掉占位符后没有内容」的行，
-    // 避免把同一行里的考勤等信息连带删掉（2026-10-17 修正）
-    template = template
-      .split('\n')
-      .filter(line => !(line.includes('【薄弱项】') && line.replace('【薄弱项】', '').replace(/[\s:：|｜·—\-*]/g, '') === ''))
-      .join('\n');
-  } else {
-    // 构建薄弱项文本（按板块）
-    const weakPointsText = weakPoints.map(formatCategoryWeakPoint).join('、');
-    template = template.replace(/【薄弱项】/g, weakPointsText);
-  }
+  // 薄弱项（2026-10-17 修「有的学员反馈里薄弱项是【薄弱项】字面量」）：
+  // 有弱项 → 列板块；无弱项 → 给一句正向兜底（与「四个一」的待提升口径一致），绝不把占位符漏出去
+  const weakPointsText = weakPoints.length > 0
+    ? weakPoints.map(formatCategoryWeakPoint).join('、')
+    : '暂未发现明显弱项，各板块基本跟上班均';
+  template = template.replace(/【薄弱项】/g, weakPointsText);
   
   // 自定义列：占位符替换 + 未使用的自动追加
   const customFields = lessonConfig.customFields || [];
@@ -249,6 +249,16 @@ export function generatePersonalFeedback(
   });
   // 题型（含口语得分等附加项）也作为可用参数；附加项额外支持【X评价】档位
   template = applyScoreVariables(template, record, lessonConfig, ratingByQtId);
+
+  // 可选变量：空值时删「空壳行」而不是留字面占位符（2026-10-17）
+  template = fillVar(template, '【作业内容】', lessonConfig.homeworkText || '', '作业内容');
+  template = fillVar(template, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
+  template = fillVar(template, '【作业】', record.homeworkStatus || '', '作业');
+  const listeningText = Number(record.listeningScore) > 0
+    ? `${record.listeningScore}分`
+    : (record.listeningStatus && record.listeningStatus !== '具体分数' ? record.listeningStatus : '');
+  template = fillVar(template, '【课后任务】', listeningText, '课后任务');
+  template = fillVar(template, '【乐听说】', listeningText, '乐听说');
 
   // 替换模板变量
   let feedback = template
@@ -524,6 +534,8 @@ export function generateFourInOne(
     .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '')
     .replace(/【参考教辅】/g, withMaterials ? `\n${FOUR_IN_ONE_MATERIALS}` : '')
     .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
+  // 空值兜底：学习建议未注入时删掉空壳行，而不是把【学习建议】原样发给家长（2026-10-17）
+  fourTpl = dropLineIfLabelOnly(fourTpl, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
 }
 
 // 生成班群表彰

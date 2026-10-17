@@ -1076,6 +1076,7 @@ function App() {
             <div className="max-w-6xl mx-auto space-y-5">
             <FeedbackGenerator
                 key={currentClassId || 'none'}
+              className={currentClass?.name || ''}
               students={currentClass?.students || []}
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}

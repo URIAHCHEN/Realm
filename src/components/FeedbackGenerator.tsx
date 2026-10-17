@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
-  CircleAlert, RotateCcw, Send, Sparkles, Table2, Lightbulb } from 'lucide-react';
+  CircleAlert, RotateCcw, Send, Sparkles, Table2, Lightbulb, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
-import { isAbsentRecord } from '@/lib/attendance';
+import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
+import { exportTeacherElfXlsx } from '@/lib/teacherElfExport';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
@@ -49,6 +50,8 @@ interface FeedbackGeneratorProps {
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 点击群发列表中的姓名弹出该生学情报告 */
   onViewStudent?: (name: string) => void;
+  /** 班级名（仅用于导出文件名） */
+  className?: string;
 }
 
 type StatusTone = 'none' | 'generated' | 'copied';
@@ -64,7 +67,8 @@ export function FeedbackGenerator({
   lessonConfigs = {},
   libraryLinks = [],
   onSaveLessonConfig,
-  onViewStudent
+  onViewStudent,
+  className
 }: FeedbackGeneratorProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
@@ -257,7 +261,7 @@ export function FeedbackGenerator({
   // 一键复制某生的学习建议（精简版）
   const handleCopyAdvice = async (name: string) => {
     const rec = recordOf(name);
-    if (!rec || isAbsentRecord(rec)) { toast.error('本课无有效记录，无法生成学习建议'); return; }
+    if (!rec || !isQuizAssessed(rec)) { toast.error('本课不在课（请假/缺勤/调课调出），无法生成学习建议'); return; }
     const text = adviceMap[name];
     if (!text) { toast.error('暂无可复制的学习建议'); return; }
     const ok = await copyToClipboard(text);
@@ -269,7 +273,7 @@ export function FeedbackGenerator({
   const handleCopyAdviceBatch = async () => {
     const rows = students
       .map(name => ({ name, rec: recordOf(name) }))
-      .filter(x => x.rec && !isAbsentRecord(x.rec))
+      .filter(x => x.rec && isQuizAssessed(x.rec))
       .map(x => ({ name: x.name, text: adviceMap[x.name] || '' }))
       .filter(x => x.text);
     if (rows.length === 0) { toast.error('没有可复制的学习建议（本课暂无到课学员）'); return; }
@@ -284,17 +288,25 @@ export function FeedbackGenerator({
   const batchRows = useMemo(() => {
     return students
       .map(name => ({ name, record: recordOf(name) }))
-      .filter(x => x.record && !isAbsentRecord(x.record))
+      // 2026-10-17：批量复制/群发只保留「在课」学员 —— 请假/缺勤排除；调课按调入/调出分流，调出（无小测数据）也排除
+      .filter(x => x.record && isQuizAssessed(x.record))
       .map(x => ({ name: x.name, text: generateFor(x.name) ?? '' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, withMaterials, lessonConfig]);
 
-  // 自动排除缺勤/请假的学员，并在复制后明确提示，避免漏发
+  // 自动排除「不在课」学员并在复制后明确提示，避免漏发：
+  //   请假/缺勤 + 调课-调出（无小测数据，成绩以原班级为准）；调课-调入照常复制
   const absentNames = useMemo(
     () => lessonRecords.filter(r => isAbsentRecord(r)).map(r => getNickname(r.studentName)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lessonRecords]
   );
+  const transferOutNames = useMemo(
+    () => lessonRecords.filter(r => !isQuizAssessed(r) && !isAbsentRecord(r)).map(r => getNickname(r.studentName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lessonRecords]
+  );
+  const excludedNames = useMemo(() => [...absentNames, ...transferOutNames], [absentNames, transferOutNames]);
   const excludedAbsentCount = absentNames.length;
 
   // 一键复制全班（表格）：一列学生 / 一列私发 / 一列四个一，直接粘进表格即可对照
@@ -316,8 +328,8 @@ export function FeedbackGenerator({
     if (ok) {
       setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
       toast.success(`已复制 ${rows.length} 位学员的对照表（学生 / 私发 / 四个一）`, {
-        description: absentNames.length
-          ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}`
+        description: excludedNames.length
+          ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}`
           : '粘贴到表格即可按列对照；含多行的反馈会整体落在一个单元格内',
       });
     } else {
@@ -346,10 +358,38 @@ export function FeedbackGenerator({
     if (ok) {
       setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
       toast.success(`已复制 ${rows.length} 位学员的${isFour ? '四个一' : '私发'}反馈（单列表格）`, {
-        description: absentNames.length ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}` : undefined,
+        description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
       });
     } else {
       toast.error('复制失败，请手动选择复制');
+    }
+  };
+
+  // 导出教师精灵（企鹅教师助手）个性化文本模板（2026-10-17）
+  // 范围与「复制对照表」完全一致：只含在课学员（请假/缺勤/调课调出排除）；B 列姓名 / C 列私发 / D 列四个一
+  const handleExportTeacherElf = async () => {
+    if (batchRows.length === 0) {
+      toast.error('没有可导出的反馈（本课暂无在课学员记录）');
+      return;
+    }
+    try {
+      const rows = batchRows.map(r => {
+        const rec = recordOf(r.name);
+        const text1 = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }) : '';
+        const text2 = rec
+          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
+          : '';
+        return { name: getNickname(r.name), text1, text2 };
+      });
+      const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows });
+      const notes = [
+        `B-D 列 = 学生姓名 / 私发反馈 / 四个一反馈，共 ${rows.length} 人`,
+        excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',
+        truncated ? `${truncated} 条文本超过模板 1000 字上限，已截断` : '',
+      ].filter(Boolean).join('；');
+      toast.success(`已导出 ${filename}`, { description: notes, duration: 9000 });
+    } catch (e) {
+      toast.error('导出失败：' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -364,7 +404,7 @@ export function FeedbackGenerator({
     if (ok) {
       setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
       toast.success(`已复制 ${batchRows.length} 份反馈（纯文本，分隔线隔开）`, {
-        description: absentNames.length ? `已自动排除 ${absentNames.length} 位缺勤或请假学员：${absentNames.join('、')}` : undefined,
+        description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
       });
     } else {
       toast.error('复制失败，请手动选择复制');
@@ -432,7 +472,7 @@ export function FeedbackGenerator({
               </div>
               <div>
                 <p className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</p>
-                <p className="text-xs text-[color:var(--ink-4)]">一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，粘贴到表格即可逐列使用（缺勤自动排除）</p>
+                <p className="text-xs text-[color:var(--ink-4)]">一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，或直接导出教师精灵模板（请假 / 缺勤 / 调课调出自动排除）</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -448,6 +488,15 @@ export function FeedbackGenerator({
               >
                 <Table2 className="w-4 h-4" />
                 复制对照表（三列）
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"
+                onClick={handleExportTeacherElf}
+                title="按教师精灵（企鹅教师助手）模板导出：B 列学生姓名、C 列私发反馈、D 列四个一反馈"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                导出教师精灵表
               </Button>
               <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
                 title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>

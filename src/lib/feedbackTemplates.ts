@@ -187,10 +187,15 @@ export function generatePersonalFeedback(
   // rateOralScore 内部会自动只用固定分数线，不做相对微调。
   const ratingByQtId = buildRatingByQtId(record, lessonConfig, stats, oralCfg);
   
-  // 构建成绩详情
+  // 构建成绩详情（区分「未登记」与「真实 0 分」：未登记的题型不写 0/满分，
+  // 避免家长以为孩子考了 0 分——与 applyScoreVariables 的口径保持一致，2026-10-17 修正）
   const scoreDetails = lessonConfig.questionTypes.map(qt => {
-    const score = record.scores[qt.id] || 0;
+    const raw = record.scores[qt.id];
     const avgScore = stats.avgScores[qt.id] || 0;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return `• ${qt.name}：本次未登记`;
+    }
+    const score = raw;
     const diff = score - avgScore;
     const diffText = diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
     return `• ${qt.name}：${score}/${qt.fullScore}分（班均${avgScore.toFixed(1)}，${diffText}）`;
@@ -212,10 +217,14 @@ export function generatePersonalFeedback(
       .join('\n');
   }
 
-  // 处理薄弱项 - 如果没有薄弱项，删除包含【薄弱项】的行
+  // 处理薄弱项 - 如果没有薄弱项，删除【薄弱项】占位
   if (weakPoints.length === 0) {
-    // 删除包含【薄弱项】的整行
-    template = template.replace(/.*【薄弱项】.*\n?/g, '');
+    // 与上面「课堂表现」同一口径：只删「剥掉占位符后没有内容」的行，
+    // 避免把同一行里的考勤等信息连带删掉（2026-10-17 修正）
+    template = template
+      .split('\n')
+      .filter(line => !(line.includes('【薄弱项】') && line.replace('【薄弱项】', '').replace(/[\s:：|｜·—\-*]/g, '') === ''))
+      .join('\n');
   } else {
     // 构建薄弱项文本（按板块）
     const weakPointsText = weakPoints.map(formatCategoryWeakPoint).join('、');
@@ -402,7 +411,9 @@ export function generateFourInOne(
   const closing = pack.closings[v % pack.closings.length];
 
   const strong = lessonConfig.questionTypes
-    .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id] || 0, avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
+    // 未登记的题型不参与强项判定（不能把「没登记」当成 0 分去比班均）
+    .filter(qt => typeof record.scores[qt.id] === 'number' && Number.isFinite(record.scores[qt.id]))
+    .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id], avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
     .filter(x => x.avg > 0 && isQtStrong(x.qt, x.s, x.avg))
     .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
   const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);

@@ -53,6 +53,12 @@ export function getCachedSession(): AuthSession | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as AuthSession;
     if (!s.access_token || !s.refresh_token) return null;
+    // expires_at 必须是有限数字：损坏值（NaN/字符串）会让 ensureFreshToken
+    // 每次请求都判定「已过期」并触发刷新。给一个 1 小时的兜底有效期，
+    // 真过期时请求会 401 → clearSession 走重新登录（2026-10-17 加固）
+    if (typeof s.expires_at !== 'number' || !Number.isFinite(s.expires_at)) {
+      return { ...s, expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    }
     return s;
   } catch {
     return null;

@@ -8,6 +8,7 @@
 //
 // "智能"体现在：负面上浮（只报异常项）、去数字堆砌、多弱项合并、同池随机防重、超长自动降级。
 import type { StudentRecord, LessonConfig } from '@/types';
+import { attendanceRateOf } from '@/lib/attendance';
 import {
   getOverallFeedback,
   getQuestionTypeFeedback,
@@ -87,8 +88,11 @@ export function buildCondensedAdvice(
     : '';
 
   // ③ 状态句：只报异常（考勤 → 作业 → 课后 → 轨迹，取最靠前的异常）；全好则一句概括
-  const att = stats.attendanceStats;
-  const attRate = att.total > 0 ? (att.onTime + att.late) / att.total : 1;
+  // 出勤率走统一口径（attendanceRateOf：调课/unknown 不计入分母），
+  // 否则同一学生在报告与建议里会算出两个出勤率（2026-10-17 修正）
+  const attRate = studentRecords.length > 0
+    ? attendanceRateOf(studentRecords.map(r => r.attendance)) / 100
+    : 1;
   const hw = stats.homeworkStats;
   const hwTotal = (hw.excellent + hw.good + hw.average + hw.poor) || 1;
   const hwRate = hw.excellent / hwTotal;
@@ -98,10 +102,11 @@ export function buildCondensedAdvice(
   const avgListening = listening.length ? listening.reduce((a, b) => a + b, 0) / listening.length : 0;
   const traj = stats.learningTrajectory.map(t => t.score);
   let status = '';
+  const trajFeedback = traj.length >= 3 ? getTrajectoryFeedback(traj) : '';
   if (attRate < 0.85) status = firstSentence(getAttendanceFeedback(attRate));
   else if (hwRate < 0.6) status = firstSentence(getHomeworkFeedback(hwRate));
   else if (listening.length > 0 && avgListening < 70) status = firstSentence(getListeningFeedback(avgListening));
-  else if (traj.length >= 3 && /回落/.test(getTrajectoryFeedback(traj))) status = firstSentence(getTrajectoryFeedback(traj));
+  else if (trajFeedback && /回落/.test(trajFeedback)) status = firstSentence(trajFeedback);
   if (!status) status = '考勤、作业和课后任务都保持得很好。';
 
   // ④ 收尾（按整体档位二选一）

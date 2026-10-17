@@ -117,11 +117,13 @@ export function computeStudentReportStats(
     // 修复 P0 —— 原 excellent 与 good 同为 tone==='good'，ReportViews 把四档相加当分母
     // → excellentRate 恒 ≤0.5，永远达不到话术阈值，每个学生都收到负面作业反馈。
     // 现映射：good→excellent、info→good、warn→average、bad→poor（互斥、分母不重计）。
+    // 只统计非请假/缺勤课次：请假课次的作业状态是残留值，计入会拉偏优秀率（2026-10-17 修正）
+    const hwPool = studentRecords.filter(r => !isAbsentRecord(r));
     const homeworkStats = {
-      excellent: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
-      good: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'info').length,
-      average: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
-      poor: studentRecords.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length
+      excellent: hwPool.filter(r => optionToneLevel(r.homeworkStatus) === 'good').length,
+      good: hwPool.filter(r => optionToneLevel(r.homeworkStatus) === 'info').length,
+      average: hwPool.filter(r => optionToneLevel(r.homeworkStatus) === 'warn').length,
+      poor: hwPool.filter(r => optionToneLevel(r.homeworkStatus) === 'bad').length
     };
     const optionCounts = (opts: string[], pick: (r: typeof studentRecords[number]) => string | undefined) =>
       opts.map(opt => ({ option: opt, count: studentRecords.filter(r => pick(r) === opt).length }))

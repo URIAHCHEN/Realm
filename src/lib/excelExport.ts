@@ -22,6 +22,22 @@ export async function exportToExcel(data: ExportData, _className: string): Promi
   const workbook = XLSX.utils.book_new();
 
   // 1. 班级学生表
+  // 工作表名：Excel 上限 31 字符，且同一工作簿内不可重名（同名班级 / 超长班名会直接抛错）
+  const usedSheetNames = new Set<string>();
+  const sheetName = (raw: string): string => {
+    // Excel 工作表名非法字符：\ / ? * [ ] :
+    const cleaned = raw.replace(/[\\/?*[\]:]/g, '').trim() || 'Sheet';
+    const base = cleaned.slice(0, 27);
+    let name = base;
+    let i = 2;
+    while (usedSheetNames.has(name)) {
+      name = `${base.slice(0, 25)}(${i})`;
+      i += 1;
+    }
+    usedSheetNames.add(name);
+    return name;
+  };
+
   Object.values(classes).forEach(cls => {
     const studentsData = cls.students.map((student, index) => ({
       '序号': index + 1,
@@ -31,7 +47,7 @@ export async function exportToExcel(data: ExportData, _className: string): Promi
     }));
 
     const studentsSheet = XLSX.utils.json_to_sheet(studentsData);
-    XLSX.utils.book_append_sheet(workbook, studentsSheet, `${cls.name}-学生名单`);
+    XLSX.utils.book_append_sheet(workbook, studentsSheet, sheetName(`${cls.name}-学生名单`));
 
     // 2. 学情记录表
     const allLessons = [...new Set(cls.records.map(r => r.lessonNumber))].sort((a, b) => a - b);
@@ -70,13 +86,13 @@ export async function exportToExcel(data: ExportData, _className: string): Promi
 
         row['总分'] = record.totalScore;
         row['正确率'] = `${record.correctRate}%`;
-        row['排名'] = `第${record.rank}名`;
+        row['排名'] = record.rank ? `第${record.rank}名` : '';
 
         return row;
       });
 
       const recordsSheet = XLSX.utils.json_to_sheet(recordsData);
-      XLSX.utils.book_append_sheet(workbook, recordsSheet, `${cls.name}-第${lessonNum}课`);
+      XLSX.utils.book_append_sheet(workbook, recordsSheet, sheetName(`${cls.name}-第${lessonNum}课`));
     });
   });
 

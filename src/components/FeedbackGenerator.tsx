@@ -303,6 +303,7 @@ export function FeedbackGenerator({
     // · libraryLinks 由父级内联生成（每次新数组），用内容指纹比较避免每次都重算
     // · getNickname 是父级内联箭头函数，直接放依赖会让 memo 永久失效，
     //   但输入模板时本就每次重算，额外成本可忽略；不加则改名后导出仍是旧昵称
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- libraryLinks 用内容指纹比较，避免父级内联数组每次触发重算
   }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, scenario, isNewStudent, variant, withMaterials, lessonConfig, adviceMap, oralRating, getNickname, libraryLinks.join('\u0001')]);
 
   // 自动排除「不在课」学员并在复制后明确提示，避免漏发：

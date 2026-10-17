@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Cloud, CloudUpload, CloudDownload, CheckCircle2, AlertTriangle,
@@ -38,6 +38,16 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
   const [autoSync, setAutoSync] = useState(sync.config?.autoSync ?? true);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string>('');
+
+  // 配置异步到达（云端拉取 / 首次登录）时回填表单；
+  // 只在配置值真正变化时覆盖，不会打断正在输入的内容（2026-10-17 补）
+  /* eslint-disable react-hooks/set-state-in-effect -- 受控表单按外部配置回填，刻意同步 */
+  useEffect(() => {
+    setUrl(sync.config?.supabaseUrl || '');
+    setKey(sync.config?.supabaseKey || '');
+    setAutoSync(sync.config?.autoSync ?? true);
+  }, [sync.config?.supabaseUrl, sync.config?.supabaseKey, sync.config?.autoSync]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const meta = statusMeta[sync.status] || statusMeta.unconfigured;
   const StatusIcon = meta.icon;

@@ -143,6 +143,36 @@ const availableVariables = [  { key: '【学生昵称】', desc: '学生昵称�
   { key: '【作业内容】', desc: '作业内容' },
 ];
 
+// 变量选择器：定义在模块级，避免每次渲染生成新的组件类型导致子树卸载重建（2026-10-17）
+function VariableSelector({
+  textareaRef,
+  isLessonConfig,
+  onInsert,
+}: {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  isLessonConfig: boolean;
+  onInsert: (ref: React.RefObject<HTMLTextAreaElement | null>, variable: string, isLessonConfig: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-3 p-3 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] rounded-xl border border-[rgb(var(--brand-rgb)/0.15)]">
+      <div className="w-full flex items-center gap-2 mb-2 text-sm text-[color:var(--brand)] font-medium">
+        <Variable className="w-4 h-4" />
+        点击插入变量：
+      </div>
+      {availableVariables.map((variable) => (
+        <button
+          key={variable.key}
+          onClick={() => onInsert(textareaRef, variable.key, isLessonConfig)}
+          className="variable-tag"
+          title={variable.desc}
+        >
+          {variable.key}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ConfigPanel({
   appConfig,
   lessonConfig,
@@ -337,32 +367,6 @@ export function ConfigPanel({
     const oral = normalizeOralRating(localAppConfig.oralRating);
     onSaveAppConfig({ ...localAppConfig, oralRating: oral });
   };
-
-  // 变量选择器组件
-  const VariableSelector = ({ 
-    textareaRef, 
-    isLessonConfig 
-  }: { 
-    textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-    isLessonConfig: boolean;
-  }) => (
-    <div className="flex flex-wrap gap-2 mt-3 p-3 bg-gradient-to-r from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.12)] rounded-xl border border-[rgb(var(--brand-rgb)/0.15)]">
-      <div className="w-full flex items-center gap-2 mb-2 text-sm text-[color:var(--brand)] font-medium">
-        <Variable className="w-4 h-4" />
-        点击插入变量：
-      </div>
-      {availableVariables.map((variable) => (
-        <button
-          key={variable.key}
-          onClick={() => insertVariable(textareaRef, variable.key, isLessonConfig)}
-          className="variable-tag"
-          title={variable.desc}
-        >
-          {variable.key}
-        </button>
-      ))}
-    </div>
-  );
 
   return (
     <Tabs defaultValue="fields" className="space-y-6">
@@ -714,6 +718,7 @@ export function ConfigPanel({
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 
+                onInsert={insertVariable}
                 textareaRef={feedbackTextareaRef}
                 isLessonConfig={true}
               />
@@ -892,6 +897,7 @@ export function ConfigPanel({
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 
+                onInsert={insertVariable}
                 textareaRef={defaultFeedbackTextareaRef}
                 isLessonConfig={false}
               />
@@ -908,6 +914,7 @@ export function ConfigPanel({
                 placeholder="点击上方变量插入到模板中..."
               />
               <VariableSelector 
+                onInsert={insertVariable}
                 textareaRef={defaultPraiseTextareaRef}
                 isLessonConfig={false}
               />

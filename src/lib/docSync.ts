@@ -200,21 +200,10 @@ function inferFullScores(
     return base;
   }
 
-  // 低估：优先把"常用档位/配置"高于当前值的列提上去（增量大的先补），逼近表头总分
-  const ups = cols
-    .map((c, i) => {
-      const cfg = c.configFullScore || 0;
-      const target = Math.max(cfg, canonOf(c.name), c.colMax || 0);
-      return { i, gain: target - base[i] };
-    })
-    .filter(x => x.gain > 0.001)
-    .sort((a, b) => b.gain - a.gain);
-  for (const u of ups) {
-    if (sum >= declaredTotal) break;
-    const add = Math.min(u.gain, declaredTotal - sum);
-    base[u.i] += add;
-    sum += add;
-  }
+  // 低估：表头总分 > 各列之和（常见于表头写 100、而各列满分只标了部分题型）。
+  // 这里**不做校准**：base 已取「配置 / 标准档位 / 数据最大值」三者最大，
+  // 没有可信依据把差额摊到某一列，抬高任意一列都是臆测（原实现在这里有一段
+  // gain 恒为 0 的死代码，2026-10-17 清理并写明取舍）。
   return base;
 }
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -94,8 +94,28 @@ export function Leaderboard({
   const [lessonRange, setLessonRange] = useState<LessonRange>('current');
   const [customStart, setCustomStart] = useState<number>(lessonNumber);
   const [customEnd, setCustomEnd] = useState<number>(lessonNumber);
+  // 切课次后自定义区间跟随当前课次（此前停留在挂载时的课次，导出范围会错）
+  useEffect(() => {
+    setCustomStart(lessonNumber);
+    setCustomEnd(lessonNumber);
+  }, [lessonNumber]);
   const [progressMinLessons, setProgressMinLessons] = useState<number>(2);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  // 导出菜单：点击外部或按 Esc 关闭（此前只能再点一次按钮收起）
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowExportMenu(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showExportMenu]);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const leaderboardRef = useRef<HTMLDivElement>(null);
 
@@ -378,6 +398,9 @@ export function Leaderboard({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success('表扬榜已复制！');
+    } else {
+      // 剪贴板被拒（非 https / 权限）时必须有反馈（2026-10-17 补）
+      toast.error('复制失败，请手动选择文本复制');
     }
   };
 
@@ -850,7 +873,7 @@ export function Leaderboard({
             )}
           </Button>
 
-          <div className="relative">
+          <div className="relative" ref={exportMenuRef}>
             <Button
               variant="outline"
               className="gap-2"

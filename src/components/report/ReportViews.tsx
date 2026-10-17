@@ -662,7 +662,7 @@ export function PersonalReportView({
                         'bg-red-100 text-red-700'
                       }>{exam.rate}%</Badge>
                     </TableCell>
-                    <TableCell>{exam.classRank} / {exam.classSize}</TableCell>
+                    <TableCell>{exam.classRank && exam.classSize ? `${exam.classRank} / ${exam.classSize}` : '—'}</TableCell>
                     <TableCell>{exam.gradeRank || '-'}</TableCell>
                   </TableRow>
                 ))}
@@ -711,7 +711,7 @@ export function PersonalReportView({
                   <TableCell>{record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}</TableCell>
                   <TableCell className="font-bold">{record.totalScore}分</TableCell>
                   <TableCell>{record.correctRate}%</TableCell>
-                  <TableCell>第{record.rank}名</TableCell>
+                  <TableCell>{typeof record.rank === 'number' && record.rank > 0 ? `第${record.rank}名` : '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1069,7 +1069,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                     <TableCell>第{record.lessonNumber}课</TableCell>
                     <TableCell className="font-bold text-rose-600">{record.totalScore}分</TableCell>
                     <TableCell>{record.correctRate}%</TableCell>
-                    <TableCell>第{record.rank}名</TableCell>
+                    <TableCell>{typeof record.rank === 'number' && record.rank > 0 ? `第${record.rank}名` : '—'}</TableCell>
                     <TableCell>
                       <Badge className={
                         record.attendance === '按时出勤' ? 'bg-green-100 text-green-700' :

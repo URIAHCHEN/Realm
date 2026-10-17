@@ -366,7 +366,20 @@ function App() {
       });
     };
     const t = window.setTimeout(attach, 120);
-    const mo = new MutationObserver(() => { window.clearTimeout(t); window.setTimeout(attach, 150); });
+    // 只处理新插入的节点：原实现每次 DOM 变化都全文档 querySelectorAll，
+    // 录入分数时每击键都会触发一轮扫描（2026-10-17 优化）
+    const REVEAL_SEL = '[data-slot="card"]:not(.reveal), .report-section:not(.reveal)';
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        m.addedNodes.forEach(node => {
+          if (!(node instanceof HTMLElement)) return;
+          if (node.matches(REVEAL_SEL)) {
+            node.classList.add('reveal'); io.observe(node);
+          }
+          node.querySelectorAll(REVEAL_SEL).forEach(el => { el.classList.add('reveal'); io.observe(el); });
+        });
+      }
+    });
     mo.observe(document.body, { childList: true, subtree: true });
     return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(t); };
   }, [activeTab]);
@@ -441,6 +454,13 @@ function App() {
     return { ...fromConfigs, ...(appConfig.qtCategoryOverrides || {}) };
   }, [classes, appConfig.qtCategoryOverrides]);
 
+  // 获取当前数据
+  // memo 化：getCurrentLessonRecords()/getAllLessons() 每次都返回新数组，
+  // 直接放在渲染体里会让下游 memo 组件每次都重渲染（2026-10-17 优化）。
+  // 必须在「未登录提前 return」之前声明——否则登录态切换时 Hook 数量变化会崩。
+  const currentRecords = useMemo(() => getCurrentLessonRecords(), [getCurrentLessonRecords]);
+  const allLessons = useMemo(() => getAllLessons(), [getAllLessons]);
+
   // 未登录显示登录页面
   if (!isAuthenticated) {
     return (
@@ -450,10 +470,6 @@ function App() {
       </>
     );
   }
-
-  // 获取当前数据
-  const currentRecords = getCurrentLessonRecords();
-  const allLessons = getAllLessons();
 
   // 处理保存当前课次
   const handleSaveCurrentLesson = () => {
@@ -726,10 +742,15 @@ function App() {
 
   // 处理导出所有数据为Excel（用于查看/分析，不可用于恢复）
   const handleExportAllData = async () => {
-    const data = exportData();
-    const { workbook, filename } = await exportToExcel(data, currentClass?.name || '所有班级');
-    await downloadExcel(workbook, filename);
-    toast.success('数据已导出为Excel！');
+    try {
+      const data = exportData();
+      const { workbook, filename } = await exportToExcel(data, currentClass?.name || '所有班级');
+      await downloadExcel(workbook, filename);
+      toast.success('数据已导出为Excel！');
+    } catch (e) {
+      // 表名非法 / 数据异常时不能静默失败（此前无 catch，点击后无任何反应）
+      toast.error('导出失败：' + (e instanceof Error ? e.message : String(e)));
+    }
   };
 
   // 处理导出完整备份（JSON 快照，可被「导入备份」读回，用于恢复与多端迁移）
@@ -1236,7 +1257,7 @@ function App() {
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}
         pending={cloudSync.pending}
-        currentSnapshot={makeSnapshot()}
+        currentSnapshot={reviewOpen ? makeSnapshot() : null}
         canReview={!!membership?.admin}
         onApprove={(item) => { void cloudSync.approvePending(item).then(() => snapshotVersion('审核通过：' + item.by)); }}
         onReject={(item) => { void cloudSync.rejectPending(item); }}
@@ -1245,7 +1266,7 @@ function App() {
       <VersionHistoryDialog
             open={versionOpen}
             onClose={() => setVersionOpen(false)}
-            currentSnapshot={makeSnapshot()}
+            currentSnapshot={versionOpen ? makeSnapshot() : null}
             actor={actor}
             canRollback={!!membership?.admin}
             onRecordCurrent={() => snapshotVersion('手动保存版本')}

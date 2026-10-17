@@ -257,10 +257,17 @@ export function SchoolScorePanel({
   // 自动设置默认对比考试
   useEffect(() => {
     if (examNames.length >= 2 && (!compareExamA || !compareExamB)) {
-      setCompareExamA(examNames[examNames.length - 2]);
-      setCompareExamB(examNames[examNames.length - 1]);
+      // 按考试日期排序取「最近两场」：examNames 是对象键顺序（插入顺序），
+      // 直接取末尾两个不一定是时间上最近的（2026-10-17 修正）
+      const examDate = (name: string) => {
+        const list = groupedScores[name] || [];
+        return list.reduce((mx, s) => Math.max(mx, new Date(s.date).getTime() || 0), 0);
+      };
+      const ordered = [...examNames].sort((a, b) => examDate(a) - examDate(b));
+      setCompareExamA(ordered[ordered.length - 2]);
+      setCompareExamB(ordered[ordered.length - 1]);
     }
-  }, [examNames, compareExamA, compareExamB]);
+  }, [examNames, groupedScores, compareExamA, compareExamB]);
 
   const kpis = [
     { icon: ClipboardList, label: '考试场次', value: String(examEntries.length) },
@@ -965,7 +972,9 @@ function TrendChartExport({ student, scores, getNickname }: { student: string; s
               <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />
               <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopLeft' }} />
               {improvements.map((imp, i) => {
-                const idx = lineData.findIndex(d => d.name === imp.examName);
+                // 用完整考试名匹配：lineData.name 是截断显示名（>8 字带 …），
+                // 用 name 比较时长考试名的进步点永远匹配不到（2026-10-17 修正）
+                const idx = lineData.findIndex(d => d.fullName === imp.examName);
                 if (idx === -1) return null;
                 return (
                   <ReferenceDot

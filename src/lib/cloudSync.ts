@@ -192,6 +192,41 @@ export interface CloudState {
   updatedAt: string;
 }
 
+// 浅校验 / 归一化云端快照（2026-10-17）：
+// 云端数据可能来自旧版本或被手工改坏，缺 scores / seasons 等字段会在各 .map/.filter 处崩。
+// 这里只做类型兜底，不改已有值；异常结构直接视为「无快照」。
+function sanitizeSnapshot(raw: unknown): SyncSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const asObj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const classes = asObj(r.classes) as Record<string, unknown>;
+  Object.values(classes).forEach(c => {
+    const cls = c as Record<string, unknown> | null;
+    if (!cls || typeof cls !== 'object') return;
+    if (Array.isArray(cls.records)) {
+      cls.records = (cls.records as unknown[]).map(rec => {
+        const rr = (rec && typeof rec === 'object' ? rec : {}) as Record<string, unknown>;
+        return {
+          ...rr,
+          scores: rr.scores && typeof rr.scores === 'object' ? rr.scores : {},
+          seasons: Array.isArray(rr.seasons) ? rr.seasons : [],
+        };
+      });
+    } else {
+      cls.records = [];
+    }
+    if (typeof cls.students === 'undefined' || !Array.isArray(cls.students)) cls.students = [];
+    if (!cls.lessonConfigs || typeof cls.lessonConfigs !== 'object') cls.lessonConfigs = {};
+  });
+  return {
+    appConfig: asObj(r.appConfig) as SyncSnapshot['appConfig'],
+    classes: classes as SyncSnapshot['classes'],
+    nicknames: asObj(r.nicknames) as SyncSnapshot['nicknames'],
+    schoolScores: asObj(r.schoolScores) as SyncSnapshot['schoolScores'],
+    templates: asObj(r.templates) as SyncSnapshot['templates'],
+  };
+}
+
 // 读取云端状态（无数据返回 null）
 export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudState> {
   await ensureFreshToken();
@@ -213,7 +248,7 @@ export async function fetchCloudState(config: CloudSyncConfig): Promise<CloudSta
     return { snapshot: null, hash: '', updatedAt: '' };
   }
   return {
-    snapshot: rows[0].data ?? null,
+    snapshot: sanitizeSnapshot(rows[0].data),
     hash: rows[0].snapshot_hash || '',
     updatedAt: rows[0].updated_at || '',
   };

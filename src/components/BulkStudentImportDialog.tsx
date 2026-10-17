@@ -69,7 +69,14 @@ export function BulkStudentImportDialog({
       const classCodeIdx = findIdx(s => s === '班级编码' || (s.includes('编码') && s.includes('班级')));
       const classNameIdx = findIdx(s => s === '班级名称' || (s.includes('名称') && s.includes('班级') && !s.includes('编码')));
       if (nameIdx >= 0 && classCodeIdx >= 0) {
-        return { code: codeIdx, name: nameIdx, classCode: classCodeIdx, className: classNameIdx };
+        // 「学员编码」列缺失时回退到第 0 列：若返回 -1，row[-1] 恒为 undefined，
+        // 每一行都会被误报成「学员编码为空」（2026-10-17 修正）
+        return {
+          code: codeIdx >= 0 ? codeIdx : 0,
+          name: nameIdx,
+          classCode: classCodeIdx,
+          className: classNameIdx >= 0 ? classNameIdx : 3,
+        };
       }
     }
     return { code: 0, name: 1, classCode: 2, className: 3 };
@@ -125,6 +132,12 @@ export function BulkStudentImportDialog({
     setResult(null);
     setFileName(file.name);
     const reader = new FileReader();
+    reader.onerror = () => {
+      // 读取失败必须收尾，否则 parsing 卡在 true（按钮永久禁用）（2026-10-17 补）
+      toast.error('文件读取失败，请重试或换一个文件');
+      setRows([]);
+      setParsing(false);
+    };
     reader.onload = async (e) => {
       try {
         const raw = e.target?.result;

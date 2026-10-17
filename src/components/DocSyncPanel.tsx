@@ -338,6 +338,8 @@ export function DocSyncInfo({ display }: { display: Display }) {
               >
                 <SelectTrigger className="w-28 h-9 rounded-[var(--r-md)] text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  {/* 0 = 关闭自动同步：必须有对应项，否则 Select 显示空白（2026-10-17 修正） */}
+                  <SelectItem value="0">已关闭</SelectItem>
                   <SelectItem value="2">2 秒（即时）</SelectItem>
                   <SelectItem value="3">3 秒（默认）</SelectItem>
                   <SelectItem value="10">10 秒</SelectItem>

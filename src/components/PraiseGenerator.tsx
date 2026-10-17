@@ -109,9 +109,11 @@ export function PraiseGenerator({
   };
 
   // 切课次后清空上一次生成的表彰，避免把上一课的文本发到本课班群（2026-10-17 修正）
+  /* eslint-disable react-hooks/set-state-in-effect -- 课次切换时的受控重置 */
   useEffect(() => {
     setPraise('');
   }, [lessonNumber]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <Card className="ios-glass-card border-0">

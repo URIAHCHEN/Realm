@@ -82,6 +82,7 @@ function App() {
   schoolScores,
   setCurrentClassId,
   setCurrentLessonNumber,
+  setCurrentLessonFor,
   getLessonConfig,
   getCurrentLessonRecords,
   getAllLessons,
@@ -279,7 +280,8 @@ function App() {
     });
 
     setCurrentClassId(classId);
-    setCurrentLessonNumber(lessonNumber);
+    // 2026-10-18：课次记忆写到「目标班」（setCurrentClassId 是异步的，直接调 setCurrentLessonNumber 会记到旧班）
+    setCurrentLessonFor(classId, lessonNumber);
     const typeCount = Object.keys(qtIdByColumn).length;
     toast.success(
       `已导入 ${rows.length} 条到第${lessonNumber}课${missing.length ? `，新增 ${missing.length} 名学生` : ''}`

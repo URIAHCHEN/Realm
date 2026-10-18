@@ -484,12 +484,35 @@ export function useClassData() {
     return saved || 'class1';
   });
 
-  const [currentLessonNumber, setCurrentLessonNumber] = useState<number>(() => {
+  const [currentLessonNumber, setCurrentLessonNumberRaw] = useState<number>(() => {
     const saved = localStorage.getItem('currentLessonNumber');
     const n = saved ? parseInt(saved, 10) : 1;
     // 损坏值（NaN/非正数）回退第 1 课，避免 NaN 课次导致所有过滤为空
     return Number.isFinite(n) && n > 0 ? n : 1;
   });
+
+  /**
+   * 每个班各自的「当前课次」记忆（2026-10-18 修「在 A 班新增课次，所有班级都多出这一课」）：
+   * 原来课次是全局唯一状态 —— A 班新增第 6 课后再切到 B 班，B 班也显示第 6 课（本班没有这一课 →
+   * 全体学员"本课次没有记录"的空表，且课次列表里凭空多出 6）。
+   * 现在：切换班级时恢复该班上次的课次；没有记忆时优先沿用当前课次（若该班也有这一课，便于跨班对比），
+   * 否则落到该班最新课次。
+   */
+  const [lessonByClass, setLessonByClass] = useState<{ [classId: string]: number }>(() => safeParse('currentLessonByClass', {}));
+
+  /** 记录/切换课次：只写当前班级的记忆，其他班级不跟随 */
+  const setCurrentLessonNumber = useCallback((n: number) => {
+    const lesson = Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+    setCurrentLessonNumberRaw(lesson);
+    setLessonByClass(prev => (currentClassId ? { ...prev, [currentClassId]: lesson } : prev));
+  }, [currentClassId]);
+
+  /** 为指定班级设置课次（导入等"先切班再定位"的场景：记忆写到目标班，不会记错班） */
+  const setCurrentLessonFor = useCallback((classId: string, n: number) => {
+    const lesson = Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+    setLessonByClass(prev => ({ ...prev, [classId]: lesson }));
+    setCurrentLessonNumberRaw(lesson);
+  }, []);
 
   // 学生昵称（按班级）
   const [nicknames, setNicknames] = useState<{ [classId: string]: { [studentName: string]: string } }>(() => {
@@ -531,6 +554,30 @@ export function useClassData() {
   useEffect(() => {
     safeSet('currentLessonNumber', currentLessonNumber.toString());
   }, [currentLessonNumber]);
+
+  useEffect(() => {
+    safeSet('currentLessonByClass', JSON.stringify(lessonByClass));
+  }, [lessonByClass]);
+
+  // 切换班级：恢复该班课次（防止课次跨班串台）
+  const lastClassForLesson = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentClassId) return;
+    if (lastClassForLesson.current === currentClassId) return;   // 同一班级内的课次变化不处理
+    lastClassForLesson.current = currentClassId;
+    const cls = classes[currentClassId];
+    const available = new Set<number>([
+      ...(cls?.records || []).map(r => r.lessonNumber),
+      ...Object.keys(cls?.lessonConfigs || {}).map(k => Number(k)),
+    ]);
+    const remembered = lessonByClass[currentClassId];
+    let next: number;
+    if (remembered != null && available.has(remembered)) next = remembered;
+    else if (available.has(currentLessonNumber)) next = currentLessonNumber;   // 保留「跨班对比同一课次」的旧习惯
+    else next = available.size ? Math.max(...available) : 1;
+    if (next !== currentLessonNumber) setCurrentLessonNumberRaw(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentClassId, classes]);
 
   useEffect(() => {
     safeSet('studentNicknames', JSON.stringify(nicknames));
@@ -1638,6 +1685,7 @@ export function useClassData() {
     schoolScores,
     setCurrentClassId,
     setCurrentLessonNumber,
+    setCurrentLessonFor,
     getLessonConfig,
     getCurrentLessonRecords,
     getAllLessons,

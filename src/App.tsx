@@ -999,7 +999,7 @@ function App() {
           </TabsList>
 
           {/* 学情记录 Tab */}
-          <TabsContent value="records" className="space-y-6">
+          <TabsContent value="records" className="main-tab-panel space-y-6">
             <ErrorBoundary label="学情记录">
             <div className="flex gap-6">
               {/* 左侧边栏 */}
@@ -1063,7 +1063,7 @@ function App() {
           </TabsContent>
 
           {/* 表扬榜 Tab：榜单 + 班群表彰生成 + 表彰模板编辑/预览 */}
-          <TabsContent value="leaderboard" className="space-y-6">
+          <TabsContent value="leaderboard" className="main-tab-panel space-y-6">
 
             <Suspense fallback={<ModuleLoading label="表扬榜" />}>
             <ErrorBoundary label="表扬榜">
@@ -1092,7 +1092,7 @@ function App() {
           </TabsContent>
 
           {/* 反馈生成 Tab */}
-          <TabsContent value="feedback">
+          <TabsContent value="feedback" className="main-tab-panel">
 
             <Suspense fallback={<ModuleLoading label="反馈生成" />}>
             <ErrorBoundary label="反馈生成">
@@ -1124,7 +1124,7 @@ function App() {
           </TabsContent>
 
           {/* 反馈素材 Tab */}
-          <TabsContent value="library" className="space-y-6">
+          <TabsContent value="library" className="main-tab-panel space-y-6">
 
             <Suspense fallback={<ModuleLoading label="反馈素材" />}>
             <ErrorBoundary label="反馈素材">
@@ -1139,7 +1139,7 @@ function App() {
           </TabsContent>
 
           {/* 校内成绩 Tab（懒加载：仅切到本 Tab 时才加载图表与 Excel 依赖） */}
-          <TabsContent value="school">
+          <TabsContent value="school" className="main-tab-panel">
 
             <Suspense fallback={<ModuleLoading label="校内成绩" />}>
             <ErrorBoundary label="校内成绩">
@@ -1161,7 +1161,7 @@ function App() {
           </TabsContent>
 
           {/* 学情报告 Tab（懒加载：仅切到本 Tab 时才加载图表与截图依赖） */}
-          <TabsContent value="report">
+          <TabsContent value="report" className="main-tab-panel">
             <ErrorBoundary label="学情报告">
             <Suspense fallback={<ModuleLoading label="学情报告" />}>
               <StudentReport
@@ -1181,7 +1181,7 @@ function App() {
           {/* 系统配置已并入「反馈生成 → 生成设置」 */}
 
           {/* 同步中心 Tab */}
-          <TabsContent value="cloud">
+          <TabsContent value="cloud" className="main-tab-panel">
             <ErrorBoundary label="同步中心">
             <div className="max-w-6xl mx-auto space-y-5">
               <SyncStatusBanner

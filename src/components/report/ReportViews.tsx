@@ -21,6 +21,7 @@ import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
   CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
 } from '@/lib/chartTheme';
+import { CHART_ANIM } from '@/lib/chartMotion';
 import { aggregateByCategory, categoryColor } from '@/lib/qtCategories';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -378,16 +379,16 @@ export function PersonalReportView({
               <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 大题型板块得分率（2026-10-16 并入）：按板块大类逐课次展开（类别从数据推导） */}
               {trendCategories.map(cat => (
-                <Line key={cat.name} type="monotone" dataKey={cat.name} name={`${cat.name}得分率`} stroke={cat.color}
+                <Line {...CHART_ANIM} key={cat.name} type="monotone" dataKey={cat.name} name={`${cat.name}得分率`} stroke={cat.color}
                   strokeWidth={1.8} strokeDasharray="5 3" dot={{ r: 2.5 }} connectNulls legendType="plainline" />
               ))}
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
-              {trendType === 'bar' && <Bar dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
-              {trendType === 'line' && <Line type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
-              {trendType === 'area' && <Area type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
+              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
+              {trendType === 'line' && <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
+              {trendType === 'area' && <Area {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
               {/* 班级对比线：定位"自己在班里什么位置" */}
-              <Line type="monotone" dataKey="班级平均" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <Line {...CHART_ANIM} type="monotone" dataKey="班级平均" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+              <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -414,10 +415,10 @@ export function PersonalReportView({
               <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
               {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
               {scoreCategories.map(cat => (
-                <Bar key={cat.name} yAxisId="l" dataKey={cat.name} name={cat.name} stackId="score" fill={cat.color} maxBarSize={38} />
+                <Bar {...CHART_ANIM} key={cat.name} yAxisId="l" dataKey={cat.name} name={cat.name} stackId="score" fill={cat.color} maxBarSize={38} />
               ))}
               {showCorrectRate && (
-                <Line yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#0ea5e9" strokeWidth={2.5}
+                <Line {...CHART_ANIM} yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#0ea5e9" strokeWidth={2.5}
                   dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}>
                   <LabelList dataKey="correctRate" position="bottom" style={{ fontSize: 10, fill: '#0369a1' }} />
                 </Line>
@@ -438,7 +439,7 @@ export function PersonalReportView({
               <ResponsiveContainer width="100%" height="100%">
                 {distType === 'pie' ? (
                   <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
+                    <Pie {...CHART_ANIM} data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
                       {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                     </Pie>
                     <Tooltip />
@@ -450,7 +451,7 @@ export function PersonalReportView({
                     <XAxis type="number" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
                     <YAxis type="category" dataKey="name" width={76} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#475569' }} />
                     <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px' }} />
-                    <Bar dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
+                    <Bar {...CHART_ANIM} dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
                       {pieData.map((entry, index) => <Cell key={`bar-cell-${index}`} fill={entry.color} />)}
                       {/* 数值直标：分数 + 得分率，一屏看清高低与达成度 */}
                       <LabelList
@@ -478,7 +479,7 @@ export function PersonalReportView({
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
                     <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar name="得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                    <Radar {...CHART_ANIM} name="得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
                       fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
                     <Legend />
                     <Tooltip />
@@ -526,7 +527,7 @@ export function PersonalReportView({
                 <PolarGrid stroke="#e6ebf2" />
                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#475569' }} />
                 <PolarRadiusAxis angle={90} domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <Radar name="当前水平（得分率）" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                <Radar {...CHART_ANIM} name="当前水平（得分率）" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
                   fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
                 <Legend />
                 <Tooltip />
@@ -880,7 +881,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                 <XAxis dataKey="label" stroke="#6b7280" />
                 <YAxis stroke="#6b7280" />
                 <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                <Bar dataKey="count" name="人数" radius={[4, 4, 0, 0]}>
+                <Bar {...CHART_ANIM} dataKey="count" name="人数" radius={[4, 4, 0, 0]}>
                   {classStats.distribution.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Bar>
               </BarChart>
@@ -955,11 +956,11 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                 <Legend wrapperStyle={LEGEND_STYLE} />
                 <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
                 <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_GOOD }} />
-                <Bar dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={26}>
+                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={26}>
                   <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />
                 </Bar>
-                <Line type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
+                <Line {...CHART_ANIM} type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

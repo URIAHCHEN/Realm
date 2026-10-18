@@ -83,7 +83,7 @@ export function LessonManager({
                   key={lesson}
                   onClick={() => onSelectLesson(lesson)}
                   className={`
-                    h-9 rounded-lg text-sm font-semibold transition-all duration-150
+                    lesson-chip h-9 rounded-lg text-sm font-semibold transition-all duration-150
                     ${currentLessonNumber === lesson
                       ? 'bg-[color:var(--brand)] text-white shadow-md shadow-[rgb(var(--brand-rgb)/0.3)]'
                       : 'bg-slate-100/80 text-slate-600 hover:bg-[rgb(var(--brand-rgb)/0.1)] hover:text-[color:var(--brand)]'}

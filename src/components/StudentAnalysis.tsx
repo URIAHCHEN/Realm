@@ -35,6 +35,7 @@ import {
   AXIS_TICK, AXIS_TICK_SM, AXIS_TICK_XS, GRID, TOOLTIP_CONTENT, TOOLTIP_LABEL,
   LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL,
 } from '@/lib/chartTheme';
+import { CHART_ANIM } from '@/lib/chartMotion';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildTrendExportHTML } from '@/lib/trendExport';
 import { aggregateByCategory } from '@/lib/qtCategories';
@@ -507,8 +508,8 @@ export function StudentAnalysis({
                       <ReferenceLine yAxisId="rate" y={rateAvg} stroke="#94a3b8" strokeDasharray="2 4"
                         label={{ value: `本生均值 ${rateAvg}%`, fontSize: 11, fill: '#64748b', position: 'insideLeft' }} />
                     )}
-                    <Bar yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
-                    <Line yAxisId="rate" type="monotone" dataKey="正确率" stroke={CHART_GOOD} strokeWidth={2.5} dot={{ r: 4, fill: CHART_GOOD }} />
+                    <Bar {...CHART_ANIM} yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
+                    <Line {...CHART_ANIM} yAxisId="rate" type="monotone" dataKey="正确率" stroke={CHART_GOOD} strokeWidth={2.5} dot={{ r: 4, fill: CHART_GOOD }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -526,7 +527,7 @@ export function StudentAnalysis({
                       <PolarGrid stroke="#e2e8f0" />
                       <PolarAngleAxis dataKey="subject" tick={AXIS_TICK_SM} />
                       <PolarRadiusAxis domain={[0, 100]} tick={AXIS_TICK_XS} angle={30} />
-                      <Radar name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.9)" fill="rgb(var(--brand-rgb) / 0.25)" strokeWidth={2} />
+                      <Radar {...CHART_ANIM} name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.9)" fill="rgb(var(--brand-rgb) / 0.25)" strokeWidth={2} />
                       <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
                     </RadarChart>
                   </ResponsiveContainer>
@@ -653,9 +654,9 @@ export function StudentAnalysis({
                         label={{ value: '优秀 85%', fontSize: 10, fill: '#10b981', position: 'insideTopRight' }} />
                       <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4"
                         label={{ value: '及格 60%', fontSize: 10, fill: '#f59e0b', position: 'insideBottomRight' }} />
-                      <Line type="monotone" dataKey="班级最高" stroke={CHART_NEUTRAL} strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
+                      <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" stroke={CHART_NEUTRAL} strokeWidth={2} dot={{ r: 3 }} />
+                      <Line {...CHART_ANIM} type="monotone" dataKey="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+                      <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -677,7 +678,7 @@ export function StudentAnalysis({
                       <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" strokeWidth={1.6}
                         label={{ value: '优秀 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopRight' }} />
                       {categories.map(c => (
-                        <Line key={c.key} type="monotone" dataKey={c.name} stroke={c.color} strokeWidth={2.2} dot={{ r: 3.5 }} connectNulls />
+                        <Line {...CHART_ANIM} key={c.key} type="monotone" dataKey={c.name} stroke={c.color} strokeWidth={2.2} dot={{ r: 3.5 }} connectNulls />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -703,11 +704,11 @@ export function StudentAnalysis({
                         label={{ value: '优秀85', fontSize: 10, fill: '#10b981', position: 'top' }} />
                       <ReferenceLine x={60} stroke="#f59e0b" strokeDasharray="4 4"
                         label={{ value: '及格60', fontSize: 10, fill: '#f59e0b', position: 'bottom' }} />
-                      <Bar dataKey="本人" fill="rgb(var(--brand-rgb))" radius={[0, 5, 5, 0]} barSize={11}>
+                      <Bar {...CHART_ANIM} dataKey="本人" fill="rgb(var(--brand-rgb))" radius={[0, 5, 5, 0]} barSize={11}>
                         <LabelList dataKey="本人" position="right" style={{ fontSize: 10.5, fill: '#334155', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} formatter={(v: number) => `${v}%`} />
                       </Bar>
                       {/* 班均改黄色（2026-10-16 用户指定）：与品牌蓝形成最大对比 */}
-                      <Bar dataKey="班均" fill="#f59e0b" radius={[0, 5, 5, 0]} barSize={11} />
+                      <Bar {...CHART_ANIM} dataKey="班均" fill="#f59e0b" radius={[0, 5, 5, 0]} barSize={11} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -744,7 +745,7 @@ export function StudentAnalysis({
                         <XAxis dataKey="name" tick={AXIS_TICK} />
                         <YAxis domain={[0, 100]} tick={AXIS_TICK} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
-                        <Line type="monotone" dataKey="得分率" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6' }} />
+                        <Line {...CHART_ANIM} type="monotone" dataKey="得分率" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6' }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

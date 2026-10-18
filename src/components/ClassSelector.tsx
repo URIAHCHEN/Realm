@@ -231,7 +231,7 @@ export function ClassSelector({
                     onClick={() => onSelectClass(cls.id)}
                     aria-pressed={active}
                     className={
-                      'px-4 h-10 rounded-[var(--r-md)] text-sm font-medium inline-flex items-center gap-2 transition-all duration-200 ' +
+                      'class-chip px-4 h-10 rounded-[var(--r-md)] text-sm font-medium inline-flex items-center gap-2 transition-all duration-200 ' +
                       (active
                         ? 'bg-[color:var(--brand)] text-white shadow-[0_6px_18px_rgb(var(--brand-rgb)/0.30)]'
                         : 'bg-white/70 text-[color:var(--ink)] ring-1 ring-black/5 hover:ring-[rgb(var(--brand-rgb)/0.4)] hover:bg-white')

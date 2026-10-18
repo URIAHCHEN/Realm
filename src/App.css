@@ -2795,3 +2795,42 @@ textarea:focus-visible,
   border-radius: 999px;
 }
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); }
+
+
+/* ==================== 动效细化 v2（2026-10-18 · 页面衔接更顺） ====================
+   在 v1（卡片 reveal / 按钮按压 / 弹层 popIn / tab 淡入）基础上补齐三处衔接感，
+   仍遵守同一套原则：只动 transform/opacity、<300ms、尊重 prefers-reduced-motion、
+   hover 仅在精确指针设备启用、高频操作只给触感反馈不做花活。 */
+
+/* ① 错峰入场：同一容器内的卡片按 45ms 步进依次浮现（封顶 5 个 = 180ms，长页面不拖沓） */
+.reveal:nth-child(2) { transition-delay: 45ms; }
+.reveal:nth-child(3) { transition-delay: 90ms; }
+.reveal:nth-child(4) { transition-delay: 135ms; }
+.reveal:nth-child(5) { transition-delay: 180ms; }
+
+/* ② 主 Tab 面板：淡入 + 6px 轻抬（220ms ease-out-quart）；内层小 tab 仍走纯淡入，避免"整页在动" */
+.main-tab-panel[data-state="active"] { animation: panelIn 220ms var(--ease-out-quart) both; }
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ③ chip 触感：班级/课次 chip 悬停轻抬、按下回弹；tab 按下回弹（高频，不给位移动画） */
+.class-chip, .lesson-chip, .ios-tabs-list [role="tab"] {
+  transition: transform var(--dur-micro) var(--ease-out-quart),
+              background-color var(--dur-ui) ease, color var(--dur-ui) ease,
+              box-shadow var(--dur-ui) ease, border-color var(--dur-ui) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .class-chip:hover:not([aria-pressed="true"]) { transform: translateY(-1px); }
+  .lesson-chip:hover:not([disabled]) { transform: translateY(-1px); }
+}
+.class-chip:active, .lesson-chip:active, .ios-tabs-list [role="tab"]:active { transform: scale(0.965); }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal:nth-child(n) { transition-delay: 0ms !important; }
+  .main-tab-panel[data-state="active"] { animation: none !important; }
+  .class-chip, .lesson-chip, .ios-tabs-list [role="tab"] { transition: none !important; }
+  .class-chip:active, .lesson-chip:active, .ios-tabs-list [role="tab"]:active,
+  .class-chip:hover, .lesson-chip:hover { transform: none !important; }
+}

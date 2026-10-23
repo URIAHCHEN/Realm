@@ -397,6 +397,17 @@ export function StudentTable({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, sortKey, sortDir, recordByKey]);
+
+  // 渐进式渲染（2026-10-23）：整表一次性挂载在 60 人班要 ~490ms（每行 4 个下拉）。
+  // 先渲染首屏 14 行（立即可录分），其余每 80ms 补 16 行，60 人约 0.4s 内补齐，最终 DOM 一致。
+  const [rowLimit, setRowLimit] = useState(14);
+  useEffect(() => { setRowLimit(14); }, [lessonNumber]);
+  useEffect(() => {
+    if (rowLimit >= orderedStudents.length) return;
+    const id = setTimeout(() => setRowLimit(n => Math.min(n + 16, orderedStudents.length)), 80);
+    return () => clearTimeout(id);
+  }, [rowLimit, orderedStudents.length]);
+  const visibleStudents = rowLimit >= orderedStudents.length ? orderedStudents : orderedStudents.slice(0, rowLimit);
   const sortCaret = (key: string) =>
     sortKey === key ? <span className="ml-0.5 font-bold" style={{ color: 'var(--brand)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span> : null;
 
@@ -776,7 +787,7 @@ export function StudentTable({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orderedStudents.map((studentName) => {
+                    {visibleStudents.map((studentName) => {
                       const record = getStudentRecord(studentName);
                       // 本次课未在读（请假/缺勤/调课-调出）：分数与判定列显示 "-"，且不参与任何计算
                       // 不显示分数、不进小测计算的情形（统一渲染 -）：

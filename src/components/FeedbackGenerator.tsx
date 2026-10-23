@@ -123,9 +123,23 @@ export function FeedbackGenerator({
     [lessonConfig]
   );
 
-  // 长期薄弱板块（跨课次）：给「附参考教辅」挑资料用
-  const weakOf = (name: string): string[] =>
-    longTermWeakCategories(records.filter(r => r.studentName === name), lessonConfigs);
+  // 按学生分组一次（原来每个学生都 filter 一遍全量记录 → O(人数 × 记录数)）
+  const recordsByName = useMemo(() => {
+    const map = new Map<string, StudentRecord[]>();
+    records.forEach(r => {
+      const arr = map.get(r.studentName);
+      if (arr) arr.push(r); else map.set(r.studentName, [r]);
+    });
+    return map;
+  }, [records]);
+
+  // 长期薄弱板块（跨课次）：给「附参考教辅」挑资料用；按学生缓存，避免每次生成重算
+  const weakByStudent = useMemo(() => {
+    const map = new Map<string, string[]>();
+    recordsByName.forEach((recs, name) => map.set(name, longTermWeakCategories(recs, lessonConfigs)));
+    return map;
+  }, [recordsByName, lessonConfigs]);
+  const weakOf = (name: string): string[] => weakByStudent.get(name) || [];
 
   const generateFor = (name: string): string | null => {
     const record = recordOf(name);
@@ -267,14 +281,14 @@ export function FeedbackGenerator({
       listeningOptions: lessonConfig.listeningOptions || [],
     };
     students.forEach(name => {
-      const srs = records.filter(r => r.studentName === name).sort((a, b) => a.lessonNumber - b.lessonNumber);
+      const srs = [...(recordsByName.get(name) || [])].sort((a, b) => a.lessonNumber - b.lessonNumber);
       if (srs.length === 0) { map[name] = ''; return; }
       const st = computeStudentReportStats(srs, lessonConfigs, opts);
       map[name] = buildCondensedAdvice(generateShortNickname(getNickname(name)), srs, st, lessonConfigs);
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, records, lessonConfigs, lessonConfig]);
+  }, [students, recordsByName, records, lessonConfigs, lessonConfig]);
 
   // 一键复制某生的学习建议（精简版）
   const handleCopyAdvice = async (name: string) => {

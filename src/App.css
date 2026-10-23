@@ -2834,3 +2834,59 @@ textarea:focus-visible,
   .class-chip:active, .lesson-chip:active, .ios-tabs-list [role="tab"]:active,
   .class-chip:hover, .lesson-chip:hover { transform: none !important; }
 }
+
+
+/* ==================== 审美精修 v4（2026-10-23 · 质感与层次） ====================
+   方向：阴影从"单层紧投影"升级为"分层柔影"（近清晰 + 远扩散的悬浮感）；
+        数字列统一等宽数字；空态图标 / 总分数据条 / 主按钮 / 表头 / 弹窗质感精修。
+   只动表面（CSS），不动布局与功能；走 --glass-* 变量，暗色与各版式主题不受影响。 */
+
+:root {
+  /* 分层柔影：卡片近处清晰、远处扩散 —— 比单层大阴影更"浮" */
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 1px 2px rgb(15 23 42 / 0.05),
+    0 2px 6px rgb(15 23 42 / 0.035),
+    0 14px 34px -14px rgb(15 23 42 / 0.13);
+  /* 弹层柔影：更大圆角卡片/弹窗用 */
+  --shadow-pop:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgb(15 23 42 / 0.06),
+    0 22px 52px -16px rgb(15 23 42 / 0.22);
+}
+
+/* 数字列：报告 KPI 与统计值统一等宽数字（分数/名次竖向对齐更整齐） */
+.report-info-value, .report-info-label { font-variant-numeric: tabular-nums; }
+
+/* 空态图标：品牌渐变柔光底（原纯色底）——空页面也有"被设计过"的质感 */
+.empty-general .empty-ico {
+  background: linear-gradient(150deg, rgb(var(--brand-rgb) / 0.16), rgb(var(--brand-rgb) / 0.05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 6px 16px -6px rgb(var(--brand-rgb) / 0.3);
+}
+
+/* 总分数据条：渐变 + 微光 —— 重点列一眼可辨 */
+.total-bar {
+  height: 4px;
+  background: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.5), rgb(var(--brand-rgb)));
+  box-shadow: 0 0 10px rgb(var(--brand-rgb) / 0.35);
+}
+
+/* 主按钮：纵向微渐变 + 双层品牌影（更"立得住"，outline 变体不受影响） */
+[data-slot="button"].ios-button:not([data-variant="outline"]),
+.liquid-glass-button {
+  background: linear-gradient(180deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb) / 0.94)) !important;
+  box-shadow: 0 1px 2px rgb(var(--brand-rgb) / 0.35), 0 8px 20px -8px rgb(var(--brand-rgb) / 0.5) !important;
+}
+
+/* 表头：更深一度的半透明白 + 底部发丝分割线（滚动时层级更清晰） */
+.data-table thead th {
+  background: rgba(255, 255, 255, 0.78) !important;
+  box-shadow: inset 0 -1px 0 rgb(15 23 42 / 0.07);
+}
+
+/* 弹窗：柔和大圆角柔影 */
+[data-slot="dialog-content"] { box-shadow: var(--shadow-pop) !important; }
+
+/* v4 · 暗色配套（浅色高光/深色分割线换成暗色语言，避免白边） */
+.dark [data-slot="dialog-content"] { box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.55) !important; }
+.dark .data-table thead th { box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.10) !important; }

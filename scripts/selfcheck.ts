@@ -184,7 +184,7 @@ check(out2.includes('语法选择：10'), '同模板其他字段不受影响');
 // 缺勤学生：只给未参与说明，不做成绩分析
 const absent = { ...normal, id: 'f3', attendance: '病假', scores: {}, totalScore: 0, rank: 0, correctRate: 0 } as unknown as StudentRecord;
 const out3 = generatePersonalFeedback(absent, { ...fbCfg, feedbackTemplate: tpl } as unknown as LessonConfig, fbStats, '丙');
-check(out3.includes('未参与'), '病假学生生成的是"未参与"说明');
+check(out3.includes('未参加本讲测评'), '病假学生生成的是"未参加"说明');
 check(!out3.includes('语法选择：'), '病假学生不做成绩分析（不出现题型分数）');
 
 // ============ 口语档位自动判定（lib/oralRating） ============
@@ -570,7 +570,7 @@ group('反馈占位符兜底');
   const cfg = {
     questionTypes: qts, customFields: [], homeworkOptions: ['完成✅'], listeningOptions: ['很棒哦👏'],
     attendanceOptions: ['准时👍'], classPerformanceOptions: ['认真积极'], homeworkText: '', passThreshold: 80,
-    feedbackTemplate: '【昵称】家长好：\n薄弱项：【薄弱项】\n课堂表现：【课堂表现】\n作业内容：【作业内容】\n学习建议：【学习建议】',
+    feedbackTemplate: '【学生昵称】家长好：\n薄弱项：【薄弱项】\n课堂表现：【课堂表现】\n作业内容：【作业内容】\n学习建议：【学习建议】',
   };
   const stats = { avgScores: { v1: 8, v2: 8 }, registeredCounts: { v1: 3, v2: 3 } };
   // ① 无薄弱项（全高于班均）+ 三个可选字段全空 → 任何占位符都不得原样漏出
@@ -581,7 +581,7 @@ group('反馈占位符兜底');
     '测试生', undefined, undefined, {}
   );
   check(!noWeak.includes('【薄弱项】'), '无薄弱项：不漏【薄弱项】字面量');
-  check(noWeak.includes('暂未发现明显弱项'), '无薄弱项：给正向兜底文案');
+  check(!noWeak.includes('薄弱项'), '无薄弱项：整行删除（连标签也不留）；不再输出兜底文案');
   check(!noWeak.includes('【课堂表现】'), '课堂表现为空：不漏字面量');
   check(!noWeak.includes('【作业内容】'), '作业内容为空：不漏字面量');
   check(!noWeak.includes('【学习建议】'), '学习建议为空：不漏字面量');
@@ -593,6 +593,15 @@ group('反馈占位符兜底');
     '测试生', undefined, undefined, {}
   );
   check(withWeak.includes('语法') && !withWeak.includes('【薄弱项】'), '有薄弱项：正常替换为板块文案');
+  // 短昵称统一（2026-10-23）：私发称呼只用短昵称（如 诗钰），不再出现全名
+  const named = generatePersonalFeedback(
+    { id: 'x3', studentName: '郭诗钰', lessonNumber: 3, seasons: [], attendance: '准时👍', homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', listeningScore: 10, classPerformance: '认真积极', scores: { v1: 10, v2: 10 }, totalScore: 20, correctRate: 100, rank: 1, date: '2026-10-23' } as unknown as StudentRecord,
+    cfg as unknown as import('@/types').LessonConfig,
+    stats as unknown as import('@/types').ClassStats,
+    '郭诗钰', undefined, undefined, {}
+  );
+  check(named.includes('诗钰家长好'), '称呼用短昵称（诗钰家长好）');
+  check(!named.includes('郭诗钰家长好'), '称呼不出现全名');
 }
 
 console.log('');

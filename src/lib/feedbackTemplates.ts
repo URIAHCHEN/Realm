@@ -67,7 +67,14 @@ function dropLineIfLabelOnly(text: string, label: string, value: string, fieldNa
       let rest = line.replace(label, '');
       // 行形如「口语得分：【口语得分】」：标题里的字段名也要一起剥掉才算空
       names.forEach(n => { if (n) rest = rest.split(n).join(''); });
-      return rest.replace(/[\s:：|｜·—\-*（）()、,，]/g, '') !== '';
+      // 2026-10-23 修「空标签残留」：两类都删——
+      //  ① 剥掉占位符+字段名后完全没内容；
+      //  ② 「纯标签行」：有效文字 ≤6 个字且以冒号/顿号结尾（如「⚠️ 还要盯的：」——4 个字属标签）；
+      //  ③ 占位符后面老师写了真实内容（如「（多开口读）」）→ 行尾不是冒号 → 保留
+      const plain = rest.replace(/[\s:：|｜·—*（）()、,，-]/g, '');
+      if (plain.length === 0) return false;
+      if (plain.length <= 6 && /[：:|｜·—-]\s*$/.test(rest)) return false;
+      return true;
     })
     .join('\n');
 }
@@ -183,13 +190,16 @@ export function generatePersonalFeedback(
   /** 扩展变量（如 【学习建议】），由调用方按生成口径计算后注入 */
   extraVars?: Record<string, string>
 ): string {
+  const shortNickname = generateShortNickname(nickname);
+  // 句内只保留文字（去掉选项里的 emoji/符号）：家长消息里"孩子请假🏫"读着别扭
+  const spokenAttendance = (record.attendance || '').replace(/[^\u4e00-\u9fa5A-Za-z]/g, '') || '未到课';
   if (isAbsentRecord(record)) {
-    return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，未参与本课入门测。落下的内容与补课安排我会另行同步～`;
+    return `${shortNickname}家长您好！\n\n第${record.lessonNumber}课孩子${spokenAttendance}，未参加本讲测评；落下的内容与补课安排，我会另行跟您同步。`;
   }
   if (isTransferRecord(record) && !isTransferIn(record)) {
     // 调出（无小测数据）：本次课的小测在原班级完成，本班只记录考勤/作业/口头表现
     const hw = record.homeworkStatus ? `本班这边记到的作业情况是「${record.homeworkStatus}」。` : '';
-    return `${nickname}家长您好！\n\n第${record.lessonNumber}课孩子${record.attendance}，入门测在调课班级完成，成绩以原班级为准。${hw}\n有需要我协调的随时找我～`;
+    return `${shortNickname}家长您好！\n\n第${record.lessonNumber}课孩子${spokenAttendance}，本讲测评在原班级完成，成绩以原班级为准。${hw}\n有需要协调的随时找我。`;
   }
   const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
   const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate) || '';
@@ -217,19 +227,14 @@ export function generatePersonalFeedback(
   // 计算满分（统一来源：题型满分 + 计入总分的自定义列满分）
   const fullScore = getLessonFullScore(lessonConfig);
   
-  // 生成短昵称
-  const shortNickname = generateShortNickname(nickname);
   
   // 课堂表现缺失时删掉该行（避免留下"🙋 课堂表现："这种空标签）—— 用统一的 dropLineIfLabelOnly，
   // 字段名标签（"课堂表现"）也要一起剥掉才算空，否则行删不掉、占位符原样漏给家长
   template = dropLineIfLabelOnly(template, '【课堂表现】', (record.classPerformance || '').trim(), '课堂表现');
 
-  // 薄弱项（2026-10-17 修「有的学员反馈里薄弱项是【薄弱项】字面量」）：
-  // 有弱项 → 列板块；无弱项 → 给一句正向兜底（与「四个一」的待提升口径一致），绝不把占位符漏出去
-  const weakPointsText = weakPoints.length > 0
-    ? weakPoints.map(formatCategoryWeakPoint).join('、')
-    : '暂未发现明显弱项，各板块基本跟上班均';
-  template = template.replace(/【薄弱项】/g, weakPointsText);
+  // 薄弱项（2026-10-23 用户口径更新）：有弱项 → 列板块；无弱项 → **整行不显示**
+  //（"要盯的地方"这行连同标签一起删掉，复制的内容里不出现薄弱项字样；四个一的"待提升"仍有兜底句）
+  template = fillVar(template, '【薄弱项】', weakPoints.length > 0 ? weakPoints.map(formatCategoryWeakPoint).join('、') : '', '薄弱项');
   
   // 自定义列：占位符替换 + 未使用的自动追加
   const customFields = lessonConfig.customFields || [];
@@ -261,8 +266,10 @@ export function generatePersonalFeedback(
   template = fillVar(template, '【乐听说】', listeningText, '乐听说');
 
   // 替换模板变量
+  // 2026-10-23 用户口径：学生称呼统一用短昵称（如 诗钰）；「全名」参数不再区分
+  //（【学生昵称】与【学生短昵称】均解析为短昵称，老模板不受影响）
   let feedback = template
-    .replace(/【学生昵称】/g, nickname)
+    .replace(/【学生昵称】/g, shortNickname)
     .replace(/【学生短昵称】/g, shortNickname)
     .replace(/【课次】/g, record.lessonNumber.toString())
     .replace(/【考勤】/g, record.attendance || '')
@@ -278,6 +285,9 @@ export function generatePersonalFeedback(
     .replace(/【正确率】/g, record.correctRate.toString())
     .replace(/【作业内容】/g, lessonConfig.homeworkText)
     .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
+
+  // 删行可能留下连续空行 → 折叠为一个空行（排版整齐）
+  feedback = feedback.replace(/\n{3,}/g, '\n\n');
 
   // 模板未引用、但已填写的自定义列 → 末尾自动附上，保证“直接可用”
   const leftover = customFields.filter(cf => {
@@ -329,40 +339,41 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
   daily: {
     intro: '',
     // 六版刻意做出人格差异：①亲切日常 ②极简要点 ③专业详实 ④鼓励正向 ⑤复盘推进 ⑥行动约定
+    // 2026-10-23 整体雅化：短句、少衬词、先事实后判断
     openers: [
-      '家长好，今天课上我记了两笔——一笔是好的，一笔得盯一下，都写下面了：',
-      '第【课次】课，长话短说：',
-      '家长您好。这堂课的内容、孩子的表现和测评数据，我整理在下面。',
-      '家长好！今天孩子有个地方做得挺好，我先说这个，再说要留心的：',
-      '家长您好。这节课我就看三件事：听进去了没、练对了没、回家能不能接上。',
-      '家长您好。情况我下面说清楚，最后有一件事想请您帮我一起盯。',
+      '家长好，今天这堂课记了两笔，都写在下面：',
+      '第【课次】课，情况如下：',
+      '家长您好。本课的内容、表现与测评数据，整理在下面。',
+      '家长好，今天有一处做得挺好，先说这个，再说要留心的：',
+      '家长您好。这堂课我只看三件事：听进去没有、练对没有、回家能不能接上。',
+      '家长您好。情况都写清楚了，末尾有一件事想请您帮个忙。',
     ],
     closings: [
-      '您在家要是也看到什么，随时告诉我。',
-      '就这些，要细聊随时找我。',
+      '您在家若看到什么，随时告诉我。',
+      '就这些，想细聊随时找我。',
       '需要的话，我可以再整理一份本讲的个性化练习建议。',
-      '孩子的一点进步我都记着，下节课接着来。',
-      '这两处我下节课重点看，有变化我第一时间告诉您。',
-      '就这一件事，您帮我盯一周，孩子这周就能看出变化。',
+      '孩子的点滴进步我都记着，下节课接着来。',
+      '这两处我下节课重点看，有变化第一时间告诉您。',
+      '这一件事您帮我盯一周，孩子会有看得见的变化。',
     ],
   },
   afterclass: {
-    intro: '这一讲在行课中段，重点是前后知识的衔接和错题复盘。\n',
+    intro: '这一讲在行课中段，重点是前后知识的衔接与错题复盘。\n',
     openers: [
-      '家长好，课到一半了，孩子这段的情况我攒了几点，一起说给您：',
-      '家长好，行课中进度同步，只说关键的：',
-      '家长您好。本讲接着上一讲往下走，结合近几次测评的走势，孩子的情况是这样：',
-      '家长好！这段能看出孩子慢慢找到感觉了，先报个喜，再说要盯的地方：',
+      '家长好，课到一半，孩子这段的情况我归拢了几点，说给您：',
+      '家长好，行课中的进度同步，只说关键的：',
+      '家长您好。本讲承接上一讲，结合近几次测评的走势，孩子的情况如下：',
+      '家长好，这段能看出孩子渐渐找到了感觉——先报喜，再说要盯的地方：',
       '家长您好。今天我把前面的内容又串了一遍，孩子的衔接情况如下：',
-      '家长您好。中段最容易松劲，今天想跟您对一下节奏，末尾有件事想请您配合。',
+      '家长您好。中段最容易松劲，今天跟您对一下节奏，末尾有件事想请您配合。',
     ],
     closings: [
-      '中段最怕的是以为自己会了。有疑问随时问我，课上我再带一遍。',
-      '关键就两条：错题别压着，节奏别断。',
-      '这个阶段我更看基础有没有闭合。进度慢一点没事，别留窟窿。',
-      '孩子这段的进步我看在眼里，保持住就更顺。',
-      '下次课前让孩子翻一下本讲笔记，我课上带着回顾。',
-      '您在家盯一周，我课上接着带。比单纯加练有用。',
+      '中段最怕"以为自己会了"。有疑问随时问我，课上我再带一遍。',
+      '关键两条：错题别压着，节奏别断。',
+      '这个阶段我更看重基础有没有闭合。进度慢一点没关系，别留窟窿。',
+      '这段的进步我看在眼里，保持住。',
+      '下次课前让孩子翻一遍本讲笔记，课上我带着回顾。',
+      '您在家盯一周，我课上接着带——比单纯加练有用。',
     ],
   },
   comm: {
@@ -376,10 +387,10 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
       '家长您好。有个想法想跟您确认一下，不一定对。',
     ],
     closings: [
-      '您什么时候方便，聊几句都行。',
+      '您方便的时候，聊几句都行。',
       '不急，先听听您的想法。',
       '方便的话，我给您做一次完整的情况说明。',
-      '孩子整体是往上走的，保持沟通就好。',
+      '孩子整体在往上走，保持沟通就好。',
       '我把看到的说清楚，怎么做我们商量着来。',
       '这事您怎么看？我按您的想法调整。',
     ],
@@ -413,6 +424,7 @@ export function generateFourInOne(
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
   }
+  const shortNickname = generateShortNickname(nickname);
   const pack = FOUR_IN_ONE_PACKS[scenarioKey] || FOUR_IN_ONE_PACKS.daily;
   const n = FOUR_IN_ONE_VARIANT_COUNT;
   const v = ((variant % n) + n) % n;
@@ -468,16 +480,17 @@ export function generateFourInOne(
   }
   if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
   if (attendBad) issueParts.push(`本课${attendBad}`);
-  const issue = issueParts.length ? issueParts.join('；') : '这次没发现明显的薄弱环节，整体状态是稳的';
+  const issue = issueParts.length ? issueParts.join('；') : '这次没发现明显的薄弱处，整体是稳的';
 
   const nextAction = weak.length
     ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；有余力的话，让孩子把思路讲给您听一遍，比再做十道都管用`
     : homeworkBad
-      ? '今晚把这次的作业补齐并订正，下次课带来我看一下'
+      ? '今晚把这次的作业补齐并订正，下次课带来我看看'
       : attendBad
-        ? '课后回看一下本讲的笔记和回放，把落下的内容补上，有不清楚的地方随时问我'
-        : '照现在的节奏走就好，课后任务按计划完成、错题及时过一遍';
-  const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下：' : scenarioKey === 'comm' ? '最想请您配合的是：' : '课后建议：';
+        ? '课后回看本讲的笔记和回放，落下的内容补上，不清楚的地方随时问我'
+        : '照现在的节奏走：课后任务按计划完成，错题及时过一遍';
+  // 2026-10-23：模板行已有「🛠 下一步：」标签，plan 不再另加一句式标签前缀（否则双重标签）
+  const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下——' : scenarioKey === 'comm' ? '最想请您配合的是——' : '';
   const plan = `${planLead}${nextAction}`;
 
   const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
@@ -522,7 +535,7 @@ export function generateFourInOne(
 
   return fourTpl
     .replace(/【课次】/g, String(record.lessonNumber))
-    .replace(/【昵称】/g, nickname)
+    .replace(/【昵称】/g, shortNickname)
     .replace(/【场景】/g, '')
     .replace(/【开场】/g, opener)
     .replace(/【场景引导】/g, pack.intro)
@@ -536,6 +549,8 @@ export function generateFourInOne(
     .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
   // 空值兜底：学习建议未注入时删掉空壳行，而不是把【学习建议】原样发给家长（2026-10-17）
   fourTpl = dropLineIfLabelOnly(fourTpl, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
+  // 删行可能留下连续空行 → 折叠
+  fourTpl = fourTpl.replace(/\n{3,}/g, '\n\n');
 }
 
 // 生成班群表彰

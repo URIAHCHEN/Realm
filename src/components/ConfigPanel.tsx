@@ -127,8 +127,7 @@ function OptionChip({ label, color, onColor, onRemove }: {
 }
 
 // 可用变量列表
-const availableVariables = [  { key: '【学生昵称】', desc: '学生昵称（自定义）' },
-  { key: '【学生短昵称】', desc: '学生短昵称（三字取后两字，两字取叠词）' },
+const availableVariables = [  { key: '【学生昵称】', desc: '学生短昵称（自动，如 诗钰）' },
   { key: '【课次】', desc: '当前课次' },
   { key: '【考勤】', desc: '考勤状态' },
   { key: '【课堂表现】', desc: '课堂表现选项' },

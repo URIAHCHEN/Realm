@@ -9,7 +9,7 @@ import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
   CircleAlert, RotateCcw, Send, Sparkles, Table2, Lightbulb, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generatePersonalFeedback, generateFourInOne, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
+import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
 import { exportTeacherElfXlsx } from '@/lib/teacherElfExport';
 import { computeStudentReportStats } from '@/lib/reportStats';
@@ -258,7 +258,7 @@ export function FeedbackGenerator({
       const srs = records.filter(r => r.studentName === name).sort((a, b) => a.lessonNumber - b.lessonNumber);
       if (srs.length === 0) { map[name] = ''; return; }
       const st = computeStudentReportStats(srs, lessonConfigs, opts);
-      map[name] = buildCondensedAdvice(getNickname(name), srs, st, lessonConfigs);
+      map[name] = buildCondensedAdvice(generateShortNickname(getNickname(name)), srs, st, lessonConfigs);
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps

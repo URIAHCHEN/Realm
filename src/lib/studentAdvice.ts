@@ -107,10 +107,15 @@ export function buildCondensedAdvice(
   else if (hwRate < 0.6) status = firstSentence(getHomeworkFeedback(hwRate));
   else if (listening.length > 0 && avgListening < 70) status = firstSentence(getListeningFeedback(avgListening));
   else if (trajFeedback && /回落/.test(trajFeedback)) status = firstSentence(trajFeedback);
+  const hasConcern = !!status;
   if (!status) status = '考勤、作业和课后任务都保持得很好。';
 
-  // ④ 收尾（按整体档位二选一）
-  const close = overallRate >= 70 ? '保持这个节奏就好～' : '不用着急，我们一步一步来，有需要随时找我。';
+  // ④ 收尾：与状态保持一致（有异常时不说"保持这个节奏"）
+  const close = hasConcern
+    ? '这几处我接着盯，有变化随时跟您说。'
+    : overallRate >= 70
+      ? '保持这个节奏就好。'
+      : '不用着急，一步一步来，有需要随时找我。';
 
   // 长度护栏：超 150 字先去掉状态句（总评 + 重点 + 收尾信息量最高）
   let text = [parts[0], focus, status, close].join('');

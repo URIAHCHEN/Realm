@@ -604,6 +604,37 @@ group('反馈占位符兜底');
   check(!named.includes('郭诗钰家长好'), '称呼不出现全名');
 }
 
+// ============ 四个一：占位符/昵称/待提升/新学员/教辅（2026-10-23） ============
+group('四个一生成器');
+{
+  const qts4 = [
+    { id: 'v1', name: '语法选择', fullScore: 10, order: 0 },
+    { id: 'v2', name: '完形填空', fullScore: 10, order: 1 },
+  ];
+  const cfg4 = {
+    questionTypes: qts4, customFields: [], homeworkOptions: ['完成✅'], listeningOptions: ['很棒哦👏'],
+    attendanceOptions: ['准时👍'], classPerformanceOptions: ['认真积极'], homeworkText: '', passThreshold: 80,
+  };
+  const stats4 = { avgScores: { v1: 7, v2: 8 }, registeredCounts: { v1: 3, v2: 3 } };
+  const mk = (scores: { [k: string]: number }) => ({ id: 'f1', studentName: '郭诗钰', lessonNumber: 3, seasons: [], attendance: '准时👍', homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', listeningScore: 10, classPerformance: '认真积极', scores, totalScore: 10, correctRate: 60, rank: 2, date: '2026-10-23' });
+  // ① 开场里的【课次】【昵称】必须替换（历史 bug：开场插在替换之后 → 漏字面量）
+  const four = generateFourInOne(mk({ v1: 4, v2: 8 }) as unknown as StudentRecord, cfg4 as unknown as import('@/types').LessonConfig, stats4 as unknown as import('@/types').ClassStats, '郭诗钰', false, [], 0, undefined, 'daily', true, undefined, {}, []);
+  check(!four.includes('【课次】'), '四个一：开场里的【课次】已替换（不漏字面量）');
+  check(four.includes('诗钰家长好') || four.includes('诗钰家长您好'), '四个一：开场以短昵称称呼家长');
+  check(!four.includes('郭诗钰'), '四个一：不出现全名');
+  // ② 无弱项 → 不输出"待提升"行
+  const fourGood = generateFourInOne(mk({ v1: 10, v2: 10 }) as unknown as StudentRecord, cfg4 as unknown as import('@/types').LessonConfig, { avgScores: { v1: 5, v2: 5 }, registeredCounts: { v1: 3, v2: 3 } } as unknown as import('@/types').ClassStats, '郭诗钰', false, [], 0, undefined, 'daily', true, undefined, {}, []);
+  check(!fourGood.includes('待提升'), '四个一：无弱项时"待提升"整行不出现');
+  // ③ 新学员：用中性开场，不含"照现在的节奏"
+  const fourNew = generateFourInOne(mk({ v1: 10, v2: 10 }) as unknown as StudentRecord, cfg4 as unknown as import('@/types').LessonConfig, { avgScores: { v1: 5, v2: 5 }, registeredCounts: { v1: 3, v2: 3 } } as unknown as import('@/types').ClassStats, '郭诗钰', true, [], 0, undefined, 'daily', true, undefined, {}, []);
+  check(/刚加入|先说|留意/.test(fourNew), '四个一：新学员用中性开场（不假设历史）');
+  check(!fourNew.includes('照现在的节奏'), '四个一：新学员不出现"照现在的节奏"');
+  // ④ 参考教辅按长期弱项匹配
+  const fourMat = generateFourInOne(mk({ v1: 4, v2: 8 }) as unknown as StudentRecord, cfg4 as unknown as import('@/types').LessonConfig, stats4 as unknown as import('@/types').ClassStats, '郭诗钰', false, [], 0, undefined, 'daily', true, undefined, {}, ['完形']);
+  check(/完形：《哈佛英语》/.test(fourMat), '参考教辅：按长期弱项（完形）推荐对应资料');
+  check(!/时文阅读/.test(fourMat), '参考教辅：不推与弱项无关的资料');
+}
+
 console.log('');
 if (failures.length) {
   console.log(`❌ 失败 ${failures.length} 项 / 通过 ${passed} 项：\n - ${failures.join('\n - ')}`);

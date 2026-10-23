@@ -381,6 +381,52 @@ function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: C
 // 加载期自愈：把登记表里记录的模板文本写回配置。
 // 场景：某次整体快照覆盖、或旧包缺字段导致配置里的模板是旧的/空的，
 // 而登记表始终保留着"最后一次编辑"的内容与时间戳 → 用更新的那份覆盖回来。
+/**
+ * 旧版默认私发模板（2026-10-23 之前的默认值）。
+ * 目的：默认话术迭代后，**没被老师改过**的课次模板要跟着升级 ——
+ * 否则新话术只在新建课次生效，老班级里永远看不到改进（用户反馈"改了怎么没看见效果"）。
+ * 只替换与旧默认逐字相同的模板，任何老师自己改过的一个字都不会被覆盖。
+ */
+const LEGACY_DEFAULT_FEEDBACK_TEMPLATES = [
+  `【学生昵称】家长好，第【课次】课的情况我写在这儿。
+
+🏫 考勤：【考勤】
+🙋 课堂表现：【课堂表现】
+📝 作业：【作业】
+🎙️ 课后任务：【课后任务】
+
+入门测这边：
+【成绩详情】
+总分【总分】/【满分】，班级第【排名】名，正确率【正确率】%。
+
+⚠️ 还要盯的地方：【薄弱项】
+
+📝 今日作业
+【作业内容】
+
+有变化我会主动告诉您。您在家看到什么，也跟我说一声，两边对得上，孩子才不白练 💪`,
+];
+
+function migrateLegacyTemplates(all: { [key: string]: Class }, appConfig: AppConfig): { [key: string]: Class } {
+  const nextDefault = appConfig.defaultFeedbackTemplate;
+  let changed = false;
+  const out: { [key: string]: Class } = {};
+  Object.entries(all).forEach(([cid, cls]) => {
+    const cfgs = cls.lessonConfigs || {};
+    const nextCfgs: { [lesson: string]: LessonConfig } = {};
+    Object.entries(cfgs).forEach(([ln, cfg]) => {
+      if (cfg?.feedbackTemplate && LEGACY_DEFAULT_FEEDBACK_TEMPLATES.includes(cfg.feedbackTemplate) && cfg.feedbackTemplate !== nextDefault) {
+        nextCfgs[ln] = { ...cfg, feedbackTemplate: nextDefault };
+        changed = true;
+      } else {
+        nextCfgs[ln] = cfg;
+      }
+    });
+    out[cid] = changed ? { ...cls, lessonConfigs: nextCfgs } : cls;
+  });
+  return changed ? out : all;
+}
+
 function applyTemplateStore(
   appConfig: AppConfig,
   classes: { [key: string]: Class }
@@ -450,7 +496,7 @@ export function useClassData() {
           // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
           const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
           // 课次模板自愈：登记表里的最后一次编辑优先；名次无条件重排（修复历史"同分未并列"）
-          return applyTemplateStore(appConfig, rerankAllLessons(migrated)).classes;
+          return applyTemplateStore(appConfig, rerankAllLessons(migrateLegacyTemplates(migrated, appConfig))).classes;
         }
       } catch {
         console.warn('[load] classData 损坏，已隔离为空（不回退示例数据，避免误推上云）');

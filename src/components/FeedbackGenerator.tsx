@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
 import { exportTeacherElfXlsx } from '@/lib/teacherElfExport';
+import { longTermWeakCategories } from '@/lib/longTermWeak';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
@@ -113,12 +114,6 @@ export function FeedbackGenerator({
     setSelected(null);
   }, [lessonNumber]);
 
-  // 切换反馈模式/场景/新学员/措辞时，清空以便按新规则重算
-  useEffect(() => {
-    setGenerated({});
-    setCopiedSet(new Set());
-  }, [feedbackMode, scenario, isNewStudent, variant, withMaterials]);
-
   const recordOf = (name: string) =>
     lessonRecords.find(r => r.studentName === name);
 
@@ -128,21 +123,38 @@ export function FeedbackGenerator({
     [lessonConfig]
   );
 
+  // 长期薄弱板块（跨课次）：给「附参考教辅」挑资料用
+  const weakOf = (name: string): string[] =>
+    longTermWeakCategories(records.filter(r => r.studentName === name), lessonConfigs);
+
   const generateFor = (name: string): string | null => {
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' });
+      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' }, weakOf(name));
     }
     return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, { '【学习建议】': adviceMap[name] || '' });
   };
 
-  // 模板草稿改动：若当前学生已有生成内容，实时重算预览
+  // 模板 / 场景 / 变体 / 开关改动：已生成的内容**自动按新规则重算**
+  //（2026-10-23：原实现是"清空全部已生成"，切换开关后预览直接空白、还得重新点一键生成；
+  //  且只刷新当前选中 → 复制对照表/导出时其他学员仍是旧话术，用户反馈"改了模板没看到效果"）
   useEffect(() => {
-    if (!selected) return;
-    setGenerated(prev => prev[selected] ? { ...prev, [selected]: generateFor(selected) ?? prev[selected] } : prev);
+    setGenerated(prev => {
+      const names = Object.keys(prev);
+      if (names.length === 0) return prev;
+      const next = { ...prev };
+      let changed = false;
+      names.forEach(n => {
+        const t = generateFor(n);
+        if (t != null && t !== next[n]) { next[n] = t; changed = true; }
+      });
+      return changed ? next : prev;
+    });
+    // 内容变了，"已发送"标记失效
+    setCopiedSet(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftFeedback, draftFourInOne]);
+  }, [draftFeedback, draftFourInOne, scenario, variant, isNewStudent, withMaterials, feedbackMode]);
 
   // 外部模板变化（保存成功 / 切换课次或班级）时回填草稿
   useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonConfig.feedbackTemplate]);
@@ -331,7 +343,7 @@ export function FeedbackGenerator({
       const rec = recordOf(r.name);
       const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }) : '';
       const fourInOneText = rec
-        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
+        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' }, weakOf(r.name))
         : '';
       return [getNickname(r.name), privateText, fourInOneText];
     });
@@ -360,7 +372,7 @@ export function FeedbackGenerator({
       const rec = recordOf(r.name);
       const text = rec
         ? (isFour
-          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' })
+          ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' }, weakOf(r.name))
           : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }))
         : '';
       return [getNickname(r.name), text];
@@ -389,7 +401,7 @@ export function FeedbackGenerator({
     if (!rec) return '';
     const adviceRef = { '【学习建议】': adviceMap[name] || '' };
     return kind === 'fourInOne'
-      ? generateFourInOne(rec, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, adviceRef)
+      ? generateFourInOne(rec, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, adviceRef, weakOf(name))
       : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef);
   };
   const handleExportTeacherElf = async () => {
@@ -824,7 +836,7 @@ export function FeedbackGenerator({
               />
               <div className="flex flex-wrap gap-1.5">
                 {(isFourInOne ? [...FOUR_IN_ONE_VARIABLES, ...dynamicVars] : [
-                  { key: '【学生昵称】', desc: '' }, { key: '【学生短昵称】', desc: '' }, { key: '【课次】', desc: '' },
+                  { key: '【学生昵称】', desc: '' }, { key: '【课次】', desc: '' },
                   { key: '【考勤】', desc: '' }, { key: '【课堂表现】', desc: '' },
                   { key: '【作业】', desc: '' }, { key: '【课后任务】', desc: '' },
                   { key: '【成绩详情】', desc: '' }, { key: '【总分】', desc: '' }, { key: '【满分】', desc: '' },

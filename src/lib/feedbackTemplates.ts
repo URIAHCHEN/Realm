@@ -304,10 +304,31 @@ export function generatePersonalFeedback(
 // 「四个一」默认模板与可用占位符（可在反馈工作台旁边直接改写；留空即用此默认结构）
 // 参考教辅推荐（家长常问「该买什么资料」，这里给一份精选清单）
 // 原则：只留最值得买的、按需自选；听说练习与难度调节各并成一行，不堆砌。
-export const FOUR_IN_ONE_MATERIALS =
-`📚 参考教辅（按需自选，不必都买）：语法《哈佛英语》（买初中全一册，不分年级）｜完型《哈佛英语》（分年级）｜阅读《英语时文阅读》（期刊，主题新颖贴近时事）｜写作《新东方中考英语满分作文》
-🎧 听说练习：想多做题可买《蓝皮英语》；想多输入，可以跟读校本课文、在家当背景放英文歌/英文电影（看孩子兴趣），或用【每日英语听力】App 按自己的程度挑喜欢的材料听读跟读～
-💡 想加难度：完型与《英语时文阅读》都有年级版本，买高 1-2 个年级即可`;
+// 教辅目录（2026-10-23）：从"固定清单"改为"按学员长期弱项挑"，避免给家长推无关资料
+const MATERIAL_ITEMS: Record<string, string> = {
+  语法: '语法：《哈佛英语》语法专项（初中全一册，不分年级）',
+  完形: '完形：《哈佛英语》完形填空（按年级选）',
+  阅读: '阅读：《英语时文阅读》（期刊，题材新、贴近时事）',
+  写作: '写作：《新东方中考英语满分作文》',
+  词汇: '词汇：先把校本词汇表默写过关（可配合【单词短语默写表】）',
+  听力: '听说：每天跟读校本课文 10 分钟，想加练再用《蓝皮英语》听力',
+  口语: '口语：每天跟读 10 分钟，录一段发给老师听',
+};
+
+/** 按学员的长期薄弱板块生成教辅推荐（最多 3 条；没有明显弱项时给"先吃透课内"的建议） */
+export function buildMaterialsBlock(weakCategories: string[] = []): string {
+  const picks = weakCategories.map(c => MATERIAL_ITEMS[c]).filter(Boolean).slice(0, 3);
+  if (picks.length === 0) {
+    return '📚 参考教辅：先把课内材料吃透——课本、校本练习和错题本，比多买一本更管用。';
+  }
+  return ['📚 参考教辅（按孩子的薄弱处挑，不必都买）：', ...picks.map(l => `· ${l}`)]
+    .join('\n');
+}
+
+/** 兼容历史引用（旧版固定清单） */
+export const FOUR_IN_ONE_MATERIALS = [
+  '📚 参考教辅：先把课内材料吃透——课本、校本练习和错题本，比多买一本更管用。',
+].join('\n');
 
 export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
 `【第【课次】课 · 【昵称】】
@@ -338,15 +359,15 @@ type FourInOnePack = { openers: string[]; closings: string[]; intro: string };
 export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOnePack> = {
   daily: {
     intro: '',
-    // 六版刻意做出人格差异：①亲切日常 ②极简要点 ③专业详实 ④鼓励正向 ⑤复盘推进 ⑥行动约定
-    // 2026-10-23 整体雅化：短句、少衬词、先事实后判断
+    // 六版人格差异：①亲切日常 ②极简要点 ③专业详实 ④鼓励正向 ⑤复盘推进 ⑥行动约定
+    // 2026-10-23：开场统一以「学生短昵称 + 家长好」起句（【昵称】在生成时替换）；去掉机械的"记了两笔"式说法
     openers: [
-      '家长好，今天这堂课记了两笔，都写在下面：',
-      '第【课次】课，情况如下：',
-      '家长您好。本课的内容、表现与测评数据，整理在下面。',
-      '家长好，今天有一处做得挺好，先说这个，再说要留心的：',
-      '家长您好。这堂课我只看三件事：听进去没有、练对没有、回家能不能接上。',
-      '家长您好。情况都写清楚了，末尾有一件事想请您帮个忙。',
+      '【昵称】家长好，今天的课有几点想跟您说，都写在下面：',
+      '【昵称】家长好，第【课次】课的情况如下：',
+      '【昵称】家长您好。本课的内容、表现与测评数据，整理在下面。',
+      '【昵称】家长好，今天有一处做得挺好，先说这个，再说要留心的：',
+      '【昵称】家长您好。这堂课我只看三件事：听进去没有、练对没有、回家能不能接上。',
+      '【昵称】家长您好。情况都写清楚了，末尾有一件事想请您帮个忙。',
     ],
     closings: [
       '您在家若看到什么，随时告诉我。',
@@ -360,12 +381,12 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
   afterclass: {
     intro: '这一讲在行课中段，重点是前后知识的衔接与错题复盘。\n',
     openers: [
-      '家长好，课到一半，孩子这段的情况我归拢了几点，说给您：',
-      '家长好，行课中的进度同步，只说关键的：',
-      '家长您好。本讲承接上一讲，结合近几次测评的走势，孩子的情况如下：',
-      '家长好，这段能看出孩子渐渐找到了感觉——先报喜，再说要盯的地方：',
-      '家长您好。今天我把前面的内容又串了一遍，孩子的衔接情况如下：',
-      '家长您好。中段最容易松劲，今天跟您对一下节奏，末尾有件事想请您配合。',
+      '【昵称】家长好，课到一半，孩子这段的情况我归拢了几点，说给您：',
+      '【昵称】家长好，行课中的进度同步，只说关键的：',
+      '【昵称】家长您好。本讲承接上一讲，结合近几次测评的走势，孩子的情况如下：',
+      '【昵称】家长好，这段能看出孩子渐渐找到了感觉——先报喜，再说要盯的地方：',
+      '【昵称】家长您好。今天我把前面的内容又串了一遍，孩子的衔接情况如下：',
+      '【昵称】家长您好。中段最容易松劲，今天跟您对一下节奏，末尾有件事想请您配合。',
     ],
     closings: [
       '中段最怕"以为自己会了"。有疑问随时问我，课上我再带一遍。',
@@ -379,12 +400,12 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
   comm: {
     intro: '',
     openers: [
-      '家长好，占用您一分钟，说说孩子最近的状态：',
-      '家长好，两句话，想跟您对一件事：',
-      '家长您好。关于孩子近期的表现，我说几点，也想听听您看到的情况。',
-      '家长好！孩子最近有两件事我挺高兴，也有一处想跟您提一下：',
-      '家长您好。这条反馈我不绕弯子，只说观察到的事实和我自己的判断：',
-      '家长您好。有个想法想跟您确认一下，不一定对。',
+      '【昵称】家长好，占用您一分钟，说说孩子最近的状态：',
+      '【昵称】家长好，想跟您对一件事：',
+      '【昵称】家长您好。孩子近期的表现我整理了几点，也想听听您看到的情况。',
+      '【昵称】家长好，孩子最近有两件事我挺高兴，也有一处想提一下：',
+      '【昵称】家长您好。这条反馈只说观察到的事实与我的判断，不绕弯子：',
+      '【昵称】家长您好。有个情况想先跟您通个气，再一起商量怎么配合：',
     ],
     closings: [
       '您方便的时候，聊几句都行。',
@@ -396,6 +417,24 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
     ],
   },
 };
+
+/**
+ * 新学员专用开场/收尾（2026-10-23）：
+ * 新学员没有历史数据，用"渐渐找到感觉""照现在的节奏"这类话会与前文冲突，单独给一组中性措辞。
+ */
+export const FOUR_IN_ONE_NEW_STUDENT_PACK = {
+  openers: [
+    '【昵称】家长好，孩子刚加入不久，这堂课的情况我记在下面：',
+    '【昵称】家长您好。先说说孩子这堂课的表现：',
+    '【昵称】家长好，这堂课我留意了几个地方，跟您说说：',
+  ],
+  closings: [
+    '孩子还在适应期，有任何情况我们随时沟通。',
+    '先按这个节奏来，过几节课我们再一起看变化。',
+    '刚起步不用急，把习惯立起来最重要。',
+  ],
+};
+
 export const FOUR_IN_ONE_VARIANT_COUNT = 6;
 export const FOUR_IN_ONE_SCENARIOS: { key: 'daily' | 'afterclass' | 'comm'; label: string }[] = [
   { key: 'daily', label: '首课&日常' },
@@ -419,7 +458,9 @@ export function generateFourInOne(
   /** 口语等附加项的档位判定配置；缺省用默认档位 */
   oralCfg?: OralRatingConfig,
   /** 扩展变量（如 【学习建议】），由调用方按生成口径计算后注入 */
-  extraVars?: Record<string, string>
+  extraVars?: Record<string, string>,
+  /** 学员长期薄弱板块（用于定制教辅推荐；缺省时给通用建议） */
+  longTermWeak: string[] = []
 ): string {
   if (isAbsentRecord(record)) {
     return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
@@ -429,8 +470,11 @@ export function generateFourInOne(
   const n = FOUR_IN_ONE_VARIANT_COUNT;
   const v = ((variant % n) + n) % n;
   // 开场与结尾一一配套：第 N 版用第 N 条开场 + 第 N 条结尾，保证同一版的语气/详略一致
-  const opener = pack.openers[v % pack.openers.length];
-  const closing = pack.closings[v % pack.closings.length];
+  // 新学员单独一组（不含"渐渐找到感觉""照现在的节奏"这类需要历史数据才能说的话，避免与其他话术冲突）
+  const openerPool = isNewStudent ? FOUR_IN_ONE_NEW_STUDENT_PACK.openers : pack.openers;
+  const closingPool = isNewStudent ? FOUR_IN_ONE_NEW_STUDENT_PACK.closings : pack.closings;
+  const opener = openerPool[v % openerPool.length];
+  const closing = closingPool[v % closingPool.length];
 
   const strong = lessonConfig.questionTypes
     // 未登记的题型不参与强项判定（不能把「没登记」当成 0 分去比班均）
@@ -480,7 +524,8 @@ export function generateFourInOne(
   }
   if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
   if (attendBad) issueParts.push(`本课${attendBad}`);
-  const issue = issueParts.length ? issueParts.join('；') : '这次没发现明显的薄弱处，整体是稳的';
+  // 没有弱项、作业和考勤也都正常时，不写"没发现明显薄弱处"这类凑数句（用户反馈"很没必要"）
+  const issue = issueParts.join('；');
 
   const nextAction = weak.length
     ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；有余力的话，让孩子把思路讲给您听一遍，比再做十道都管用`
@@ -488,7 +533,9 @@ export function generateFourInOne(
       ? '今晚把这次的作业补齐并订正，下次课带来我看看'
       : attendBad
         ? '课后回看本讲的笔记和回放，落下的内容补上，不清楚的地方随时问我'
-        : '照现在的节奏走：课后任务按计划完成，错题及时过一遍';
+        : isNewStudent
+          ? '先按这个节奏来：课后任务按计划完成，错题当场弄懂'
+          : '照现在的节奏走：课后任务按计划完成，错题及时过一遍';
   // 2026-10-23：模板行已有「🛠 下一步：」标签，plan 不再另加一句式标签前缀（否则双重标签）
   const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下——' : scenarioKey === 'comm' ? '最想请您配合的是——' : '';
   const plan = `${planLead}${nextAction}`;
@@ -533,9 +580,11 @@ export function generateFourInOne(
       .join('\n');
   }
 
-  return fourTpl
-    .replace(/【课次】/g, String(record.lessonNumber))
-    .replace(/【昵称】/g, shortNickname)
+  // 先替换"成员级"占位符（待提升/学习建议为空时整行删），再插入开场/结尾
+  fourTpl = dropLineIfLabelOnly(fourTpl, '【待提升】', issue, '待提升');
+  fourTpl = dropLineIfLabelOnly(fourTpl, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
+
+  let out = fourTpl
     .replace(/【场景】/g, '')
     .replace(/【开场】/g, opener)
     .replace(/【场景引导】/g, pack.intro)
@@ -544,13 +593,21 @@ export function generateFourInOne(
     .replace(/【下一步】/g, plan)
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
     .replace(/【结尾】/g, closing)
-    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，也欢迎您跟我说说他的感受和习惯，方便我们更快对上节奏～' : '')
-    .replace(/【参考教辅】/g, withMaterials ? `\n${FOUR_IN_ONE_MATERIALS}` : '')
+    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，有需要特别留意的，您随时跟我说。' : '')
+    .replace(/【参考教辅】/g, withMaterials ? `\n${buildMaterialsBlock(longTermWeak)}` : '')
     .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
-  // 空值兜底：学习建议未注入时删掉空壳行，而不是把【学习建议】原样发给家长（2026-10-17）
-  fourTpl = dropLineIfLabelOnly(fourTpl, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
-  // 删行可能留下连续空行 → 折叠
-  fourTpl = fourTpl.replace(/\n{3,}/g, '\n\n');
+
+  // 关键修复（2026-10-23）：开场/结尾文本自身也带【课次】【昵称】占位符 ——
+  // 必须在插入之后再扫一遍，否则"第【课次】课"会原样漏给家长（用户截图：四个一里课次不生效）
+  out = out
+    .replace(/【课次】/g, String(record.lessonNumber))
+    .replace(/【昵称】/g, shortNickname);
+
+  if (!withMaterials) {
+    out = out.split('\n').filter(l => !/参考教辅|^\s*(📚|🎧|💡)|^\s*·\s/.test(l.trim())).join('\n');
+  }
+  out = out.replace(/\n{3,}/g, '\n\n').trimEnd();
+  return out;
 }
 
 // 生成班群表彰

@@ -593,7 +593,8 @@ export function generateFourInOne(
     .replace(/【下一步】/g, plan)
     .replace(/【素材】/g, candidateLinks[0] || '见附件')
     .replace(/【结尾】/g, closing)
-    .replace(/【新学员补充】/g, isNewStudent ? '\n孩子刚加入不久，有需要特别留意的，您随时跟我说。' : '')
+    // 新学员的表达已由专用开场/收尾承担，这里不再追加一句（否则"刚加入"重复、语气打架）
+    .replace(/【新学员补充】/g, '')
     .replace(/【参考教辅】/g, withMaterials ? `\n${buildMaterialsBlock(longTermWeak)}` : '')
     .replace(/【学习建议】/g, extraVars?.['【学习建议】'] ?? '');
 

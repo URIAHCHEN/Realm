@@ -742,18 +742,29 @@ export function useClassData() {
   }, []);
 
   // 计算学生薄弱项（按板块聚合，得分率口径）
+  // 性能（2026-10-23）：原来每行都 filter 全班记录 + 重算一次班均 → 表格渲染是 O(人数 × 记录数)；
+  // 现在按「课次 + 题型集」缓存班均，失效条件是记录数组换成新引用（任何写入都会换），每课次只算一次。
+  const weakStatsCache = useMemo(() => {
+    const byKey = new Map<string, ClassStats>();
+    return (records: StudentRecord[], lessonNumber: number, quizTypes: QuestionType[]): ClassStats => {
+      const key = lessonNumber + '|' + quizTypes.map(q => q.id).join(',');
+      let st = byKey.get(key);
+      if (!st) {
+        st = calculateClassStats(records.filter(r => r.lessonNumber === lessonNumber), quizTypes);
+        byKey.set(key, st);
+      }
+      return st;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculateClassStats, currentClass?.records]);
+
   const calculateWeakPoints = useCallback((record: StudentRecord, questionTypes: QuestionType[]): CategoryWeakPoint[] => {
     if (!currentClass) return [];
-
-    const lessonRecords = currentClass.records.filter(
-      r => r.lessonNumber === record.lessonNumber
-    );
     // 附加项（如口语得分）不属于小测，不参与薄弱项分析
     const quizTypes = questionTypes.filter(qt => !qt.excludeFromTotal);
-    const stats = calculateClassStats(lessonRecords, quizTypes);
-
+    const stats = weakStatsCache(currentClass.records, record.lessonNumber, quizTypes);
     return computeCategoryWeakPoints(record, quizTypes, stats.avgScores);
-  }, [currentClass, calculateClassStats]);
+  }, [currentClass, weakStatsCache]);
 
   // 创建新班级
   const createClass = useCallback((name: string, term?: string, batchCode?: string) => {

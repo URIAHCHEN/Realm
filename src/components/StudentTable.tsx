@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,10 +97,24 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
 }) {
   const [text, setText] = useState(() => (value > 0 ? String(value) : ''));
   const [focused, setFocused] = useState(false);
-
-  // 外部值变化（批量/他端拉取）且未聚焦时，回填显示
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- 受控输入本地缓冲（聚焦时不覆盖用户输入），有意同步
-  useEffect(() => { if (!focused) setText(value > 0 ? String(value) : ''); }, [value, focused]);
+  // 显示值：聚焦时用本地缓冲（输入即时可见），失焦时直接用记录值（无需 effect 同步，避免级联渲染）
+  const shown = focused ? text : (value > 0 ? String(value) : '');
+  // 性能（2026-10-23）：原来每次按键都 onCommit → 整表重算 + 重排 + 落库，40 人×20 课次时每键 ~67ms。
+  // 现在输入即时显示、落库防抖 260ms；失焦/卸载立即 flush，不丢数据。
+  const pendingRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commitRef = useRef(onCommit);
+  // 渲染期不读写 ref（react-hooks/refs）：在 effect 里同步最新回调
+  useEffect(() => { commitRef.current = onCommit; }, [onCommit]);
+  const flush = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (pendingRef.current != null) {
+      const n = pendingRef.current;
+      pendingRef.current = null;
+      commitRef.current(n);
+    }
+  };
+  useEffect(() => () => flush(), []);   // 卸载（切课次/切 tab）兜底落库
 
   const clamp = (n: number) => {
     if (isNaN(n)) return 0;
@@ -117,7 +131,9 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
     const entered = parseFloat(raw);
     // 超限/非法时把输入框同步成落库值：否则用户看到 12、实际存的是 10，短暂误导
     setText(Number.isNaN(entered) ? raw : (n !== entered ? String(n) : raw));
-    onCommit(n);
+    pendingRef.current = n;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(flush, 260);
   };
 
   const handleBlur = () => {
@@ -126,20 +142,63 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
       // 空文本区分两种情形：
       //  · 原本未录入 → 保持「未录入」，不提交（若提交 0，hasQuizScores 会把调出学生误判成调入并进统计）
       //  · 原本有分数、用户主动清空 → 仍按 0 分提交，保留原有的「清零」能力
+      pendingRef.current = null;
       if (value > 0) onCommit(0);
       setText('');
       return;
     }
     const n = clamp(parseFloat(text));
     setText(n > 0 ? String(n) : '');
-    onCommit(n);
+    pendingRef.current = n;
+    flush();   // 失焦立即落库
   };
 
   return (
     <Input
-      type="text" inputMode="decimal" placeholder={placeholder} value={text}
-      onFocus={() => setFocused(true)} onChange={handleChange} onBlur={handleBlur}
+      type="text" inputMode="decimal" placeholder={placeholder} value={shown}
+      onFocus={() => { setText(value > 0 ? String(value) : ''); setFocused(true); }}
+      onChange={handleChange} onBlur={handleBlur}
       className={className}
+    />
+  );
+}
+
+/**
+ * 行内备注输入（调课原因等自由文本）：2026-10-23
+ * 原来 onChange 直接写库 → 每敲一个字都整表重算 + 重排 + 落库（40 人×20 课次时明显卡顿）。
+ * 现在本地即时显示、400ms 防抖落库，失焦/卸载立即 flush。
+ */
+function NoteInput({ value, onCommit, placeholder, className }: {
+  value: string; onCommit: (v: string) => void; placeholder?: string; className?: string;
+}) {
+  const [text, setText] = useState(value || '');
+  const [focused, setFocused] = useState(false);
+  const pendingRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commitRef = useRef(onCommit);
+  useEffect(() => { commitRef.current = onCommit; }, [onCommit]);
+  const flush = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (pendingRef.current != null) {
+      const v = pendingRef.current;
+      pendingRef.current = null;
+      commitRef.current(v);
+    }
+  };
+  useEffect(() => () => flush(), []);
+  const shown = focused ? text : (value || '');
+  return (
+    <Input
+      type="text" placeholder={placeholder} value={shown} className={className}
+      onFocus={() => { setText(value || ''); setFocused(true); }}
+      onChange={(e) => {
+        const v = e.target.value;
+        setText(v);
+        pendingRef.current = v;
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(flush, 400);
+      }}
+      onBlur={() => { setFocused(false); flush(); }}
     />
   );
 }
@@ -818,7 +877,7 @@ export function StudentTable({
                                   {attendanceOpts.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {transferred && <Input type="text" placeholder="调课原因" value={record?.adjustReason || ''} onChange={(e) => handleAdjustReasonChange(studentName, e.target.value)} className="w-24 h-7 text-sm rounded-lg" />}
+                              {transferred && <NoteInput placeholder="调课原因" value={record?.adjustReason || ''} onCommit={(v) => handleAdjustReasonChange(studentName, v)} className="w-24 h-7 text-sm rounded-lg" />}
                             </div>
                           </TableCell>
                           )}

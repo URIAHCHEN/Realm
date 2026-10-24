@@ -38,7 +38,7 @@ export const COLUMN_LABELS: { id: string; label: string; always?: boolean }[] = 
 
 /** layout 决定 App.css 里 [data-theme='xxx'] 的版式块：不只是换色，排版/圆角/分隔线一并变化 */
 export const THEME_PRESETS: { id: ThemeColor; name: string; accent: string; accentStrong: string; rgb: string; pageFrom: string; pageTo: string; layout?: string }[] = [
-  { id: 'blue', name: '海洋蓝', accent: '#0a84ff', accentStrong: '#0060df', rgb: '10 132 255', pageFrom: '#f5f7fa', pageTo: '#e8ecf1' },
+  { id: 'blue', name: '海洋蓝', accent: '#0a84ff', accentStrong: '#0060df', rgb: '10 132 255', pageFrom: '#f4f7fc', pageTo: '#e7eef7' },
   { id: 'purple', name: '星云紫', accent: '#7c5cff', accentStrong: '#5f3ee8', rgb: '124 92 255', pageFrom: '#f7f6fc', pageTo: '#ece9f5' },
   { id: 'teal', name: '青屿绿', accent: '#0fb5ae', accentStrong: '#0d8f89', rgb: '15 181 174', pageFrom: '#f4faf9', pageTo: '#e4f0ee' },
   { id: 'pink', name: '晨曦粉', accent: '#ff4d7d', accentStrong: '#e0335f', rgb: '255 77 125', pageFrom: '#fdf6f8', pageTo: '#f4e7ec' },

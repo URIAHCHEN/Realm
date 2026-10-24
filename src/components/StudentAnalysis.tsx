@@ -502,10 +502,10 @@ export function StudentAnalysis({
                       formatter={(value, name) => (name === '正确率' ? [`${value}%`, '正确率'] : [`${value} 分`, '总分'])}
                     />
                     <Legend wrapperStyle={LEGEND_STYLE} />
-                    <ReferenceLine yAxisId="rate" y={85} stroke="#10b981" strokeDasharray="4 4"
-                      label={{ value: '优秀线 85%', fontSize: 11, fill: '#10b981', position: 'insideTopRight' }} />
-                    <ReferenceLine yAxisId="rate" y={60} stroke="#f59e0b" strokeDasharray="4 4"
-                      label={{ value: '及格线 60%', fontSize: 11, fill: '#f59e0b', position: 'insideBottomRight' }} />
+                    <ReferenceLine yAxisId="rate" y={85} stroke="#7aa88f" strokeDasharray="4 4"
+                      label={{ value: '优秀线 85%', fontSize: 11, fill: '#7aa88f', position: 'insideTopRight' }} />
+                    <ReferenceLine yAxisId="rate" y={60} stroke="#c39a5f" strokeDasharray="4 4"
+                      label={{ value: '及格线 60%', fontSize: 11, fill: '#c39a5f', position: 'insideBottomRight' }} />
                     {rateAvg > 0 && (
                       <ReferenceLine yAxisId="rate" y={rateAvg} stroke="#94a3b8" strokeDasharray="2 4"
                         label={{ value: `本生均值 ${rateAvg}%`, fontSize: 11, fill: '#64748b', position: 'insideLeft' }} />
@@ -658,10 +658,10 @@ export function StudentAnalysis({
                       <YAxis domain={[0, 100]} unit="%" tick={AXIS_TICK} />
                       <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(value: number) => `${value}%`} />
                       <Legend wrapperStyle={LEGEND_STYLE_SM} />
-                      <ReferenceLine y={85} stroke="#10b981" strokeDasharray="4 4"
-                        label={{ value: '优秀 85%', fontSize: 10, fill: '#10b981', position: 'insideTopRight' }} />
-                      <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4"
-                        label={{ value: '及格 60%', fontSize: 10, fill: '#f59e0b', position: 'insideBottomRight' }} />
+                      <ReferenceLine y={85} stroke="#7aa88f" strokeDasharray="4 4"
+                        label={{ value: '优秀 85%', fontSize: 10, fill: '#7aa88f', position: 'insideTopRight' }} />
+                      <ReferenceLine y={60} stroke="#c39a5f" strokeDasharray="4 4"
+                        label={{ value: '及格 60%', fontSize: 10, fill: '#c39a5f', position: 'insideBottomRight' }} />
                       <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" stroke={CHART_NEUTRAL} strokeWidth={2} dot={{ r: 3 }} />
                       <Line {...CHART_ANIM} type="monotone" dataKey="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
                       <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" stroke="#0a84ff" strokeWidth={2.5} dot={{ r: 4 }} />
@@ -708,15 +708,15 @@ export function StudentAnalysis({
                       <YAxis type="category" dataKey="name" width={84} tick={AXIS_TICK_SM} />
                       <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} formatter={(value: number) => `${value}%`} />
                       <Legend wrapperStyle={LEGEND_STYLE_SM} />
-                      <ReferenceLine x={85} stroke="#10b981" strokeDasharray="4 4"
-                        label={{ value: '优秀85', fontSize: 10, fill: '#10b981', position: 'top' }} />
-                      <ReferenceLine x={60} stroke="#f59e0b" strokeDasharray="4 4"
-                        label={{ value: '及格60', fontSize: 10, fill: '#f59e0b', position: 'bottom' }} />
-                      <Bar {...CHART_ANIM} dataKey="本人" fill="rgb(var(--brand-rgb))" radius={[0, 5, 5, 0]} barSize={11}>
+                      <ReferenceLine x={85} stroke="#7aa88f" strokeDasharray="4 4"
+                        label={{ value: '优秀85', fontSize: 10, fill: '#7aa88f', position: 'top' }} />
+                      <ReferenceLine x={60} stroke="#c39a5f" strokeDasharray="4 4"
+                        label={{ value: '及格60', fontSize: 10, fill: '#c39a5f', position: 'bottom' }} />
+                      <Bar {...CHART_ANIM} dataKey="本人" fill="rgb(var(--brand-rgb) / 0.62)" radius={[0, 5, 5, 0]} barSize={11}>
                         <LabelList dataKey="本人" position="right" style={{ fontSize: 10.5, fill: '#334155', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} formatter={(v: number) => `${v}%`} />
                       </Bar>
                       {/* 班均改黄色（2026-10-16 用户指定）：与品牌蓝形成最大对比 */}
-                      <Bar {...CHART_ANIM} dataKey="班均" fill="#f59e0b" radius={[0, 5, 5, 0]} barSize={11} />
+                      <Bar {...CHART_ANIM} dataKey="班均" fill="#6f9e86" radius={[0, 5, 5, 0]} barSize={11} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -753,7 +753,7 @@ export function StudentAnalysis({
                         <XAxis dataKey="name" tick={AXIS_TICK} />
                         <YAxis domain={[0, 100]} tick={AXIS_TICK} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
-                        <Line {...CHART_ANIM} type="monotone" dataKey="得分率" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6' }} />
+                        <Line {...CHART_ANIM} type="monotone" dataKey="得分率" stroke="#8a7fae" strokeWidth={2.5} dot={{ r: 4, fill: '#8a7fae' }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

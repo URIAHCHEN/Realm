@@ -376,14 +376,14 @@ export function PersonalReportView({
               />
               <Legend />
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
-              <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
+              <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 大题型板块得分率（2026-10-16 并入）：按板块大类逐课次展开（类别从数据推导） */}
               {trendCategories.map(cat => (
                 <Line {...CHART_ANIM} key={cat.name} type="monotone" dataKey={cat.name} name={`${cat.name}得分率`} stroke={cat.color}
                   strokeWidth={1.8} strokeDasharray="5 3" dot={{ r: 2.5 }} connectNulls legendType="plainline" />
               ))}
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
-              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />}
+              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={22} />}
               {trendType === 'line' && <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
               {trendType === 'area' && <Area {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
               {/* 班级对比线：定位"自己在班里什么位置" */}
@@ -413,12 +413,12 @@ export function PersonalReportView({
                 formatter={(v: number | string, n: string) => [n === '正确率%' ? `${v}%` : `${v} 分`, n]}
               />
               <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
-              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
+              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#c39a5f" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
               {scoreCategories.map(cat => (
                 <Bar {...CHART_ANIM} key={cat.name} yAxisId="l" dataKey={cat.name} name={cat.name} stackId="score" fill={cat.color} maxBarSize={38} />
               ))}
               {showCorrectRate && (
-                <Line {...CHART_ANIM} yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#0ea5e9" strokeWidth={2.5}
+                <Line {...CHART_ANIM} yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#5f8fb0" strokeWidth={2.5}
                   dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}>
                   <LabelList dataKey="correctRate" position="bottom" style={{ fontSize: 10, fill: '#0369a1' }} />
                 </Line>

@@ -79,6 +79,8 @@ export interface LessonConfig {
   customFields?: CustomField[];
   /** 固定列自定义标题，如将"课后任务"改为其他名称 */
   columnLabels?: ColumnLabels;
+  /** 本课次隐藏的列（列 id 见 lib/displaySettings 的 COLUMN_LABELS；全局显示设置之上再收一层） */
+  hiddenColumns?: string[];
   /** 过关正确率阈值（百分比），达到或超过判定为过关；默认 80 */
   passThreshold?: number;
 }

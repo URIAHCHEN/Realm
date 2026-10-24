@@ -224,7 +224,9 @@ export function StudentTable({
   const [bulkValue, setBulkValue] = useState('');
   const [bulkQtId, setBulkQtId] = useState('');
   const { settings } = useDisplaySettings();
-  const col = (id: string) => isColumnVisible(settings, id);
+  // 列显隐 = 全局显示设置 ∩ 本课次隐藏列表（2026-10-24：支持"这一课不看课堂表现"这类按课次收列）
+  const hiddenByLesson = lessonConfig.hiddenColumns || [];
+  const col = (id: string) => isColumnVisible(settings, id) && !hiddenByLesson.includes(id);
   const customFields = useMemo(() => lessonConfig.customFields || [], [lessonConfig.customFields]);
 
   // 自动隐藏「本课无数据」的列：导入的表格没出现的题型/自定义列不再占位置。

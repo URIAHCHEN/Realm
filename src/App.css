@@ -3319,3 +3319,73 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .poster-frame > * { transform: none !important; transition: none; }
 }
+
+
+/* ==================== 视觉升级 v9 · 旗舰化第三轮（2026-10-24） ====================
+   ① 弹窗内 tab 白底白字修复 ② 灰底统一为低饱和蓝调 ③ 骨架屏更大更柔和
+   ④ 学情报告 KPI 与学员分析弹窗同一套语言 ⑤ 参考线/柱色降饱和后统一 */
+
+/* ① 弹窗内 tab：白底必须深字（修"生成设置"里选中项看不见） */
+[role="dialog"] [role="tab"][data-state="active"],
+[role="dialog"] .ios-tab-trigger[data-state="active"] {
+  color: var(--ink) !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.10), inset 0 0 0 1px rgba(255, 255, 255, 0.7) !important;
+}
+
+/* ② 灰底统一：汇总行/分段控件等从"中性灰"改为品牌低饱和底（跟随主题色相，但只有 3% 左右） */
+.class-stats-row > td,
+.class-stats-row > th { background: rgb(var(--brand-rgb) / 0.035) !important; }
+.mode-seg { background: rgb(var(--brand-rgb) / 0.05); }
+/* 表格表头：极淡品牌底，替代纯灰 */
+.data-table thead th { background: rgba(255, 255, 255, 0.82) !important; }
+
+/* ③ 骨架屏：从"小卡片"改为"内容画布"，尺寸更大、投影更轻 */
+.module-skeleton {
+  max-width: 880px;
+  min-height: 380px;
+  padding: 34px 32px;
+  border-radius: 24px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px -18px rgb(15 23 42 / 0.12);
+  margin: 32px auto;
+}
+.module-skeleton .sk-title { height: 20px; width: 38%; margin-bottom: 22px; }
+.module-skeleton .sk-line { height: 14px; margin-bottom: 14px; }
+.module-skeleton .sk-caption { margin-top: 20px; font-size: 13px; }
+.dark .module-skeleton { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+
+/* ④ 学情报告 KPI：与学员分析弹窗统一（亚克力小卡 + 左对齐 + Outfit 数字） */
+.report-container .report-info-item,
+.report-info-item {
+  background: rgba(255, 255, 255, 0.66) !important;
+  border: 1px solid rgb(var(--brand-rgb) / 0.10) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  padding: 16px 18px !important;
+  text-align: left !important;
+}
+.report-container .report-info-label,
+.report-info-label { font-size: 12px !important; color: var(--ink-4) !important; margin-bottom: 2px; }
+.report-container .report-info-value,
+.report-info-value {
+  font-family: var(--font-display);
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  color: var(--ink) !important;
+  line-height: 1.15;
+}
+.dark .report-container .report-info-item,
+.dark .report-info-item {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* ⑤ Switch 轨道：--input 未定义时轨道解析成白色 → 开关看起来"只有白色圆点"（2026-10-24 修） */
+[data-slot="switch"][data-state="unchecked"] { background: rgba(15, 23, 42, 0.16) !important; }
+[data-slot="switch"][data-state="checked"] { background: rgb(var(--brand-rgb)) !important; }
+[data-slot="switch"] {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 1px 2px rgb(15 23 42 / 0.06);
+}
+.dark [data-slot="switch"][data-state="unchecked"] { background: rgba(255, 255, 255, 0.20) !important; }

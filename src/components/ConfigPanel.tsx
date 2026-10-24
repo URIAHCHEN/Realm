@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Eye, EyeOff } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import type { QuestionType, LessonConfig, AppConfig, OralBand } from '@/types';
 import { inferCategory } from '@/lib/weakPoints';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
+import { COLUMN_LABELS } from '@/lib/displaySettings';
 import { DEFAULT_ORAL_RATING, normalizeOralRating, oralRatingForEditing } from '@/lib/oralRating';
 
 /** 默认选项可编辑列表（新增/删除），用于「默认配置」页 */
@@ -313,6 +314,7 @@ export function ConfigPanel({
   // —— 自定义列 customFields 管理 ——
   const [newCustomField, setNewCustomField] = useState<{ name: string; kind: 'select' | 'number' }>({ name: '', kind: 'select' });
   const customFieldsOf = () => localLessonConfig.customFields || [];
+  const hiddenCols = localLessonConfig.hiddenColumns || [];
   const handleAddCustomField = () => {
     const name = newCustomField.name.trim();
     if (!name) return;
@@ -604,6 +606,40 @@ export function ConfigPanel({
             </div>
 
             <Separator className="bg-[rgb(var(--brand-rgb)/0.15)]" />
+
+            {/* 本课次列显隐（2026-10-24）：只影响当前课次，解决"这一课不需要课堂表现/课后任务"的诉求 */}
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium text-[color:var(--brand)]">本课次列显隐</Label>
+                <span className="text-xs text-slate-400">已隐藏 {hiddenCols.length} 列</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 mb-2">点一下隐藏该列（只影响第 {lessonNumber} 课），再点恢复；排名、姓名、题型得分、总分始终显示。</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {COLUMN_LABELS.filter(c => !c.always).map(c => {
+                  const hidden = hiddenCols.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={hidden}
+                      onClick={() => {
+                        const next = hidden ? hiddenCols.filter(x => x !== c.id) : [...hiddenCols, c.id];
+                        setLocalLessonConfig(prev => ({ ...prev, hiddenColumns: next }));
+                        onSaveLessonConfig(lessonNumber, { hiddenColumns: next });
+                      }}
+                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs border transition-all ${
+                        hidden
+                          ? 'bg-black/[0.04] text-slate-400 border-transparent line-through'
+                          : 'bg-white text-[color:var(--ink-2)] border-[rgb(var(--brand-rgb)/0.22)] hover:border-[rgb(var(--brand-rgb)/0.45)]'
+                      }`}
+                    >
+                      {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* 列标题自定义（支持新增 / 编辑 / 清除） */}
             <div>

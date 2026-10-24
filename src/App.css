@@ -2113,10 +2113,10 @@ html, body { overflow-x: hidden; }
 
 /* 数据表里的负面评价高亮（未完成/请假/迟到/缺勤/未交…） */
 .opt-negative {
-  background: #fff1f2 !important;
-  border-color: #fda4af !important;
+  background: rgba(244, 63, 94, 0.06) !important;
+  border-color: rgba(244, 63, 94, 0.28) !important;
   color: #be123c !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
 }
 .opt-negative svg { color: #e11d48 !important; }
 
@@ -2441,15 +2441,17 @@ html[data-exporting] * { animation: none !important; }
 .data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.045) !important; }
 .dark .data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.09) !important; }
 .data-table td:has(.opt-negative) .opt-negative {
-  background: rgba(244, 63, 94, 0.10) !important;
-  border-color: rgba(244, 63, 94, 0.26) !important;
+  background: rgba(244, 63, 94, 0.05) !important;
+  border-color: rgba(244, 63, 94, 0.24) !important;
   color: #b91c1c !important;
-  font-weight: 700 !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
 }
 .dark .data-table td:has(.opt-negative) .opt-negative {
-  background: rgba(244, 63, 94, 0.18) !important;
-  border-color: rgba(244, 63, 94, 0.40) !important;
+  background: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(244, 63, 94, 0.32) !important;
   color: #fda4af !important;
+  font-weight: 500 !important;
 }
 
 /* ====================================================================
@@ -3239,4 +3241,81 @@ h1, h2, h3,
 .dark .module-skeleton { background: rgba(255, 255, 255, 0.05); }
 @media (prefers-reduced-motion: reduce) {
   .module-skeleton .sk-title, .module-skeleton .sk-line { animation: none; }
+}
+
+
+/* ==================== 视觉升级 v8 · 旗舰化第二轮（2026-10-24） ====================
+   ① 负向胶囊去刺眼（淡底细边，不要红块+红边+粗体叠加）
+   ② KPI 统一品牌风（sa-kpi）
+   ③ 学情表工具条「灵动岛」吸顶
+   ④ 表扬榜海报沉浸式视差 */
+
+/* ① 负向状态：淡玫瑰底 + 细边 + 正常字重，不再"红底红边加粗" */
+.opt-negative {
+  background: rgba(244, 63, 94, 0.06) !important;
+  border-color: rgba(244, 63, 94, 0.28) !important;
+  color: #be123c !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+.opt-negative svg { color: #e11d48 !important; }
+.data-table td:has(.opt-negative) { background: rgba(244, 63, 94, 0.02) !important; }
+.dark .opt-negative {
+  background: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(244, 63, 94, 0.32) !important;
+  color: #fda4af !important;
+}
+
+/* ② KPI 统一品牌风：亚克力小卡 + 品牌色图标块 + Outfit 数字（替代多彩渐变方块） */
+.sa-kpi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgb(var(--brand-rgb) / 0.10);
+  box-shadow: var(--elev-1);
+}
+.sa-kpi-ico {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: rgb(var(--brand-rgb) / 0.12);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sa-kpi-ico svg { color: rgb(var(--brand-rgb)) !important; }
+.sa-kpi-label { font-size: 12px; color: var(--ink-4); margin: 0; }
+.sa-kpi-value {
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 800;
+  color: var(--ink);
+  line-height: 1.15;
+  margin: 0;
+}
+.sa-kpi-sub { font-size: 12px; font-weight: 500; color: var(--ink-4); margin-left: 4px; }
+.dark .sa-kpi { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.10); }
+
+/* ③ 工具条「灵动岛」：滚动时吸顶悬浮（顶栏 64px + 12px 间距），带磨砂与悬浮阴影 */
+.ops-capsule {
+  position: sticky;
+  top: 76px;
+  z-index: 30;
+  box-shadow: var(--elev-2), inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 10px 28px -12px rgb(var(--brand-rgb) / 0.18);
+}
+/* 顶栏是 sticky top-0 z-50，胶囊 z-30 不压顶栏 */
+
+/* ④ 海报沉浸式视差：微弱 3D 跟随（±3deg），过渡平滑；导出与减弱动效归零 */
+.poster-frame { perspective: 1200px; }
+.poster-frame > * {
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 240ms ease-out;
+  will-change: transform;
+}
+html[data-exporting] .poster-frame > * { transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .poster-frame > * { transform: none !important; transition: none; }
 }

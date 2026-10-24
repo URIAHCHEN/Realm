@@ -88,12 +88,14 @@ const listeningBadge = (status: string, score?: number) => (
 
 // KPI 卡片
 function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; tone: string }) {
+  // 2026-10-24：多彩渐变方块改为统一品牌风（tone 仅保留签名兼容，不再决定配色）
+  void tone;
   return (
-    <div className="rounded-2xl bg-white/70 backdrop-blur border border-black/5 p-4 flex items-center gap-3 shadow-sm">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tone}`}>{icon}</div>
+    <div className="sa-kpi">
+      <div className="sa-kpi-ico">{icon}</div>
       <div className="min-w-0">
-        <p className="text-xs text-slate-400 font-medium">{label}</p>
-        <p className="text-xl font-bold text-slate-800 leading-tight">{value}<span className="text-xs font-medium text-slate-400 ml-1">{sub}</span></p>
+        <p className="sa-kpi-label">{label}</p>
+        <p className="sa-kpi-value">{value}<span className="sa-kpi-sub">{sub}</span></p>
       </div>
     </div>
   );
@@ -508,7 +510,13 @@ export function StudentAnalysis({
                       <ReferenceLine yAxisId="rate" y={rateAvg} stroke="#94a3b8" strokeDasharray="2 4"
                         label={{ value: `本生均值 ${rateAvg}%`, fontSize: 11, fill: '#64748b', position: 'insideLeft' }} />
                     )}
-                    <Bar {...CHART_ANIM} yAxisId="score" dataKey="总分" fill="rgb(var(--brand-rgb) / 0.55)" radius={[6, 6, 0, 0]} barSize={22} />
+                    <defs>
+                      <linearGradient id="saBarGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.85} />
+                        <stop offset="100%" stopColor="rgb(var(--brand-rgb))" stopOpacity={0.42} />
+                      </linearGradient>
+                    </defs>
+                    <Bar {...CHART_ANIM} yAxisId="score" dataKey="总分" fill="url(#saBarGrad)" radius={[6, 6, 0, 0]} barSize={22} />
                     <Line {...CHART_ANIM} yAxisId="rate" type="monotone" dataKey="正确率" stroke={CHART_GOOD} strokeWidth={2.5} dot={{ r: 4, fill: CHART_GOOD }} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -524,10 +532,10 @@ export function StudentAnalysis({
                 <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
-                      <PolarGrid stroke="#e2e8f0" />
+                      <PolarGrid stroke="rgba(15,23,42,0.07)" />
                       <PolarAngleAxis dataKey="subject" tick={AXIS_TICK_SM} />
                       <PolarRadiusAxis domain={[0, 100]} tick={AXIS_TICK_XS} angle={30} />
-                      <Radar {...CHART_ANIM} name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.9)" fill="rgb(var(--brand-rgb) / 0.25)" strokeWidth={2} />
+                      <Radar {...CHART_ANIM} name="得分率%" dataKey="得分率" stroke="rgb(var(--brand-rgb) / 0.85)" fill="rgb(var(--brand-rgb) / 0.20)" strokeWidth={2} />
                       <Tooltip contentStyle={tooltipStyle} labelStyle={TOOLTIP_LABEL} />
                     </RadarChart>
                   </ResponsiveContainer>

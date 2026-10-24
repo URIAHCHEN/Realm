@@ -473,6 +473,7 @@ export function Leaderboard({
 
   // 导出当前榜单为图片（过滤控制栏与彩带层，保证完整清晰）
   const handleExportImage = async () => {
+    resetPosterTilt();
     setShowExportMenu(false);
     if (!leaderboardRef.current || isExportingImage) return;
     setIsExportingImage(true);
@@ -504,6 +505,25 @@ export function Leaderboard({
   };
 
   const fullScore = getLessonFullScore(lessonConfig);
+
+  // 海报沉浸式视差（2026-10-24）：微弱 3D 跟随，只在精确指针设备生效；
+  // 导出/减弱动效时归零（html[data-exporting] 与 prefers-reduced-motion 都有守卫）
+  const posterFrameRef = useRef<HTMLDivElement>(null);
+  const resetPosterTilt = () => {
+    posterFrameRef.current?.style.setProperty('--tilt-x', '0deg');
+    posterFrameRef.current?.style.setProperty('--tilt-y', '0deg');
+  };
+  const handlePosterMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = posterFrameRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - 0.5;
+    const y = (e.clientY - r.top) / r.height - 0.5;
+    el.style.setProperty('--tilt-x', `${(-y * 3).toFixed(2)}deg`);
+    el.style.setProperty('--tilt-y', `${(x * 3).toFixed(2)}deg`);
+  };
 
   // 渲染主内容
   const renderContent = () => {
@@ -922,7 +942,7 @@ export function Leaderboard({
       </div>
 
       {/* 榜单内容：装裱外框（导出时仅导出内层，不带外框） */}
-      <div className="poster-frame" data-h2c-ignore="false">
+      <div className="poster-frame" ref={posterFrameRef} onMouseMove={handlePosterMove} onMouseLeave={resetPosterTilt}>
         {renderContent()}
       </div>
     </div>

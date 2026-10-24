@@ -2939,3 +2939,61 @@ textarea:focus-visible,
 .dark * { scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
 .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+
+/* ==================== 视觉升级 v6 · 全局 Layout 与材质（2026-10-24） ====================
+   激进版（用户授权）：底层微光极光 + 亚克力卡片 + 品牌弥散阴影 + Outfit 数字字体。
+   红线：mono 主题保持扁平、暗色单独配方、导出链路与性能不动。 */
+:root {
+  --radius-glass: 24px;
+  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+}
+
+/* ① 底层极光（只铺在页面最底层）：三团低透明品牌色径向渐变，随视口固定（background-attachment: fixed）
+   —— 长页滚动时玻璃卡片折射的仍是同一层光，而不是"背景在跑"。 */
+:root:not([data-theme='mono']) .ios-glass-bg {
+  background:
+    radial-gradient(60% 42% at 8% -6%, rgb(var(--brand-rgb) / 0.10), transparent 62%),
+    radial-gradient(48% 36% at 96% 8%, rgb(var(--brand-rgb) / 0.07), transparent 60%),
+    radial-gradient(70% 46% at 50% 108%, rgb(var(--brand-rgb) / 0.06), transparent 64%),
+    linear-gradient(180deg, var(--page-from) 0%, var(--page-to) 100%);
+  background-attachment: fixed;
+}
+.dark .ios-glass-bg {
+  background:
+    radial-gradient(60% 42% at 8% -6%, rgb(var(--brand-rgb) / 0.16), transparent 62%),
+    radial-gradient(48% 36% at 96% 8%, rgb(var(--brand-rgb) / 0.12), transparent 60%),
+    radial-gradient(70% 46% at 50% 108%, rgb(var(--brand-rgb) / 0.10), transparent 64%),
+    linear-gradient(180deg, #0b0e14 0%, #0e141c 100%) !important;
+  background-attachment: fixed;
+}
+
+/* ② 亚克力卡片：更高模糊 + 1px 内侧高光线（亚克力边缘光）+ 品牌弥散阴影（替代灰黑大阴影） */
+:root:not([data-theme='mono']) {
+  --glass-bg: rgba(255, 255, 255, 0.70);
+  --glass-blur: blur(32px) saturate(160%);
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 10px 32px -10px rgb(var(--brand-rgb) / 0.16);
+}
+/* 暗色：不是简单反色 —— 深蓝灰底 + 5% 白玻璃 + 10% 白描边 + 同色弱环境光 */
+.dark [data-slot="card"], .dark .liquid-glass-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 32px -12px rgba(0, 0, 0, 0.5),
+    0 10px 30px -14px rgb(var(--brand-rgb) / 0.18) !important;
+}
+
+/* ③ 数字与标题的性格：Outfit（拉丁/数字），中文回落苹方；mono 主题的等宽字体规则特异度更高，自动不受影响 */
+h1, h2, h3,
+.report-info-value, .report-info-label,
+.praise-kpi-value,
+.data-table td, .data-table th, .data-table input,
+.class-stats-row td,
+.tnum, .tnum input {
+  font-family: var(--font-display);
+}

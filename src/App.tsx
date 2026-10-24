@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
+import { resolveCategory } from '@/lib/weakPoints';
 import { LoginPage } from '@/components/LoginPage';
 import { getCachedSession, signOut, subscribeSession } from '@/lib/auth';
 import { BrandMark } from '@/components/BrandMark';
@@ -461,6 +462,21 @@ function App() {
     });
     return { ...fromConfigs, ...(appConfig.qtCategoryOverrides || {}) };
   }, [classes, appConfig.qtCategoryOverrides]);
+
+  // 未归类题型巡检（2026-10-24）：全课次扫一遍，报告页给出提示并可直接去归类
+  const unclassifiedByLesson = useMemo(() => {
+    const cls = classes[currentClassId || ''];
+    if (!cls) return [] as { lesson: number; names: string[] }[];
+    return Object.entries(cls.lessonConfigs)
+      .map(([lessonKey, cfg]) => ({
+        lesson: Number(lessonKey),
+        names: (cfg.questionTypes || [])
+          .filter(qt => resolveCategory(qt, effectiveQtCategories) === '其他')
+          .map(qt => qt.name),
+      }))
+      .filter(x => x.names.length > 0)
+      .sort((a, b) => a.lesson - b.lesson);
+  }, [classes, currentClassId, effectiveQtCategories]);
 
   // 获取当前数据
   // memo 化：getCurrentLessonRecords()/getAllLessons() 每次都返回新数组，
@@ -1064,6 +1080,7 @@ function App() {
                   getPublicityHTML={() => currentClass ? exportToHTML(currentClass.id, currentLessonNumber, displaySettings.settings.exportStyle) : ''}
                   onViewStudentAnalysis={handleViewStudentAnalysis}
                   onCopyStudentFeedback={handleCopyStudentFeedback}
+                  qtCategoryOverrides={effectiveQtCategories}
                   lessonBar={(
                     <LessonManager
                       compact
@@ -1141,6 +1158,7 @@ function App() {
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
               onViewStudent={handleViewStudentAnalysis}
+              qtCategoryOverrides={effectiveQtCategories}
               viewSwitch={(
                 <div className="mode-seg mode-seg--sm" role="tablist" aria-label="反馈视图">
                   <button role="tab" aria-selected={!showLibrary} className={`mode-seg-item ${!showLibrary ? 'is-active' : ''}`} onClick={() => setFeedbackView('generate')}>反馈生成</button>
@@ -1162,6 +1180,24 @@ function App() {
 
           {/* 学情报告 Tab（懒加载：仅切到本 Tab 时才加载图表与截图依赖） */}
           <TabsContent value="report" className="main-tab-panel">
+            {unclassifiedByLesson.length > 0 && (
+              <div className="cat-hint mb-3">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 min-w-0">
+                  有 {unclassifiedByLesson.reduce((n, x) => n + x.names.length, 0)} 个题型还没归类（
+                  {unclassifiedByLesson.map(x => `第${x.lesson}课 ${x.names.join('、')}`).join('；')}
+                  ），它们会被算进「其他」，影响报告与反馈的板块统计。
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentLessonNumber(unclassifiedByLesson[0].lesson);
+                    setActiveTab('records');
+                    setShowGenerateSettings(true);
+                  }}
+                >去归类</button>
+              </div>
+            )}
             <div className="mb-4">
               <div className="mode-seg" role="tablist" aria-label="报告视图">
                 <button role="tab" aria-selected={reportView === 'report'} className={`mode-seg-item ${reportView === 'report' ? 'is-active' : ''}`} onClick={() => setReportView('report')}>学情报告</button>

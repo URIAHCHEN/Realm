@@ -11,6 +11,8 @@ export function longTermWeakCategories(
   records: StudentRecord[],
   lessonConfigs: { [lesson: string]: LessonConfig } | undefined,
   max = 2,
+  /** 题型名 → 板块覆盖（与报告/表格同口径） */
+  categoryOverrides?: Record<string, string>,
 ): string[] {
   if (!lessonConfigs) return [];
   const acc = new Map<string, { s: number; f: number }>();
@@ -22,7 +24,7 @@ export function longTermWeakCategories(
       if (qt.excludeFromTotal) return;
       const v = r.scores?.[qt.id];
       if (typeof v !== 'number' || !Number.isFinite(v)) return;
-      const cat = categoryOf(qt.name).name;
+      const cat = categoryOf(qt.name, categoryOverrides).name;
       const b = acc.get(cat) || { s: 0, f: 0 };
       b.s += v;
       b.f += Number(qt.fullScore) || 0;

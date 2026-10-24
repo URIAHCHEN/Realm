@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Save, Settings, GripVertical, ChevronUp, ChevronDown, Variable, Eye, EyeOff } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import type { QuestionType, LessonConfig, AppConfig, OralBand } from '@/types';
-import { inferCategory } from '@/lib/weakPoints';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS } from '@/hooks/useClassData';
 import { COLUMN_LABELS } from '@/lib/displaySettings';
+import { CATEGORY_PRESETS, resolveCategory } from '@/lib/weakPoints';
 import { DEFAULT_ORAL_RATING, normalizeOralRating, oralRatingForEditing } from '@/lib/oralRating';
 
 /** 默认选项可编辑列表（新增/删除），用于「默认配置」页 */
@@ -407,7 +407,15 @@ export function ConfigPanel({
 
             {/* 列标题自定义（自动同步当前记录表所有固定列） */}
             <div>
-              <Label className="text-base font-medium text-[color:var(--brand)]">题型配置</Label>
+              <Label className="text-base font-medium text-[color:var(--brand)] flex items-center gap-2">
+                题型配置
+                {(() => {
+                  const n = localLessonConfig.questionTypes.filter(t => resolveCategory(t) === '其他').length;
+                  return n > 0
+                    ? <span className="text-[11px] font-normal px-2 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,.14)', color: '#b45309' }}>{n} 个未归类</span>
+                    : null;
+                })()}
+              </Label>
               <div className="space-y-2 mt-2">
                 {localLessonConfig.questionTypes.map((qt, i) => (
                   <div key={qt.id} className="flex items-center gap-3 bg-white/70 p-3 rounded-xl border border-[rgb(var(--brand-rgb)/0.22)]">
@@ -448,8 +456,9 @@ export function ConfigPanel({
                       <Input
                         list="qt-category-options"
                         value={qt.category || ''}
-                        placeholder={inferCategory(qt)}
-                        title="留空则按题型名称自动归类"
+                        placeholder={resolveCategory(qt) === '其他' ? '未归类' : resolveCategory(qt)}
+                        title={resolveCategory(qt) === '其他' ? '按名称没能识别板块：请从这里选一个（会影响报告与反馈的板块统计）' : '留空则按题型名称自动归类'}
+                        style={resolveCategory(qt) === '其他' ? { borderColor: 'rgba(245,158,11,.55)', background: 'rgba(245,158,11,.06)' } : undefined}
                         onChange={(e) => {
                           const cat = e.target.value;
                           setLocalLessonConfig(prev => ({
@@ -464,8 +473,8 @@ export function ConfigPanel({
                     </div>
                     <datalist id="qt-category-options">
                       {Array.from(new Set([
-                        '语法', '词汇', '阅读', '完形', '写作', '听力', '口语',
-                        ...localLessonConfig.questionTypes.map(t => inferCategory(t)),
+                        ...CATEGORY_PRESETS,
+                        ...localLessonConfig.questionTypes.map(t => resolveCategory(t)).filter(c => c !== '其他'),
                       ])).map(c => <option key={c} value={c} />)}
                     </datalist>
                     <div className="flex gap-1">

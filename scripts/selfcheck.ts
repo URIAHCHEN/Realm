@@ -8,7 +8,7 @@ import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
-import { computeCategoryWeakPoints } from '@/lib/weakPoints';
+import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
@@ -603,6 +603,23 @@ group('反馈占位符兜底');
   );
   check(named.includes('诗钰家长好'), '称呼用短昵称（诗钰家长好）');
   check(!named.includes('郭诗钰家长好'), '称呼不出现全名');
+}
+
+// ============ 题型归类：常见题型必须归到正确板块（2026-10-24 用户反馈"其他"） ============
+group('题型板块归类');
+{
+  const cases: Array<[string, string]> = [
+    ['语法选择', '语法'], ['单项选择', '语法'], ['语篇填词', '语法'], ['句型转换', '写作'],
+    ['完形填空', '完形'], ['七选五', '阅读'], ['任务型阅读', '阅读'], ['信息匹配', '阅读'],
+    ['书面表达', '写作'], ['单词拼写', '词汇'], ['笔记默写', '词汇'], ['听写句子', '听力'], ['情景对话', '口语'],
+  ];
+  cases.forEach(([name, expect]) => {
+    check(inferCategoryByName(name) === expect, `归类：${name} → ${expect}（实际 ${inferCategoryByName(name)}）`);
+  });
+  check(inferCategoryByName('课堂小测') === '其他', '归类：无法识别时兜底「其他」');
+  check(isCategoryResolved({ id: 'x', name: '课堂小测', fullScore: 10, order: 0 } as unknown as import('@/types').QuestionType) === false, '归类：无法识别 → 视为未归类（触发提示）');
+  check(isCategoryResolved({ id: 'x', name: '课堂小测', fullScore: 10, order: 0, category: '语法' } as unknown as import('@/types').QuestionType) === true, '归类：人工指定后视为已归类');
+  check(resolveCategory({ id: 'x', name: '课堂小测', fullScore: 10, order: 0 } as unknown as import('@/types').QuestionType, { 课堂小测: '阅读' }) === '阅读', '归类：名称覆盖表优先于兜底');
 }
 
 // ============ 薄弱项口径：未登记题型不得参与（2026-10-24 用户反馈） ============

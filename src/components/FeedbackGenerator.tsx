@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText, Copy, Check, Wand2, Users, ClipboardList,
-  CircleAlert, RotateCcw, Send, Sparkles, Table2, Lightbulb, FileSpreadsheet } from 'lucide-react';
+  CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
@@ -53,6 +53,8 @@ interface FeedbackGeneratorProps {
   onViewStudent?: (name: string) => void;
   /** 视图切换（反馈生成 / 反馈素材），并入工具栏，避免单独一行灰 pill */
   viewSwitch?: React.ReactNode;
+  /** 题型名 → 板块覆盖（appConfig.qtCategoryOverrides）：让反馈的薄弱项与报告同口径 */
+  qtCategoryOverrides?: Record<string, string>;
   /** 班级名（仅用于导出文件名） */
   className?: string;
 }
@@ -62,7 +64,7 @@ type StatusTone = 'none' | 'generated' | 'copied';
 export function FeedbackGenerator({
   students,
   records,
-  lessonConfig,
+  lessonConfig: lessonConfigProp,
   lessonNumber,
   getNickname,
   calculateClassStats,
@@ -72,8 +74,19 @@ export function FeedbackGenerator({
   onSaveLessonConfig,
   onViewStudent,
   viewSwitch,
+  qtCategoryOverrides,
   className
 }: FeedbackGeneratorProps) {
+  // 2026-10-24：把「题型名 → 板块」覆盖表注入题型，下游（薄弱项/长期弱项/建议）与报告完全同口径，
+  // 避免同一个题型在报告里是"语法"、在反馈里变成"其他"
+  const lessonConfig = useMemo(() => ({
+    ...lessonConfigProp,
+    questionTypes: (lessonConfigProp.questionTypes || []).map(qt => ({
+      ...qt,
+      category: qt.category?.trim() || qtCategoryOverrides?.[qt.name || ''] || '',
+    })),
+  }), [lessonConfigProp, qtCategoryOverrides]);
+
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [copiedSet, setCopiedSet] = useState<Set<string>>(new Set());
@@ -139,9 +152,9 @@ export function FeedbackGenerator({
   // 长期薄弱板块（跨课次）：给「附参考教辅」挑资料用；按学生缓存，避免每次生成重算
   const weakByStudent = useMemo(() => {
     const map = new Map<string, string[]>();
-    recordsByName.forEach((recs, name) => map.set(name, longTermWeakCategories(recs, lessonConfigs)));
+    recordsByName.forEach((recs, name) => map.set(name, longTermWeakCategories(recs, lessonConfigs, 2, qtCategoryOverrides)));
     return map;
-  }, [recordsByName, lessonConfigs]);
+  }, [recordsByName, lessonConfigs, qtCategoryOverrides]);
   const weakOf = (name: string): string[] => weakByStudent.get(name) || [];
 
   const generateFor = (name: string): string | null => {
@@ -294,30 +307,7 @@ export function FeedbackGenerator({
   }, [students, recordsByName, records, lessonConfigs, lessonConfig]);
 
   // 一键复制某生的学习建议（精简版）
-  const handleCopyAdvice = async (name: string) => {
-    const rec = recordOf(name);
-    if (!rec || !isQuizAssessed(rec)) { toast.error('本课不在课（请假/缺勤/调课调出），无法生成学习建议'); return; }
-    const text = adviceMap[name];
-    if (!text) { toast.error('暂无可复制的学习建议'); return; }
-    const ok = await copyToClipboard(text);
-    if (ok) toast.success(`已复制 ${getNickname(name)} 的学习建议（精简版）`);
-    else toast.error('复制失败，请手动选择复制');
-  };
-
   // 一键复制全班学习建议（学生 | 学习建议 两列表格）
-  const handleCopyAdviceBatch = async () => {
-    const rows = students
-      .map(name => ({ name, rec: recordOf(name) }))
-      .filter(x => x.rec && isQuizAssessed(x.rec))
-      .map(x => ({ name: x.name, text: adviceMap[x.name] || '' }))
-      .filter(x => x.text);
-    if (rows.length === 0) { toast.error('没有可复制的学习建议（本课暂无到课学员）'); return; }
-    const text = buildTsvTable(['学生姓名', '学习建议'], rows.map(r => [getNickname(r.name), r.text]));
-    const ok = await copyToClipboard(text);
-    if (ok) toast.success(`已复制 ${rows.length} 位学员的学习建议（两列表格）`);
-    else toast.error('复制失败，请手动选择复制');
-  };
-
   // 群发预览：仅含有记录且非请假/缺勤的学员；内容按当前模板（课次配置/默认/界面修改后的草稿）实时生成
   // 注意：withMaterials 必须进依赖 —— 否则取消勾选「附参考教辅」后群发预览仍带旧文本（历史缺陷）
   const batchRows = useMemo(() => {
@@ -351,33 +341,6 @@ export function FeedbackGenerator({
   const excludedAbsentCount = absentNames.length;
 
   // 一键复制全班（表格）：一列学生 / 一列私发 / 一列四个一，直接粘进表格即可对照
-  const handleCopyBatchTable = async () => {
-    if (batchRows.length === 0) {
-      toast.error('本课还没有可复制的反馈（到课学员暂无记录）');
-      return;
-    }
-    const rows = batchRows.map(r => {
-      const rec = recordOf(r.name);
-      const privateText = rec ? generatePersonalFeedback(rec, lessonConfig, stats, getNickname(r.name), draftFeedback, oralRating, { '【学习建议】': adviceMap[r.name] || '' }) : '';
-      const fourInOneText = rec
-        ? generateFourInOne(rec, lessonConfig, stats, getNickname(r.name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[r.name] || '' }, weakOf(r.name))
-        : '';
-      return [getNickname(r.name), privateText, fourInOneText];
-    });
-    const text = buildTsvTable(['学生姓名', '私发反馈', '四个一反馈'], rows);
-    const ok = await copyToClipboard(text);
-    if (ok) {
-      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
-      toast.success(`已复制 ${rows.length} 位学员的对照表（学生 / 私发 / 四个一）`, {
-        description: excludedNames.length
-          ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}`
-          : '粘贴到表格即可按列对照；含多行的反馈会整体落在一个单元格内',
-      });
-    } else {
-      toast.error('复制失败，请手动选择复制');
-    }
-  };
-
   // 一键复制全班（单列）：按当前模式只导出私发或只导出四个一
   const handleCopyBatchSingle = async () => {
     if (batchRows.length === 0) {
@@ -540,15 +503,6 @@ export function FeedbackGenerator({
               </Button>
               <Button
                 variant="outline"
-                className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]"
-                onClick={handleCopyBatchTable}
-                title="一列学生、一列私发、一列四个一；粘贴到 Excel / 腾讯文档即成对照表"
-              >
-                <Table2 className="w-4 h-4" />
-                复制对照表
-              </Button>
-              <Button
-                variant="outline"
                 className={`h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] ${elfOpen ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}
                 onClick={() => setElfOpen(v => !v)}
                 title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
@@ -560,11 +514,6 @@ export function FeedbackGenerator({
                 title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
                 <Copy className="w-4 h-4" />
                 仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}
-              </Button>
-              <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyAdviceBatch}
-                title="学生 | 学习建议（精简版）两列表格，粘贴进 Excel / 腾讯文档即成对照表">
-                <Lightbulb className="w-4 h-4" />
-                复制建议
               </Button>
               <details className="fb-more">
                 <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
@@ -735,15 +684,6 @@ export function FeedbackGenerator({
                             {hasRecord ? `${recordOf(s)!.totalScore}分 · 第${recordOf(s)!.rank}名` : '本课无记录'}
                           </span>
                         </span>
-                        {/* 一键复制建议（精简版）—— 与「四个一」复制的同级快捷入口 */}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); void handleCopyAdvice(s); }}
-                          title="复制建议（精简版，可直接发家长）"
-                          className="p-1.5 rounded-lg text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.08)] flex-shrink-0 transition-opacity"
-                        >
-                          <Lightbulb className="w-4 h-4" />
-                        </button>
                         {tone === 'copied' ? (
                           <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                         ) : tone === 'generated' ? (

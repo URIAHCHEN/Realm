@@ -54,6 +54,8 @@ interface StudentTableProps {
   onCopyStudentFeedback?: (studentName: string) => void;
   /** 课次切换条（从左侧卡片并入表头，2026-10-24） */
   lessonBar?: React.ReactNode;
+  /** 题型名 → 板块覆盖（与报告/反馈同口径） */
+  qtCategoryOverrides?: Record<string, string>;
 }
 
 const seasons: { value: SeasonType; label: string; className: string }[] = [
@@ -210,7 +212,7 @@ function NoteInput({ value, onCommit, placeholder, className }: {
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback, lessonBar,
+  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback, lessonBar, qtCategoryOverrides,
   onRemoveStudentsFromLesson,
   onOpenConfig,
 }: StudentTableProps) {
@@ -369,7 +371,8 @@ export function StudentTable({
       (lessonConfig.questionTypes || []).filter(qt => !qt.excludeFromTotal),
       stats.avgScores,
       undefined,
-      stats.registeredCounts
+      stats.registeredCounts,
+      qtCategoryOverrides
     );
 
   // —— 列排序：姓名（按姓氏拼音）/ 排名 / 总分 / 正确率 / 各题型分数；点击表头 升→降→取消 ——

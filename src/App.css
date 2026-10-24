@@ -3515,3 +3515,27 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
 
 /* 分段控件：强制按内容宽度，且不参与 flex 伸缩（防止被父级拉满整行） */
 .mode-seg { width: fit-content !important; flex: 0 0 auto !important; }
+
+/* 未归类题型提示条（报告页/课次配置） */
+.cat-hint {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #92400e;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.cat-hint > button {
+  flex: 0 0 auto;
+  height: 28px; padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: #fff;
+  color: #b45309;
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.cat-hint > button:hover { background: rgba(245, 158, 11, 0.10); }
+.dark .cat-hint { background: rgba(245, 158, 11, 0.12); color: #fcd34d; border-color: rgba(245, 158, 11, 0.4); }

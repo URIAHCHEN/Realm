@@ -475,14 +475,15 @@ export function Leaderboard({
   const handleExportImage = async () => {
     resetPosterTilt();
     setShowExportMenu(false);
-    if (!leaderboardRef.current || isExportingImage) return;
+    if (!posterExportRef.current || isExportingImage) return;
     setIsExportingImage(true);
     try {
       await new Promise(r => setTimeout(r, 120));
-      const target = leaderboardRef.current;
+      // 只导出海报本体（KPI/控制条/页脚提示都不进图）
+      const target = posterExportRef.current;
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
-        backgroundColor: document.documentElement.classList.contains('dark') ? '#101826' : '#f3f6fb',
+        backgroundColor: document.documentElement.classList.contains('dark') ? '#101826' : '#ffffff',
         scale: 2,
         useCORS: true,
         logging: false,
@@ -509,6 +510,8 @@ export function Leaderboard({
   // 海报沉浸式视差（2026-10-24）：微弱 3D 跟随，只在精确指针设备生效；
   // 导出/减弱动效时归零（html[data-exporting] 与 prefers-reduced-motion 都有守卫）
   const posterFrameRef = useRef<HTMLDivElement>(null);
+  /** 导出只用海报本体（2026-10-24 用户口径：不要带上 KPI/控制条等页面内容） */
+  const posterExportRef = useRef<HTMLDivElement>(null);
   const resetPosterTilt = () => {
     posterFrameRef.current?.style.setProperty('--tilt-x', '0deg');
     posterFrameRef.current?.style.setProperty('--tilt-y', '0deg');
@@ -943,7 +946,7 @@ export function Leaderboard({
 
       {/* 榜单内容：装裱外框（导出时仅导出内层，不带外框） */}
       <div className="poster-frame" ref={posterFrameRef} onMouseMove={handlePosterMove} onMouseLeave={resetPosterTilt}>
-        {renderContent()}
+        <div ref={posterExportRef} className="poster-export">{renderContent()}</div>
       </div>
     </div>
   );

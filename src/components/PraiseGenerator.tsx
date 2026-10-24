@@ -96,6 +96,24 @@ export function PraiseGenerator({
     setPraise(generatedPraise);
   };
 
+  // 模板/表彰类型/数据变化时自动重算公示表彰（2026-10-24）：
+  // 原来必须手点「生成表彰」，改完模板看不到变化，误以为"模板不生效"
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- 模板变更后的受控同步，依赖只取模板相关项 */
+  useEffect(() => {
+    if (lessonRecords.length === 0) return;
+    const next = generatePraise(
+      lessonNumber,
+      lessonRecords,
+      lessonConfig,
+      stats,
+      getNickname,
+      praiseType,
+      activeTemplate?.template
+    );
+    setPraise(next);
+  }, [lessonConfig.praiseTemplate, lessonConfig.praiseTemplates, praiseType, templateId, lessonNumber, lessonRecords]);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+
   const handleCopy = async () => {
     if (!praise) return;
     const success = await copyToClipboard(praise);

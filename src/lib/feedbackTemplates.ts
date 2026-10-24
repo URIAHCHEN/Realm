@@ -528,7 +528,7 @@ export function generateFourInOne(
   const issue = issueParts.join('；');
 
   const nextAction = weak.length
-    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）做几道同类练习，错题收进错题本；有余力的话，让孩子把思路讲给您听一遍，比再做十道都管用`
+    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）练几道同类题，错题收进错题本；有余力让孩子把思路讲给您听，胜过再做十道`
     : homeworkBad
       ? '今晚把这次的作业补齐并订正，下次课带来我看看'
       : attendBad

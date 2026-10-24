@@ -788,19 +788,20 @@ export function Leaderboard({
       <div data-h2c-ignore className="relative z-30 flex flex-wrap items-end gap-4 p-4 sm:p-5 ios-glass-card rounded-[var(--r-lg)]">
         <div className="space-y-1.5">
           <Label className="text-sm text-[color:var(--ink-2)]">榜单类型</Label>
-          <Select value={mode} onValueChange={(v) => setMode(v as LeaderboardMode)}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="fengyun">🏅 风云榜</SelectItem>
-              <SelectItem value="top10">🏆 前十名</SelectItem>
-              <SelectItem value="champion">👑 状元</SelectItem>
-              <SelectItem value="progress">📈 进步之星</SelectItem>
-              <SelectItem value="listening">🎙️ 课后任务达人</SelectItem>
-              <SelectItem value="homework">📚 作业表彰</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="mode-seg" role="tablist" aria-label="榜单类型">
+            {([
+              ['fengyun', '🏅 风云榜'], ['top10', '🏆 前十名'], ['champion', '👑 状元'],
+              ['progress', '📈 进步之星'], ['listening', '🎙️ 课后任务达人'], ['homework', '📚 作业表彰'],
+            ] as const).map(([v, label]) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={mode === v}
+                className={`mode-seg-item ${mode === v ? 'is-active' : ''}`}
+                onClick={() => setMode(v)}
+              >{label}</button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -920,8 +921,10 @@ export function Leaderboard({
         </div>
       </div>
 
-      {/* 榜单内容 */}
-      {renderContent()}
+      {/* 榜单内容：装裱外框（导出时仅导出内层，不带外框） */}
+      <div className="poster-frame" data-h2c-ignore="false">
+        {renderContent()}
+      </div>
     </div>
   );
 }

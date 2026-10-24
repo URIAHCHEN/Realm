@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, X, BarChart3, Eraser } from 'lucide-react';
+import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, X, BarChart3, Eraser, Copy } from 'lucide-react';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
@@ -50,6 +50,8 @@ interface StudentTableProps {
   /** 返回当前课次的学情公示 HTML（用于生成图片） */
   getPublicityHTML: () => string;
   onViewStudentAnalysis: (studentName: string) => void;
+  /** 行悬停快捷操作：复制该生本课反馈（由 App 统一生成） */
+  onCopyStudentFeedback?: (studentName: string) => void;
 }
 
 const seasons: { value: SeasonType; label: string; className: string }[] = [
@@ -206,7 +208,7 @@ function NoteInput({ value, onCommit, placeholder, className }: {
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis,
+  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback,
   onRemoveStudentsFromLesson,
   onOpenConfig,
 }: StudentTableProps) {
@@ -582,7 +584,7 @@ export function StudentTable({
             学情记录表
             <Badge variant="secondary" className="text-base bg-[rgb(var(--brand-rgb)/0.12)] text-[color:var(--brand)] border border-[rgb(var(--brand-rgb)/0.2)]">第{lessonNumber}课</Badge>
           </CardTitle>
-          <div className="flex gap-2 flex-wrap">
+          <div className="ops-capsule flex gap-2 flex-wrap">
             <Button onClick={onOpenConfig} variant="outline" size="sm" title="课次配置 / 字段 / 显示样式" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
               <Settings2 className="w-4 h-4" /><span className="hidden sm:inline">课次配置</span>
             </Button>
@@ -841,6 +843,16 @@ export function StudentTable({
                             >
                               {getNickname(studentName)}
                             </button>
+                            <span className="row-quick" aria-hidden="true">
+                              <button
+                                type="button"
+                                title="复制该生本课反馈"
+                                aria-label={`复制 ${getNickname(studentName)} 的反馈`}
+                                onClick={(e) => { e.stopPropagation(); onCopyStudentFeedback?.(studentName); }}
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </span>
                           </TableCell>
                           {col('seasons') && (
                           <TableCell className="text-base tnum">

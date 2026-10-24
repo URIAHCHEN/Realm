@@ -48,12 +48,13 @@ const StudentAnalysis = lazy(() =>
 
 // 懒加载期间的占位，保持与页面一致的留白节奏
 const ModuleLoading = ({ label }: { label: string }) => (
-  <div className="flex items-center justify-center py-16 text-[#8e8e93] text-sm gap-2">
-    <span className="w-4 h-4 rounded-full border-2 border-[rgb(var(--brand-rgb)/0.3)] border-t-[rgb(var(--brand-rgb))] animate-spin" />
-    正在加载{label}…
+  <div className="module-skeleton" aria-busy="true" aria-label={`正在加载${label}`}>
+    <div className="sk-title" />
+    {[0, 1, 2, 3, 4].map(i => <div key={i} className="sk-line" style={{ width: `${88 - i * 9}%` }} />)}
+    <p className="sk-caption">正在加载{label}…</p>
   </div>
 );
-import { exportToCSV, downloadCSV } from '@/lib/feedbackTemplates';
+import { exportToCSV, downloadCSV, generatePersonalFeedback, copyToClipboard } from '@/lib/feedbackTemplates';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
@@ -831,6 +832,20 @@ function App() {
   };
 
   // 处理查看学生分析
+  // 行悬停快捷操作：复制该生本课私发反馈（2026-10-24）
+  const handleCopyStudentFeedback = async (studentName: string) => {
+    const cls = classes[currentClassId || ''];
+    if (!cls) return;
+    const rec = cls.records.find(r => r.studentName === studentName && r.lessonNumber === currentLessonNumber);
+    if (!rec) { toast.error('该生本课暂无记录，无法生成反馈'); return; }
+    const stats = calculateClassStats(cls.records.filter(r => r.lessonNumber === currentLessonNumber), currentLessonConfig.questionTypes);
+    const nick = getStudentNickname(studentName, currentClassId || undefined);
+    const text = generatePersonalFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {});
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(`已复制 ${nick} 的私发反馈`);
+    else toast.error('复制失败，请手动选择复制');
+  };
+
   const handleViewStudentAnalysis = (studentName: string) => {
     setAnalysisStudent(studentName);
   };
@@ -1055,6 +1070,7 @@ function App() {
                   onExportExcel={handleExportRosterExcel}
                   getPublicityHTML={() => currentClass ? exportToHTML(currentClass.id, currentLessonNumber, displaySettings.settings.exportStyle) : ''}
                   onViewStudentAnalysis={handleViewStudentAnalysis}
+                  onCopyStudentFeedback={handleCopyStudentFeedback}
                   onOpenConfig={() => setShowGenerateSettings(true)}
                 />
               </div>

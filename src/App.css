@@ -2997,3 +2997,246 @@ h1, h2, h3,
 .tnum, .tnum input {
   font-family: var(--font-display);
 }
+
+
+/* ==================== 视觉升级 v7 · 旗舰化 W1/W2（2026-10-24） ====================
+   W1 外壳：Tab 分段化、班级 chip 描边化（减少"一排蓝块"）；
+   W2 学情表：工具条玻璃胶囊、行高统一、聚焦品牌光晕、行悬停快捷操作。 */
+
+/* —— 工具条玻璃胶囊（操作区从内容里"浮"出来） —— */
+.ops-capsule {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--elev-2), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.dark .ops-capsule { background: rgba(255, 255, 255, 0.06); }
+
+/* —— 班级 chip：选中从"实心蓝块"改为"白底品牌描边"（更克制、更像筛选器） —— */
+.class-chip[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: rgb(var(--brand-rgb)) !important;
+  box-shadow: inset 0 0 0 1.5px rgb(var(--brand-rgb) / 0.55), var(--elev-1) !important;
+}
+.class-chip[aria-pressed="true"] > span {
+  background: rgb(var(--brand-rgb) / 0.10) !important;
+  color: rgb(var(--brand-rgb)) !important;
+}
+.dark .class-chip[aria-pressed="true"] { background: rgba(255, 255, 255, 0.10) !important; }
+
+/* —— 表格：行高统一、极淡斑马纹、汇总行数字加粗 —— */
+.data-table tbody td { height: 44px; padding-top: 6px; padding-bottom: 6px; }
+.data-table tbody tr:nth-child(even):not(.class-stats-row):not([class*="bg-"]) {
+  background: rgb(15 23 42 / 0.012);
+}
+.class-stats-row td, .class-stats-row th { font-weight: 700; }
+
+/* —— 分数输入：聚焦品牌光晕（柔和外发光，不做缩放避免抖动） —— */
+.data-table .score-input:focus {
+  outline: none;
+  border-color: rgb(var(--brand-rgb));
+  box-shadow: 0 0 0 4px rgb(var(--brand-rgb) / 0.14), 0 4px 14px -4px rgb(var(--brand-rgb) / 0.35);
+}
+/* 状态下拉：统一最小宽度，避免一列宽窄不一 */
+.data-table [role="combobox"] { min-width: 84px; }
+
+/* —— 行悬停快捷操作（复制反馈）：默认隐藏，悬停/聚焦行时淡入；不挤压列宽 —— */
+.data-table td { position: relative; }
+.row-quick {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+.data-table tbody tr:hover .row-quick,
+.data-table tbody tr:focus-within .row-quick { opacity: 1; pointer-events: auto; }
+.row-quick button {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.94);
+  color: rgb(var(--brand-rgb));
+  border: 1px solid rgb(var(--brand-rgb) / 0.22);
+  box-shadow: var(--elev-2);
+  cursor: pointer;
+}
+.row-quick button:hover { background: rgb(var(--brand-rgb) / 0.10); }
+.dark .row-quick button { background: rgba(17, 24, 39, 0.94); }
+
+/* —— Tab 分段控件化：容器更薄、选中胶囊更清晰（原有 panelIn 保留） —— */
+.ios-tabs-list {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-radius: 999px !important;
+  padding: 4px !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 1px 2px rgb(15 23 42 / 0.04) !important;
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+.ios-tab-trigger { border-radius: 999px !important; }
+.dark .ios-tabs-list { background: rgba(255, 255, 255, 0.05) !important; }
+
+
+/* ==================== 视觉升级 v7b · 旗舰化 W3–W6（2026-10-24） ==================== */
+
+/* —— W3 表扬榜：海报装裱（只加 8px 白边与阴影，不改变海报内容与导出结构） —— */
+.poster-frame {
+  padding: 8px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--elev-3);
+  margin-bottom: 24px;
+}
+.dark .poster-frame { background: rgba(255, 255, 255, 0.06); }
+/* KPI 瓷贴：亚克力 + 数字 Outfit 800 + 图标单色品牌 */
+.praise-kpi {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: var(--elev-1);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.praise-kpi-value { font-family: var(--font-display); font-size: 26px; font-weight: 800; line-height: 1.1; }
+.praise-kpi-label { font-size: 12px; color: var(--ink-4); }
+.praise-kpi-ico { color: rgb(var(--brand-rgb) / 0.55); }
+.dark .praise-kpi { background: rgba(255, 255, 255, 0.05); }
+/* 榜单类型：分段控件（替代下拉） */
+.mode-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.045);
+}
+.mode-seg-item {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.mode-seg-item:hover { color: var(--ink); }
+.mode-seg-item.is-active {
+  background: #fff;
+  color: rgb(var(--brand-rgb));
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.12), 0 0 0 1px rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+.dark .mode-seg { background: rgba(255, 255, 255, 0.06); }
+.dark .mode-seg-item.is-active { background: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
+
+/* —— W4 反馈生成：预览纸张化（微暖白 + 细纸感，暗色不白板） —— */
+.feedback-paper,
+.fb-paper {
+  background: #fdfcf9;
+  border-radius: 18px;
+  box-shadow: var(--elev-1), inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+.dark .feedback-paper, .dark .fb-paper { background: rgba(255, 255, 255, 0.045); }
+/* 预览阅读区：限宽 + 行高 + 段距 */
+[data-preview-text] {
+  max-width: 68ch;
+  line-height: 1.75;
+}
+/* 低频操作 details 菜单 */
+.fb-more { position: relative; display: inline-flex; }
+.fb-more > summary {
+  list-style: none;
+  cursor: pointer;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  color: var(--ink-3);
+  font-size: 18px;
+  border: 1px solid transparent;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.fb-more > summary::-webkit-details-marker { display: none; }
+.fb-more > summary:hover, .fb-more[open] > summary {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--ink);
+}
+.fb-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--elev-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fb-more-menu button {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border: none; background: transparent;
+  border-radius: 9px;
+  font-size: 13px; color: var(--ink-2);
+  cursor: pointer; text-align: left;
+}
+.fb-more-menu button:hover { background: rgb(var(--brand-rgb) / 0.07); color: rgb(var(--brand-rgb)); }
+.dark .fb-more-menu { background: rgba(17, 24, 39, 0.96); }
+
+/* —— W5 学情报告：KPI 去描边、图表更淡、标题短线、长文限宽 —— */
+.report-container [data-slot="card"] {
+  border: none !important;
+  box-shadow: var(--elev-1) !important;
+}
+.report-container .report-section-title {
+  border-left: 3px solid rgb(var(--brand-rgb) / 0.55);
+  padding-left: 10px;
+}
+.report-container .report-section-title::after { display: none !important; }
+.report-container p { max-width: 72ch; }
+/* 图表网格与坐标轴更淡（仅视觉，不动数据） */
+.report-container .recharts-cartesian-grid line { stroke: rgba(15, 23, 42, 0.05); }
+.report-container .recharts-text { font-size: 12px; }
+
+/* —— W6 骨架屏（替代 spinner，1.2s 扫光最多 3 次后静止） —— */
+.module-skeleton {
+  padding: 26px 22px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: var(--elev-1);
+  max-width: 560px;
+  margin: 24px auto;
+}
+.module-skeleton .sk-title,
+.module-skeleton .sk-line {
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.10), rgba(15, 23, 42, 0.05));
+  background-size: 200% 100%;
+  animation: skSweep 1.2s ease-in-out 3;
+}
+.module-skeleton .sk-title { height: 18px; width: 42%; margin-bottom: 18px; }
+.module-skeleton .sk-line { height: 12px; margin-bottom: 12px; }
+.module-skeleton .sk-caption { margin-top: 14px; font-size: 12px; color: var(--ink-4); }
+@keyframes skSweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.dark .module-skeleton { background: rgba(255, 255, 255, 0.05); }
+@media (prefers-reduced-motion: reduce) {
+  .module-skeleton .sk-title, .module-skeleton .sk-line { animation: none; }
+}

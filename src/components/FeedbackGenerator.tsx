@@ -350,7 +350,7 @@ export function FeedbackGenerator({
   // 一键复制全班（表格）：一列学生 / 一列私发 / 一列四个一，直接粘进表格即可对照
   const handleCopyBatchTable = async () => {
     if (batchRows.length === 0) {
-      toast.error('没有可复制的反馈（本课暂无到课学员记录）');
+      toast.error('本课还没有可复制的反馈（到课学员暂无记录）');
       return;
     }
     const rows = batchRows.map(r => {
@@ -378,7 +378,7 @@ export function FeedbackGenerator({
   // 一键复制全班（单列）：按当前模式只导出私发或只导出四个一
   const handleCopyBatchSingle = async () => {
     if (batchRows.length === 0) {
-      toast.error('没有可复制的反馈（本课暂无到课学员记录）');
+      toast.error('本课还没有可复制的反馈（到课学员暂无记录）');
       return;
     }
     const isFour = feedbackMode === 'fourInOne';
@@ -542,7 +542,7 @@ export function FeedbackGenerator({
                 title="一列学生、一列私发、一列四个一；粘贴到 Excel / 腾讯文档即成对照表"
               >
                 <Table2 className="w-4 h-4" />
-                复制对照表（三列）
+                复制三列对照表
               </Button>
               <Button
                 variant="outline"
@@ -556,17 +556,20 @@ export function FeedbackGenerator({
               <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
                 title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
                 <Copy className="w-4 h-4" />
-                仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}（两列）
+                仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}
               </Button>
               <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyAdviceBatch}
                 title="学生 | 学习建议（精简版）两列表格，粘贴进 Excel / 腾讯文档即成对照表">
                 <Lightbulb className="w-4 h-4" />
-                复制学习建议（两列）
+                复制学习建议
               </Button>
-              <Button variant="ghost" className="h-9 px-3 text-sm rounded-[var(--r-md)] gap-1.5 text-[color:var(--ink-4)]" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里">
-                <ClipboardList className="w-4 h-4" />
-                复制纯文本
-              </Button>
+              <details className="fb-more">
+                <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
+                <div className="fb-more-menu" role="menu">
+                  <button role="menuitem" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里"><ClipboardList className="w-4 h-4" />复制纯文本</button>
+                  <button role="menuitem" onClick={handleResetStatus}><RotateCcw className="w-4 h-4" />重置状态</button>
+                </div>
+              </details>
               <div role="tablist" className="inline-flex gap-1 p-1 rounded-[var(--r-md)] bg-black/[0.05]">
               <button
               role="tab" aria-selected={feedbackMode === 'normal'}
@@ -579,10 +582,7 @@ export function FeedbackGenerator({
               className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'fourInOne' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
               ><Sparkles className="w-3.5 h-3.5" />四个一</button>
               </div>
-              <Button variant="ghost" className="rounded-xl gap-1.5 h-9 text-[color:var(--ink-4)]" onClick={handleResetStatus}>
-                <RotateCcw className="w-4 h-4" />
-                重置状态
-              </Button>
+
             </div>
           </div>
 
@@ -709,7 +709,9 @@ export function FeedbackGenerator({
                         className={`group w-full cursor-pointer flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
                           isActive
                             ? 'bg-[rgb(var(--brand-rgb)/0.1)] ring-1 ring-[rgb(var(--brand-rgb)/0.35)]'
-                            : 'hover:bg-black/[0.04]'
+                            : tone === 'copied'
+                              ? 'bg-emerald-50/80 hover:bg-emerald-100/80'
+                              : 'hover:bg-black/[0.04]'
                         }`}
                       >
                         <span
@@ -753,8 +755,8 @@ export function FeedbackGenerator({
           </CardContent>
         </Card>
 
-        {/* 编辑区 */}
-        <Card className="ios-glass-card border-0">
+        {/* 编辑区（纸张化预览） */}
+        <Card className="ios-glass-card border-0 feedback-paper">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center justify-between gap-2 text-[color:var(--ink)]">
               <span className="flex items-center gap-2">
@@ -791,6 +793,7 @@ export function FeedbackGenerator({
               <>
                 <Textarea
                   value={generated[selected] ?? ''}
+                  data-preview-text
                   onChange={(e) => setGenerated(prev => ({ ...prev, [selected]: e.target.value }))}
                   className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
                   placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
@@ -843,6 +846,7 @@ export function FeedbackGenerator({
               </div>
               <Textarea
                 ref={templateRef}
+                data-preview-text
                 value={activeTemplate}
                 onChange={(e) => setActiveTemplate(e.target.value)}
                 className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"

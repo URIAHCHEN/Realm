@@ -57,17 +57,27 @@ export function computeCategoryWeakPoints(
   record: StudentRecord,
   questionTypes: QuestionType[],
   avgScores: { [qtId: string]: number },
-  threshold = CATEGORY_WEAK_THRESHOLD
+  threshold = CATEGORY_WEAK_THRESHOLD,
+  /** 各题型的班级有效样本数（可选）：为 0 时该题型无班均可比，直接跳过，避免"和 0 比"产生假差距 */
+  registeredCounts?: { [qtId: string]: number }
 ): CategoryWeakPoint[] {
   const groups = new Map<string, { names: string[]; sScore: number; sFull: number; cScore: number; cFull: number }>();
 
   for (const qt of questionTypes) {
+    const own = record.scores?.[qt.id];
+    // 2026-10-24 修口径（用户反馈"四个一数据不是当课的"）：
+    // 原实现把"本人没有登记这一题型"当成 0 分，分母却加满分 ——
+    // 该题型本课没考/中途加入/漏录时，会凭空算出"得分率 40%、低于班均 28 个百分点"。
+    // 现在只统计"本人已登记 + 班里有样本"的题型；真实登记 0 分仍按 0 计（那是真弱）。
+    if (typeof own !== 'number' || !Number.isFinite(own)) continue;
+    if (registeredCounts && (registeredCounts[qt.id] || 0) === 0) continue;
     const cat = inferCategory(qt);
     const g = groups.get(cat) || { names: [], sScore: 0, sFull: 0, cScore: 0, cFull: 0 };
     g.names.push(qt.name);
-    g.sScore += record.scores?.[qt.id] || 0;
+    g.sScore += own;
     g.sFull += qt.fullScore || 0;
-    g.cScore += avgScores?.[qt.id] || 0;
+    // 班均缺失时用本人分兜底 → 差距为 0，不误判为弱项
+    g.cScore += avgScores?.[qt.id] ?? own;
     g.cFull += qt.fullScore || 0;
     groups.set(cat, g);
   }

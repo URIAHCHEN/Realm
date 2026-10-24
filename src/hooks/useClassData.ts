@@ -763,7 +763,7 @@ export function useClassData() {
     // 附加项（如口语得分）不属于小测，不参与薄弱项分析
     const quizTypes = questionTypes.filter(qt => !qt.excludeFromTotal);
     const stats = weakStatsCache(currentClass.records, record.lessonNumber, quizTypes);
-    return computeCategoryWeakPoints(record, quizTypes, stats.avgScores);
+    return computeCategoryWeakPoints(record, quizTypes, stats.avgScores, undefined, stats.registeredCounts);
   }, [currentClass, weakStatsCache]);
 
   // 创建新班级

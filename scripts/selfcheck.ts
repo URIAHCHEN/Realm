@@ -8,6 +8,7 @@ import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
+import { computeCategoryWeakPoints } from '@/lib/weakPoints';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
@@ -602,6 +603,28 @@ group('反馈占位符兜底');
   );
   check(named.includes('诗钰家长好'), '称呼用短昵称（诗钰家长好）');
   check(!named.includes('郭诗钰家长好'), '称呼不出现全名');
+}
+
+// ============ 薄弱项口径：未登记题型不得参与（2026-10-24 用户反馈） ============
+group('薄弱项统计口径');
+{
+  const qts = [
+    { id: 'a', name: '语法选择', fullScore: 15, order: 0 },
+    { id: 'b', name: '完形填空', fullScore: 10, order: 1 },
+  ] as unknown as import('@/types').QuestionType[];
+  // 学生只登记了语法选择（完形本课没考/漏录）
+  const rec = { id: 'x', studentName: '测试', lessonNumber: 6, seasons: [], attendance: '准时👍', homeworkStatus: '', listeningStatus: '', listeningScore: 0, classPerformance: '', scores: { a: 13.5 }, totalScore: 13.5, correctRate: 90, rank: 1, date: '2026-10-24' } as unknown as StudentRecord;
+  const avg = { a: 11, b: 7 };
+  const counts = { a: 3, b: 3 };
+  const noReg = computeCategoryWeakPoints(rec, qts, avg, undefined, counts);
+  check(!noReg.some(w => w.category.includes('完形')), '薄弱项：未登记的题型不参与（不再按 0 分算）');
+  // 真实登记 0 分仍应判弱
+  const zeroRec = { ...rec, scores: { a: 13.5, b: 0 } } as unknown as StudentRecord;
+  const withZero = computeCategoryWeakPoints(zeroRec, qts, avg, undefined, counts);
+  check(withZero.some(w => w.category.includes('完形')), '薄弱项：真实登记 0 分仍判为弱项');
+  // 班里没有该题型样本时跳过
+  const noClass = computeCategoryWeakPoints({ ...rec, scores: { a: 13.5, b: 4 } } as unknown as StudentRecord, qts, avg, undefined, { a: 3, b: 0 });
+  check(!noClass.some(w => w.category.includes('完形')), '薄弱项：班级无样本的题型不做对比');
 }
 
 // ============ 四个一：占位符/昵称/待提升/新学员/教辅（2026-10-23） ============

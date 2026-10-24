@@ -201,7 +201,7 @@ export function generatePersonalFeedback(
     const hw = record.homeworkStatus ? `本班这边记到的作业情况是「${record.homeworkStatus}」。` : '';
     return `${shortNickname}家长您好！\n\n第${record.lessonNumber}课孩子${spokenAttendance}，本讲测评在原班级完成，成绩以原班级为准。${hw}\n有需要协调的随时找我。`;
   }
-  const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
+  const weakPoints = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores, undefined, stats.registeredCounts);
   const baseTemplate = (templateOverride != null ? templateOverride : lessonConfig.feedbackTemplate) || '';
   let template = baseTemplate;
 
@@ -482,7 +482,7 @@ export function generateFourInOne(
     .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id], avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
     .filter(x => x.avg > 0 && isQtStrong(x.qt, x.s, x.avg))
     .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
-  const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores);
+  const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores, undefined, stats.registeredCounts);
   // 作业好/坏按语义色调判定（修复 P0：原硬编码 '超赞完成'/'未完成'/'没带' 为 v1 旧值，
   // 现行选项已迁移为 完成✅/未完成❌/按要求❗ → 恒 false，家长话术错档）
   const hwTone = optionToneLevel(record.homeworkStatus);

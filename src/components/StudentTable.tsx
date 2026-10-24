@@ -367,7 +367,9 @@ export function StudentTable({
     computeCategoryWeakPoints(
       record,
       (lessonConfig.questionTypes || []).filter(qt => !qt.excludeFromTotal),
-      stats.avgScores
+      stats.avgScores,
+      undefined,
+      stats.registeredCounts
     );
 
   // —— 列排序：姓名（按姓氏拼音）/ 排名 / 总分 / 正确率 / 各题型分数；点击表头 升→降→取消 ——

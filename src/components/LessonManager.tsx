@@ -12,6 +12,8 @@ interface LessonManagerProps {
   onSelectLesson: (lesson: number) => void;
   onAddLesson: (lesson: number) => void;
   onSaveCurrentLesson: () => void;
+  /** 紧凑模式（2026-10-24）：并入「学情记录表」表头，不再单独占一张卡 */
+  compact?: boolean;
 }
 
 export function LessonManager({
@@ -19,7 +21,8 @@ export function LessonManager({
   allLessons,
   onSelectLesson,
   onAddLesson,
-  onSaveCurrentLesson
+  onSaveCurrentLesson,
+  compact,
 }: LessonManagerProps) {
   const [newLessonNumber, setNewLessonNumber] = useState('');
 
@@ -39,6 +42,43 @@ export function LessonManager({
   const displayLessons = allLessons.includes(currentLessonNumber)
     ? allLessons
     : [...allLessons, currentLessonNumber].sort((a, b) => a - b);
+
+  // 紧凑横排：当前课次 + 保存 + 课次 chips + 新增（并入表头用）
+  if (compact) {
+    return (
+      <div className="lesson-bar">
+        <span className="lesson-bar-label"><BookOpen className="w-3.5 h-3.5" />当前课次</span>
+        <span className="lesson-bar-current">第 {currentLessonNumber} 课</span>
+        <Button size="sm" onClick={onSaveCurrentLesson} className="lesson-bar-save gap-1.5">
+          <Save className="w-3.5 h-3.5" />保存
+        </Button>
+        <span className="lesson-bar-sep" />
+        <div className="lesson-bar-chips">
+          {displayLessons.length === 0 ? (
+            <span className="text-xs text-[color:var(--ink-4)]">暂无课次，点右侧 + 新建</span>
+          ) : displayLessons.map((lesson) => (
+            <button
+              key={lesson}
+              onClick={() => onSelectLesson(lesson)}
+              className={`lesson-chip ${currentLessonNumber === lesson ? 'is-active' : ''}`}
+            >{lesson}</button>
+          ))}
+        </div>
+        <button
+          onClick={() => onAddLesson(Math.max(0, ...allLessons, 0) + 1)}
+          className="lesson-bar-add"
+          title="新建下一个课次"
+        ><Plus className="w-3.5 h-3.5" /></button>
+        <Input
+          type="number" min={1} placeholder="课次号"
+          value={newLessonNumber}
+          onChange={(e) => setNewLessonNumber(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddLesson()}
+          className="h-7 w-20 rounded-lg text-xs text-center"
+        />
+      </div>
+    );
+  }
 
   return (
     <Card className="rounded-2xl bg-white/60 backdrop-blur border border-black/5 shadow-sm">

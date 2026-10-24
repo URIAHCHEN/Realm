@@ -15,7 +15,27 @@ interface PraiseTemplateEditorProps {
 
 const PREVIEW_CONTENT = '🏆【入门测风云榜】\n🥇 小明：95分（正确率95%）\n🥈 小红：92分（正确率92%）\n\n📚【作业超赞】\n小刚、小丽';
 
+const TYPE_DEFAULTS = {
+  entrance: `🏆 第【课次】课【表彰类型】
+
+【表彰内容】
+
+恭喜上榜的同学，保持这个势头。`,
+  listening: `🎙️ 第【课次】课【表彰类型】
+
+【表彰内容】
+
+坚持课后练习的孩子，进步看得见。`,
+  comprehensive: `🏆 第【课次】课【表彰类型】表扬榜
+
+【表彰内容】
+
+上面几位，这节课的功夫是实打实的。没上榜的别急，下节课接着来。`,
+} as const;
+type PraiseTypeKey = keyof typeof TYPE_DEFAULTS;
+
 export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonConfig }: PraiseTemplateEditorProps) {
+  const [activePraiseType, setActivePraiseType] = useState<PraiseTypeKey>('comprehensive');
   const [activeTemplateId, setActiveTemplateId] = useState<string>('default');
   const [renamingTemplateId, setRenamingTemplateId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -23,7 +43,12 @@ export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonC
 
   const praiseTemplates = lessonConfig.praiseTemplates || [];
   const activeCustom = praiseTemplates.find(t => t.id === activeTemplateId);
-  const activeTemplateText = activeCustom ? activeCustom.template : lessonConfig.praiseTemplate;
+  // 2026-10-24：三种公示各存一份模板（praiseTemplateByType），缺省回落默认/老字段
+  const byType = lessonConfig.praiseTemplateByType || {};
+  const typeFallback = activePraiseType === 'comprehensive'
+    ? (lessonConfig.praiseTemplate || TYPE_DEFAULTS.comprehensive)
+    : TYPE_DEFAULTS[activePraiseType];
+  const activeTemplateText = activeCustom ? activeCustom.template : (byType[activePraiseType] ?? typeFallback);
 
   const save = (patch: Partial<LessonConfig>) => onSaveLessonConfig(lessonNumber, patch);
 
@@ -31,7 +56,7 @@ export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonC
     if (activeCustom) {
       save({ praiseTemplates: praiseTemplates.map(t => (t.id === activeCustom.id ? { ...t, template: text } : t)) });
     } else {
-      save({ praiseTemplate: text });
+      save({ praiseTemplateByType: { ...byType, [activePraiseType]: text } });
     }
   };
 
@@ -58,7 +83,7 @@ export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonC
 
   const preview = (activeTemplateText || '')
     .replace(/【课次】/g, String(lessonNumber))
-    .replace(/【表彰类型】/g, '综合')
+    .replace(/【表彰类型】/g, activePraiseType === 'entrance' ? '入门测' : activePraiseType === 'listening' ? '课后任务' : '综合')
     .replace(/【表彰内容】/g, PREVIEW_CONTENT);
 
   return (
@@ -75,7 +100,25 @@ export function PraiseTemplateEditor({ lessonConfig, lessonNumber, onSaveLessonC
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-xs text-[color:var(--ink-4)]">支持多套模板切换（日常表彰 / 阶段测表彰等）；修改即时保存，右侧实时预览。</p>
+        <p className="text-xs text-[color:var(--ink-4)]">三种班群公示各有自己的模板（入门测 / 课后任务 / 综合），修改即时保存，右侧实时预览。</p>
+
+        {/* 公示类型：每种类型各存一份模板（2026-10-24） */}
+        <div className="mode-seg" role="tablist" aria-label="表彰类型模板">
+          {([
+            ['entrance', '入门测公示'],
+            ['listening', '课后任务公示'],
+            ['comprehensive', '综合公示'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={activePraiseType === key}
+              className={`mode-seg-item ${activePraiseType === key ? 'is-active' : ''}`}
+              onClick={() => { setActivePraiseType(key); setActiveTemplateId('default'); }}
+            >{label}</button>
+          ))}
+        </div>
 
         {/* 模板列表 */}
         <div className="flex flex-wrap gap-2">

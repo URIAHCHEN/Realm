@@ -3389,3 +3389,83 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 1px 2px rgb(15 23 42 / 0.06);
 }
 .dark [data-slot="switch"][data-state="unchecked"] { background: rgba(255, 255, 255, 0.20) !important; }
+
+/* ==================== 视觉升级 v10 · 结构合并（2026-10-24） ====================
+   ① 课次切换条并入「学情记录表」表头 ② 同步中心的高级配置可折叠 */
+
+/* ① 课次条：紧凑横排，和表头同一张卡 */
+.lesson-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px 6px 10px;
+  border-radius: 14px;
+  background: rgb(var(--brand-rgb) / 0.035);
+  border: 1px solid rgb(var(--brand-rgb) / 0.08);
+}
+.lesson-bar-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--ink-4);
+}
+.lesson-bar-current {
+  font-size: 13px; font-weight: 700;
+  color: rgb(var(--brand-rgb));
+  padding: 2px 9px; border-radius: 999px;
+  background: #fff;
+  box-shadow: var(--elev-1);
+}
+.lesson-bar-save { height: 28px; border-radius: 9px; }
+.lesson-bar-sep { width: 1px; height: 16px; background: rgba(15, 23, 42, 0.08); }
+.lesson-bar-chips { display: flex; gap: 4px; flex-wrap: wrap; max-height: 58px; overflow: auto; }
+.lesson-bar .lesson-chip {
+  min-width: 26px; height: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 12px; font-weight: 600;
+  color: var(--ink-3);
+  background: rgba(15, 23, 42, 0.04);
+  border: none; cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.lesson-bar .lesson-chip:hover { color: rgb(var(--brand-rgb)); background: rgb(var(--brand-rgb) / 0.08); }
+.lesson-bar .lesson-chip.is-active {
+  background: rgb(var(--brand-rgb)) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgb(var(--brand-rgb) / 0.35);
+}
+.lesson-bar-add {
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: transparent; color: var(--ink-4); cursor: pointer;
+}
+.lesson-bar-add:hover { color: rgb(var(--brand-rgb)); border-color: rgb(var(--brand-rgb) / 0.4); }
+.dark .lesson-bar { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.08); }
+.dark .lesson-bar-current { background: rgba(255, 255, 255, 0.10); color: #e5e7eb; }
+
+/* ② 同步中心高级配置：默认折叠，避免整页被配置项占满 */
+.cloud-advanced { border-radius: 18px; }
+.cloud-advanced > summary {
+  list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgb(var(--brand-rgb) / 0.10);
+  box-shadow: var(--elev-1);
+  font-size: 13px; font-weight: 600; color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.cloud-advanced > summary::-webkit-details-marker { display: none; }
+.cloud-advanced > summary::after {
+  content: '展开';
+  margin-left: auto;
+  font-size: 12px; font-weight: 500; color: var(--ink-4);
+}
+.cloud-advanced[open] > summary::after { content: '收起'; }
+.cloud-advanced[open] > summary { margin-bottom: 12px; }
+.cloud-advanced > div, .cloud-advanced > .ios-glass-card { margin-top: 12px; }
+.dark .cloud-advanced > summary { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.10); }

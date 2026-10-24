@@ -19,6 +19,8 @@ interface PraiseGeneratorProps {
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  /** 保存本课次的公示参数（名额/板块） */
+  onSaveLessonConfig?: (lessonNumber: number, config: Partial<LessonConfig>) => void;
 }
 
 const PRAISE_META: Record<PraiseType, { label: string; desc: string }> = {
@@ -32,7 +34,8 @@ export function PraiseGenerator({
   lessonConfig,
   lessonNumber,
   getNickname,
-  calculateClassStats
+  calculateClassStats,
+  onSaveLessonConfig,
 }: PraiseGeneratorProps) {
   const [praiseType, setPraiseType] = useState<PraiseType>('comprehensive');
   // 表彰模板选择：'default' 为默认模板，其余为多模板管理中的自定义模板
@@ -42,6 +45,21 @@ export function PraiseGenerator({
 
   const customTemplates = lessonConfig.praiseTemplates || [];
   const activeTemplate = customTemplates.find(t => t.id === templateId);
+
+  // 公示参数（2026-10-24）：不同表彰类型各有口径，可按课次保存
+  const pParams = lessonConfig.praiseParams || {};
+  const entranceTopN = pParams.entranceTopN ?? 3;
+  const listeningTopN = pParams.listeningTopN ?? 5;
+  const sections = { entrance: true, listening: true, homework: true, allPresent: true, progress: true, ...(pParams.sections || {}) };
+  const saveParams = (patch: Partial<NonNullable<LessonConfig['praiseParams']>>) => {
+    onSaveLessonConfig?.(lessonNumber, { praiseParams: { ...pParams, ...patch } });
+  };
+  const praiseOpts = {
+    allRecords: records,
+    entranceTopN,
+    listeningTopN,
+    sections,
+  };
 
   const lessonRecords = useMemo(() =>
     records.filter(r => r.lessonNumber === lessonNumber),
@@ -91,7 +109,8 @@ export function PraiseGenerator({
       stats,
       getNickname,
       praiseType,
-      activeTemplate?.template
+      activeTemplate?.template,
+      praiseOpts
     );
     setPraise(generatedPraise);
   };
@@ -108,7 +127,8 @@ export function PraiseGenerator({
       stats,
       getNickname,
       praiseType,
-      activeTemplate?.template
+      activeTemplate?.template,
+      praiseOpts
     );
     setPraise(next);
   }, [lessonConfig.praiseTemplate, lessonConfig.praiseTemplates, praiseType, templateId, lessonNumber, lessonRecords]);
@@ -125,13 +145,6 @@ export function PraiseGenerator({
       toast.error('复制失败，请手动选择表彰文本复制');
     }
   };
-
-  // 切课次后清空上一次生成的表彰，避免把上一课的文本发到本课班群（2026-10-17 修正）
-  /* eslint-disable react-hooks/set-state-in-effect -- 课次切换时的受控重置 */
-  useEffect(() => {
-    setPraise('');
-  }, [lessonNumber]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <Card className="ios-glass-card border-0">
@@ -183,6 +196,37 @@ export function PraiseGenerator({
               </SelectContent>
             </Select>
           )}
+          </div>
+
+        {/* 参数（2026-10-24）：入门测名次 / 达人名额 / 综合表彰包含哪些板块 —— 三种公示都能调 */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[color:var(--ink-4)]">参数</span>
+          {praiseType === 'entrance' && [3, 5, 10].map(n => (
+            <button key={n} type="button" aria-pressed={entranceTopN === n}
+              onClick={() => saveParams({ entranceTopN: n })}
+              className={`h-7 px-2.5 rounded-full border transition-all ${entranceTopN === n ? 'bg-[rgb(var(--brand-rgb)/0.10)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] font-semibold' : 'border-black/[0.08] text-[color:var(--ink-3)] hover:border-[rgb(var(--brand-rgb)/0.3)]'}`}
+            >前 {n} 名</button>
+          ))}
+          {praiseType === 'listening' && [3, 5, 8].map(n => (
+            <button key={n} type="button" aria-pressed={listeningTopN === n}
+              onClick={() => saveParams({ listeningTopN: n })}
+              className={`h-7 px-2.5 rounded-full border transition-all ${listeningTopN === n ? 'bg-[rgb(var(--brand-rgb)/0.10)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] font-semibold' : 'border-black/[0.08] text-[color:var(--ink-3)] hover:border-[rgb(var(--brand-rgb)/0.3)]'}`}
+            >前 {n} 名</button>
+          ))}
+          {praiseType === 'comprehensive' && ([
+            ['entrance', '风云榜'], ['listening', '任务达人'], ['homework', '作业'], ['allPresent', '全勤之星'], ['progress', '稳步前进'],
+          ] as const).map(([key, label]) => {
+            const on = sections[key] !== false;
+            return (
+              <button key={key} type="button" aria-pressed={on}
+                onClick={() => saveParams({ sections: { ...sections, [key]: !on } })}
+                className={`h-7 px-2.5 rounded-full border transition-all ${on ? 'bg-[rgb(var(--brand-rgb)/0.10)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] font-semibold' : 'border-black/[0.08] text-[color:var(--ink-4)] line-through'}`}
+              >{label}</button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-2">
           <Button
             onClick={handleGenerate}
             disabled={lessonRecords.length === 0}

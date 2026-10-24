@@ -81,6 +81,14 @@ export interface LessonConfig {
   columnLabels?: ColumnLabels;
   /** 本课次隐藏的列（列 id 见 lib/displaySettings 的 COLUMN_LABELS；全局显示设置之上再收一层） */
   hiddenColumns?: string[];
+  /** 班群公示：按表彰类型各存一份模板（缺省回落 praiseTemplate） */
+  praiseTemplateByType?: { entrance?: string; listening?: string; comprehensive?: string };
+  /** 班群公示参数：风云榜名次 / 达人名额 / 综合表彰包含哪些板块 */
+  praiseParams?: {
+    entranceTopN?: number;
+    listeningTopN?: number;
+    sections?: { entrance?: boolean; listening?: boolean; homework?: boolean; allPresent?: boolean; progress?: boolean };
+  };
   /** 过关正确率阈值（百分比），达到或超过判定为过关；默认 80 */
   passThreshold?: number;
 }

@@ -619,25 +619,45 @@ export function generatePraise(
   stats: ClassStats,
   getNickname: (name: string) => string,
   praiseType: 'entrance' | 'listening' | 'comprehensive' = 'comprehensive',
-  /** 指定模板内容（多模板管理时传入所选模板），缺省用 lessonConfig.praiseTemplate */
-  templateOverride?: string
+  /** 指定模板内容（多模板管理时传入所选模板），缺省用 lessonConfig.praiseTemplateByType / praiseTemplate */
+  templateOverride?: string,
+  /** 跨课次数据与参数（2026-10-24）：全勤按全课次判定、进步按自身提升算，名额/板块可调 */
+  opts?: {
+    allRecords?: StudentRecord[];
+    /** 兼容位：单一名额（不区分板块时使用） */
+    topN?: number;
+    entranceTopN?: number;
+    listeningTopN?: number;
+    sections?: { entrance?: boolean; listening?: boolean; homework?: boolean; allPresent?: boolean; progress?: boolean };
+  }
 ): string {
   // 兜底：旧备份 / 部分云同步可能缺 praiseTemplate，不能让它 undefined.replace 崩掉
   const FALLBACK_PRAISE_TEMPLATE = `🏆 第【课次】课【表彰类型】\n\n【表彰内容】\n\n上面这几位，这节课的功夫是实打实的。没上榜的也别急，下节课接着来。`;
-  const template = templateOverride ?? lessonConfig.praiseTemplate ?? FALLBACK_PRAISE_TEMPLATE;
+  void stats; // 进步之星改为"与自身历史比"，不再依赖班均；保留入参以兼容调用方
+  const byType = lessonConfig.praiseTemplateByType?.[praiseType];
+  const template = templateOverride ?? byType ?? lessonConfig.praiseTemplate ?? FALLBACK_PRAISE_TEMPLATE;
+  const sections = opts?.sections ?? {};
+  const included = (k: 'entrance' | 'listening' | 'homework' | 'allPresent' | 'progress') => sections[k] !== false;
+  const all = opts?.allRecords ?? records;
+  const byStudent = new Map<string, StudentRecord[]>();
+  all.forEach(r => {
+    const arr = byStudent.get(r.studentName);
+    if (arr) arr.push(r); else byStudent.set(r.studentName, [r]);
+  });
   
   let praiseContent = '';
   
-  if (praiseType === 'entrance' || praiseType === 'comprehensive') {
+  if ((praiseType === 'entrance' || praiseType === 'comprehensive') && included('entrance')) {
     // 入门测风云榜（请假/缺勤学员不计入）
     // 默认表彰前三名；同分并列一并纳入；表彰总人数控制在 6 人以内
     const scored = records
       .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
       .sort((a, b) => b.totalScore - a.totalScore);
+    const topN = Math.max(1, Math.min(20, opts?.entranceTopN ?? opts?.topN ?? 3));
     const distinctScores = Array.from(new Set(scored.map(r => r.totalScore)));
-    const thirdScore = distinctScores[2];
-    const tiered = thirdScore != null ? scored.filter(r => r.totalScore >= thirdScore) : scored;
-    const rankedStudents = tiered.slice(0, 6);
+    const cutoffScore = distinctScores[topN - 1];
+    const tiered = cutoffScore != null ? scored.filter(r => r.totalScore >= cutoffScore) : scored;
+    const rankedStudents = tiered.slice(0, topN * 2);
     const medalFor = (score: number): string => {
       const rk = distinctScores.indexOf(score) + 1;
       return rk === 1 ? '🥇' : rk === 2 ? '🥈' : rk === 3 ? '🥉' : `${rk}️⃣`;
@@ -653,7 +673,7 @@ export function generatePraise(
     }
   }
   
-  if (praiseType === 'listening' || praiseType === 'comprehensive') {
+  if ((praiseType === 'listening' || praiseType === 'comprehensive') && included('listening')) {
     // 课后任务排名（口径 2026-10-08 三修）：老师既没有"听力打卡/具体分数"字面量，
     // 也常常只填定性状态不填数值分（很棒哦👏 / 完成✅）；前两版要求数值分>0 → 真实数据仍空。
     // 现在：有数值分按分排；无数值分回退到"课后任务登记为正向状态"的学员，
@@ -664,11 +684,11 @@ export function generatePraise(
     const listeningRanked = records
       .filter(r => !isAbsentRecord(r) && (scoreOf(r) > 0 || positiveStatus(r)))
       .sort((a, b) => (scoreOf(b) - scoreOf(a)) || (Number(b.totalScore) - Number(a.totalScore)))
-      .slice(0, 5);
+      .slice(0, Math.max(1, Math.min(20, opts?.listeningTopN ?? opts?.topN ?? 5)));
     
     if (listeningRanked.length > 0) {
       praiseContent += '🎙️【课后任务达人】\n';
-      const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌'];
+      const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌', '📌', '📌', '📌'];
       listeningRanked.forEach((r, i) => {
         const nickname = getNickname(r.studentName);
         const tail = scoreOf(r) > 0
@@ -682,9 +702,9 @@ export function generatePraise(
   
   if (praiseType === 'comprehensive') {
     // 作业优秀
-    const homeworkExcellent = records
+    const homeworkExcellent = included('homework') ? records
       .filter(r => optionToneLevel(r.homeworkStatus) === 'good' && !isAbsentRecord(r))
-      .map(r => getNickname(r.studentName));
+      .map(r => getNickname(r.studentName)) : [];
     
     if (homeworkExcellent.length > 0) {
       praiseContent += `📚【作业超赞】\n`;
@@ -692,10 +712,16 @@ export function generatePraise(
       praiseContent += '\n\n';
     }
     
-    // 全勤学生（按考勤关键词归类，忽略 emoji 后缀）
-    const allPresent = records
-      .filter(r => attendanceKind(r.attendance) === 'onTime')
-      .map(r => getNickname(r.studentName));
+    // 全勤之星（2026-10-24 修口径）：按**全部课次**判定 —— 任何一次请假/迟到/缺勤/调课都不算全勤；
+    // 原来只看本课，导致"之前请过假也算全勤"（用户反馈）
+    const allPresent = included('allPresent')
+      ? [...byStudent.entries()]
+        .filter(([, recs]) => {
+          const kinds = recs.map(r => attendanceKind(r.attendance)).filter(k => k !== 'unknown');
+          return kinds.length > 0 && kinds.every(k => k === 'onTime');
+        })
+        .map(([name]) => getNickname(name))
+      : [];
     
     if (allPresent.length > 0) {
       praiseContent += `✅【全勤之星】\n`;
@@ -703,16 +729,22 @@ export function generatePraise(
       praiseContent += '\n\n';
     }
     
-    // 进步之星（与平均分差距最小的）
-    const progressStudents = records
-      .filter(r => r.totalScore > 0)
-      .map(r => ({
-        name: r.studentName,
-        nickname: getNickname(r.studentName),
-        diff: Math.abs(r.totalScore - stats.avgScore)
-      }))
-      .sort((a, b) => a.diff - b.diff)
-      .slice(0, 3);
+    // 稳步前进（2026-10-24 修口径）：与本生此前几次的平均比，提升最多者；
+    // 原实现是"与班均差距最小"，那不是进步，会选到中等生（用户质疑后修正）。
+    const progressStudents = included('progress')
+      ? [...byStudent.entries()]
+        .map(([name, recs]) => {
+          const cur = recs.find(r => r.lessonNumber === lessonNumber);
+          if (!cur || isAbsentRecord(cur) || !(cur.totalScore > 0)) return null;
+          const prev = recs.filter(r => r.lessonNumber !== lessonNumber && !isAbsentRecord(r) && r.totalScore > 0);
+          if (prev.length === 0) return null;
+          const base = prev.reduce((a, b) => a + Number(b.totalScore), 0) / prev.length;
+          return { name, nickname: getNickname(name), delta: Number(cur.totalScore) - base };
+        })
+        .filter((x): x is { name: string; nickname: string; delta: number } => !!x && x.delta > 0)
+        .sort((a, b) => b.delta - a.delta)
+        .slice(0, 3)
+      : [];
     
     if (progressStudents.length > 0) {
       praiseContent += `📈【稳步前进】\n`;

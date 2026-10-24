@@ -146,6 +146,9 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
         </CardContent>
       </Card>
 
+      {/* 高级配置（2026-10-24 折叠）：连接参数与建表步骤默认收起，只保留同步状态卡 */}
+      <details className="cloud-advanced">
+        <summary>Supabase 连接与首次配置</summary>
       {/* 配置表单 */}
       <Card className="ios-glass-card border-0">
         <CardHeader className="pb-3">
@@ -232,6 +235,7 @@ export function CloudSyncPanel({ sync }: { sync: Sync }) {
           </p>
         </CardContent>
       </Card>
+      </details>
     </div>
   );
 }

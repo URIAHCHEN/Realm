@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { BarChart3, BookMarked, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, TrendingUp, Trophy, Upload } from 'lucide-react';
+import { BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
@@ -125,6 +125,9 @@ function App() {
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('records');
+  // 2026-10-24：校内成绩并入「学情报告」、反馈素材并入「反馈生成」，用二级切换保持独立视图
+  const [reportView, setReportView] = useState<'report' | 'school'>('report');
+  const [feedbackView, setFeedbackView] = useState<'generate' | 'library'>('generate');
   const [analysisStudent, setAnalysisStudent] = useState<string | null>(null);
 
   // 团队权限：是否已登录、当前会话用户、成员身份（服务端 RLS 为准）
@@ -957,7 +960,9 @@ function App() {
         </div>
       </header>
 
-      {/* 班级选择栏：外层加 class-band —— 让背景色整宽延伸，卡片不再"悬在半空" */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+      {/* 班级选择栏：外层加 class-band —— 让背景色整宽延伸，卡片不再"悬在半空"；
+          主 Tab 行并入这一行右侧（2026-10-24），整体只占一屏高度 */}
       <div className="class-band max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
         <ClassSelector
           classes={classes}
@@ -967,11 +972,35 @@ function App() {
           onUpdateClass={updateClass}
           onDeleteClass={deleteClass}
           onAddStudents={addStudents}
+          rightSlot={(
+        <TabsList className="ios-tabs-list shrink-0">
+          <TabsTrigger value="records" className="ios-tab-trigger">
+            <BookOpen className="w-5 h-5" />
+            学情记录
+          </TabsTrigger>
+          <TabsTrigger value="feedback" className="ios-tab-trigger">
+            <FileText className="w-5 h-5" />
+            反馈生成
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="ios-tab-trigger">
+            <Trophy className="w-5 h-5" />
+            表扬榜
+          </TabsTrigger>
+          <TabsTrigger value="report" className="ios-tab-trigger">
+            <BarChart3 className="w-5 h-5" />
+            学情报告
+          </TabsTrigger>
+          <TabsTrigger value="cloud" className="ios-tab-trigger">
+            <Cloud className="w-5 h-5" />
+            同步中心
+          </TabsTrigger>
+        </TabsList>
+          )}
         />
       </div>
 
       {/* 主内容区 */}
-      <div className="max-w-[1600px] mx-auto px-4 pb-10 sm:px-6 sm:pb-12">
+      <div className="max-w-[1600px] mx-auto px-4 pt-5 pb-10 sm:px-6 sm:pb-12">
         {/* 云端不可达时的全局提示（与同步状态横幅独立，避免误以为系统坏了） */}
         <div className="mb-5">
           <BackendOfflineBanner
@@ -981,37 +1010,6 @@ function App() {
           />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="ios-tabs-list">
-            <TabsTrigger value="records" className="ios-tab-trigger">
-              <BookOpen className="w-5 h-5" />
-              学情记录
-            </TabsTrigger>
-            <TabsTrigger value="feedback" className="ios-tab-trigger">
-              <FileText className="w-5 h-5" />
-              反馈生成
-            </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="ios-tab-trigger">
-              <Trophy className="w-5 h-5" />
-              表扬榜
-            </TabsTrigger>
-            <TabsTrigger value="report" className="ios-tab-trigger">
-              <BarChart3 className="w-5 h-5" />
-              学情报告
-            </TabsTrigger>
-            <TabsTrigger value="cloud" className="ios-tab-trigger">
-              <Cloud className="w-5 h-5" />
-              同步中心
-            </TabsTrigger>
-            <TabsTrigger value="school" className="ios-tab-trigger">
-              <TrendingUp className="w-5 h-5" />
-              校内成绩
-            </TabsTrigger>
-            <TabsTrigger value="library" className="ios-tab-trigger">
-              <BookMarked className="w-5 h-5" />
-              反馈素材
-            </TabsTrigger>
-          </TabsList>
 
           {/* 学情记录 Tab */}
           <TabsContent value="records" className="main-tab-panel space-y-6">
@@ -1028,13 +1026,6 @@ function App() {
                   onViewStudent={handleViewStudentAnalysis}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                   lessonNumber={currentLessonNumber}
-                />
-                <LessonManager
-                  currentLessonNumber={currentLessonNumber}
-                  allLessons={allLessons}
-                  onSelectLesson={setCurrentLessonNumber}
-                  onAddLesson={handleAddLesson}
-                  onSaveCurrentLesson={handleSaveCurrentLesson}
                 />
               </div>
 
@@ -1071,6 +1062,16 @@ function App() {
                   getPublicityHTML={() => currentClass ? exportToHTML(currentClass.id, currentLessonNumber, displaySettings.settings.exportStyle) : ''}
                   onViewStudentAnalysis={handleViewStudentAnalysis}
                   onCopyStudentFeedback={handleCopyStudentFeedback}
+                  lessonBar={(
+                    <LessonManager
+                      compact
+                      currentLessonNumber={currentLessonNumber}
+                      allLessons={allLessons}
+                      onSelectLesson={setCurrentLessonNumber}
+                      onAddLesson={handleAddLesson}
+                      onSaveCurrentLesson={handleSaveCurrentLesson}
+                    />
+                  )}
                   onOpenConfig={() => setShowGenerateSettings(true)}
                 />
               </div>
@@ -1096,6 +1097,7 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+              onSaveLessonConfig={handleSaveLessonConfig}
             />
             <PraiseTemplateEditor
               lessonConfig={currentLessonConfig}
@@ -1109,7 +1111,23 @@ function App() {
 
           {/* 反馈生成 Tab */}
           <TabsContent value="feedback" className="main-tab-panel">
-
+            <div className="max-w-6xl mx-auto mb-4">
+              <div className="mode-seg" role="tablist" aria-label="反馈视图">
+                <button role="tab" aria-selected={feedbackView === 'generate'} className={`mode-seg-item ${feedbackView === 'generate' ? 'is-active' : ''}`} onClick={() => setFeedbackView('generate')}>反馈生成</button>
+                <button role="tab" aria-selected={feedbackView === 'library'} className={`mode-seg-item ${feedbackView === 'library' ? 'is-active' : ''}`} onClick={() => setFeedbackView('library')}>反馈素材</button>
+              </div>
+            </div>
+            {feedbackView === 'library' ? (
+              <Suspense fallback={<ModuleLoading label="反馈素材" />}>
+                <ErrorBoundary label="反馈素材">
+                  <FeedbackLibrary
+                    items={appConfig.savedFeedbacks || []}
+                    onChange={(list) => updateAppConfig({ savedFeedbacks: list })}
+                    currentLesson={currentLessonNumber}
+                  />
+                </ErrorBoundary>
+              </Suspense>
+            ) : (
             <Suspense fallback={<ModuleLoading label="反馈生成" />}>
             <ErrorBoundary label="反馈生成">
             <div className="max-w-6xl mx-auto space-y-5">
@@ -1137,47 +1155,31 @@ function App() {
           </ErrorBoundary>
           
             </Suspense>
-          </TabsContent>
-
-          {/* 反馈素材 Tab */}
-          <TabsContent value="library" className="main-tab-panel space-y-6">
-
-            <Suspense fallback={<ModuleLoading label="反馈素材" />}>
-            <ErrorBoundary label="反馈素材">
-            <FeedbackLibrary
-              items={appConfig.savedFeedbacks || []}
-              onChange={(list) => updateAppConfig({ savedFeedbacks: list })}
-              currentLesson={currentLessonNumber}
-            />
-          </ErrorBoundary>
-          
-            </Suspense>
-          </TabsContent>
-
-          {/* 校内成绩 Tab（懒加载：仅切到本 Tab 时才加载图表与 Excel 依赖） */}
-          <TabsContent value="school" className="main-tab-panel">
-
-            <Suspense fallback={<ModuleLoading label="校内成绩" />}>
-            <ErrorBoundary label="校内成绩">
-            <Suspense fallback={<ModuleLoading label="校内成绩" />}>
-              <SchoolScorePanel
-                students={currentClass?.students || []}
-                scores={currentClass
-                  ? currentClass.students.flatMap(s => schoolScores[s] || [])
-                  : []}
-                onAddScore={addSchoolScore}
-                onDeleteScore={handleDeleteScore}
-                onImportExcel={handleImportExcel}
-                getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-              />
-            </Suspense>
-          </ErrorBoundary>
-          
-            </Suspense>
+            )}
           </TabsContent>
 
           {/* 学情报告 Tab（懒加载：仅切到本 Tab 时才加载图表与截图依赖） */}
           <TabsContent value="report" className="main-tab-panel">
+            <div className="mb-4">
+              <div className="mode-seg" role="tablist" aria-label="报告视图">
+                <button role="tab" aria-selected={reportView === 'report'} className={`mode-seg-item ${reportView === 'report' ? 'is-active' : ''}`} onClick={() => setReportView('report')}>学情报告</button>
+                <button role="tab" aria-selected={reportView === 'school'} className={`mode-seg-item ${reportView === 'school' ? 'is-active' : ''}`} onClick={() => setReportView('school')}>校内成绩</button>
+              </div>
+            </div>
+            {reportView === 'school' ? (
+            <ErrorBoundary label="校内成绩">
+              <Suspense fallback={<ModuleLoading label="校内成绩" />}>
+                <SchoolScorePanel
+                  students={currentClass?.students || []}
+                  scores={currentClass ? currentClass.students.flatMap(s => schoolScores[s] || []) : []}
+                  onAddScore={addSchoolScore}
+                  onDeleteScore={handleDeleteScore}
+                  onImportExcel={handleImportExcel}
+                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                />
+              </Suspense>
+            </ErrorBoundary>
+            ) : (
             <ErrorBoundary label="学情报告">
             <Suspense fallback={<ModuleLoading label="学情报告" />}>
               <StudentReport
@@ -1191,7 +1193,8 @@ function App() {
                 oralRating={appConfig.oralRating}
               />
             </Suspense>
-          </ErrorBoundary>
+            </ErrorBoundary>
+            )}
           </TabsContent>
 
           {/* 系统配置已并入「反馈生成 → 生成设置」 */}
@@ -1233,8 +1236,8 @@ function App() {
             </div>
           </ErrorBoundary>
           </TabsContent>
-        </Tabs>
       </div>
+      </Tabs>
 
       {/* 学生导入模态框 */}
       <GenerateSettingsDialog

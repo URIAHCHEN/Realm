@@ -14,6 +14,8 @@ interface ClassSelectorProps {
   onUpdateClass: (classId: string, patch: { name?: string; term?: string; batchCode?: string }) => void;
   onDeleteClass: (classId: string) => void;
   onAddStudents: (classId: string, studentNames: string[]) => void;
+  /** 右上角插槽（主 Tab 行放在这里，与"班级选择"同一行，2026-10-24） */
+  rightSlot?: React.ReactNode;
 }
 
 export function ClassSelector({
@@ -23,7 +25,8 @@ export function ClassSelector({
   onCreateClass,
   onUpdateClass,
   onDeleteClass,
-  onAddStudents
+  onAddStudents,
+  rightSlot,
 }: ClassSelectorProps) {
   const [newClassName, setNewClassName] = useState('');
   const [newTerm, setNewTerm] = useState('FY27Q1');
@@ -178,7 +181,10 @@ export function ClassSelector({
           班级选择
           {!totalEmpty && <span className="text-[color:var(--ink-4)] text-sm font-normal">· {visibleClasses.length}/{allClasses.length}</span>}
         </h2>
-        {ManageButton}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {rightSlot}
+          {ManageButton}
+        </div>
       </div>
 
       {/* 空状态：完全没有班级 */}

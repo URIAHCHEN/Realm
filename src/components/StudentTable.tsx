@@ -52,6 +52,8 @@ interface StudentTableProps {
   onViewStudentAnalysis: (studentName: string) => void;
   /** 行悬停快捷操作：复制该生本课反馈（由 App 统一生成） */
   onCopyStudentFeedback?: (studentName: string) => void;
+  /** 课次切换条（从左侧卡片并入表头，2026-10-24） */
+  lessonBar?: React.ReactNode;
 }
 
 const seasons: { value: SeasonType; label: string; className: string }[] = [
@@ -208,7 +210,7 @@ function NoteInput({ value, onCommit, placeholder, className }: {
 export function StudentTable({
   students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
-  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback,
+  onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback, lessonBar,
   onRemoveStudentsFromLesson,
   onOpenConfig,
 }: StudentTableProps) {
@@ -614,6 +616,7 @@ export function StudentTable({
             )}
           </div>
         </div>
+        {lessonBar && <div className="mt-3">{lessonBar}</div>}
       </CardHeader>
       <CardContent>
         {students.length === 0 ? (

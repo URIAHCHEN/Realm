@@ -398,7 +398,7 @@ export function StudentReport({
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             <Tabs value={reportMode} onValueChange={(v) => setReportMode(v as typeof reportMode)} className="w-auto">
-              <TabsList className="grid w-64 grid-cols-2">
+              <TabsList className="mode-seg-grid w-64">
                 <TabsTrigger value="personal" className="gap-2">
                   <User className="w-4 h-4" />
                   个人报告

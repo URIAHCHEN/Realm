@@ -2041,7 +2041,7 @@ body{
 
 /* 非导航的分段控件（如反馈页「常规反馈 / 四个一」）恢复自身外观：
    上几轮我的全局 [role="tablist"] 规则把它也当成导航改了，导致"好端端改成这样很难看"。 */
-[role="tablist"]:not(.ios-tabs-list) {
+[role="tablist"]:not(.ios-tabs-list):not(.mode-seg):not(.mode-seg-grid) {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px !important;
@@ -2052,7 +2052,7 @@ body{
   width: fit-content !important;
   margin: 0 auto !important;
 }
-[role="tablist"]:not(.ios-tabs-list) > button {
+[role="tablist"]:not(.ios-tabs-list):not(.mode-seg):not(.mode-seg-grid) > button {
   height: 32px !important;
   border-radius: 9px !important;
   font-size: 13px !important;
@@ -3113,34 +3113,6 @@ h1, h2, h3,
 .praise-kpi-label { font-size: 12px; color: var(--ink-4); }
 .praise-kpi-ico { color: rgb(var(--brand-rgb) / 0.55); }
 .dark .praise-kpi { background: rgba(255, 255, 255, 0.05); }
-/* 榜单类型：分段控件（替代下拉） */
-.mode-seg {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.045);
-}
-.mode-seg-item {
-  border: none;
-  background: transparent;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
-}
-.mode-seg-item:hover { color: var(--ink); }
-.mode-seg-item.is-active {
-  background: #fff;
-  color: rgb(var(--brand-rgb));
-  box-shadow: 0 1px 3px rgb(15 23 42 / 0.12), 0 0 0 1px rgba(255, 255, 255, 0.7);
-  font-weight: 600;
-}
-.dark .mode-seg { background: rgba(255, 255, 255, 0.06); }
-.dark .mode-seg-item.is-active { background: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
 
 /* —— W4 反馈生成：预览纸张化（微暖白 + 细纸感，暗色不白板） —— */
 .feedback-paper,
@@ -3336,7 +3308,6 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
 /* ② 灰底统一：汇总行/分段控件等从"中性灰"改为品牌低饱和底（跟随主题色相，但只有 3% 左右） */
 .class-stats-row > td,
 .class-stats-row > th { background: rgb(var(--brand-rgb) / 0.035) !important; }
-.mode-seg { background: rgb(var(--brand-rgb) / 0.05); }
 /* 表格表头：极淡品牌底，替代纯灰 */
 .data-table thead th { background: rgba(255, 255, 255, 0.82) !important; }
 
@@ -3469,3 +3440,78 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
 .cloud-advanced[open] > summary { margin-bottom: 12px; }
 .cloud-advanced > div, .cloud-advanced > .ios-glass-card { margin-top: 12px; }
 .dark .cloud-advanced > summary { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.10); }
+
+/* ==================== 视觉升级 v11 · 分段控件统一（2026-10-24） ====================
+   用户反馈"灰色小选项很突兀"：灰底胶囊改为"描边容器 + 白色选中片"，与工具栏按钮同一材质语言；
+   反馈生成/反馈素材 并入工具栏（不再单独占一行）。 */
+
+.mode-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+}
+.mode-seg-item {
+  border: none;
+  background: transparent;
+  padding: 5px 10px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.mode-seg-item:hover { color: var(--ink); background: rgba(15, 23, 42, 0.04); }
+.mode-seg-item.is-active {
+  background: #fff;
+  color: rgb(var(--brand-rgb));
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.10);
+}
+.dark .mode-seg { border-color: rgba(255, 255, 255, 0.12); }
+.dark .mode-seg-item.is-active { background: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
+
+/* 报告页的「个人/班级」切换（shadcn TabsList 版）：同样去灰底、改描边 */
+.mode-seg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: transparent !important;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  height: auto !important;
+}
+.mode-seg-grid [role="tab"] {
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background: transparent;
+  box-shadow: none !important;
+}
+.mode-seg-grid [role="tab"][data-state="active"] {
+  background: #fff;
+  color: rgb(var(--brand-rgb));
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.10) !important;
+}
+.dark .mode-seg-grid { border-color: rgba(255, 255, 255, 0.12); }
+.dark .mode-seg-grid [role="tab"][data-state="active"] { background: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
+
+/* 工具栏内的分隔线（视图切换与模式切换之间） */
+.tb-divider { width: 1px; height: 18px; background: rgba(15, 23, 42, 0.10); flex: 0 0 auto; }
+.dark .tb-divider { background: rgba(255, 255, 255, 0.14); }
+
+/* 工具栏内的紧凑分段（与按钮同一条线，不换行） */
+.mode-seg--sm { padding: 2px; border-radius: 10px; }
+.mode-seg--sm .mode-seg-item { padding: 4px 8px; font-size: 12px; border-radius: 8px; }
+
+/* 分段控件宽度按内容收缩（避免在 flex 行里被拉满整行） */
+.mode-seg { width: fit-content; max-width: 100%; }
+
+/* 分段控件：强制按内容宽度，且不参与 flex 伸缩（防止被父级拉满整行） */
+.mode-seg { width: fit-content !important; flex: 0 0 auto !important; }

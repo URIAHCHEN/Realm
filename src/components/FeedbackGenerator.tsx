@@ -51,6 +51,8 @@ interface FeedbackGeneratorProps {
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 点击群发列表中的姓名弹出该生学情报告 */
   onViewStudent?: (name: string) => void;
+  /** 视图切换（反馈生成 / 反馈素材），并入工具栏，避免单独一行灰 pill */
+  viewSwitch?: React.ReactNode;
   /** 班级名（仅用于导出文件名） */
   className?: string;
 }
@@ -69,6 +71,7 @@ export function FeedbackGenerator({
   libraryLinks = [],
   onSaveLessonConfig,
   onViewStudent,
+  viewSwitch,
   className
 }: FeedbackGeneratorProps) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -542,7 +545,7 @@ export function FeedbackGenerator({
                 title="一列学生、一列私发、一列四个一；粘贴到 Excel / 腾讯文档即成对照表"
               >
                 <Table2 className="w-4 h-4" />
-                复制三列对照表
+                复制对照表
               </Button>
               <Button
                 variant="outline"
@@ -551,7 +554,7 @@ export function FeedbackGenerator({
                 title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                导出教师精灵表
+                教师精灵表
               </Button>
               <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
                 title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
@@ -561,7 +564,7 @@ export function FeedbackGenerator({
               <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyAdviceBatch}
                 title="学生 | 学习建议（精简版）两列表格，粘贴进 Excel / 腾讯文档即成对照表">
                 <Lightbulb className="w-4 h-4" />
-                复制学习建议
+                复制建议
               </Button>
               <details className="fb-more">
                 <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
@@ -570,18 +573,20 @@ export function FeedbackGenerator({
                   <button role="menuitem" onClick={handleResetStatus}><RotateCcw className="w-4 h-4" />重置状态</button>
                 </div>
               </details>
-              <div role="tablist" className="inline-flex gap-1 p-1 rounded-[var(--r-md)] bg-black/[0.05]">
+              <div role="tablist" className="mode-seg mode-seg--sm">
               <button
               role="tab" aria-selected={feedbackMode === 'normal'}
               onClick={() => setFeedbackMode('normal')}
-              className={`px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'normal' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              className={`mode-seg-item ${feedbackMode === 'normal' ? 'is-active' : ''}`}
               >常规反馈</button>
               <button
               role="tab" aria-selected={feedbackMode === 'fourInOne'}
               onClick={() => setFeedbackMode('fourInOne')}
-              className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-medium transition-all ${feedbackMode === 'fourInOne' ? 'bg-white shadow-sm text-[color:var(--ink)]' : 'text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+              className={`mode-seg-item inline-flex items-center gap-1.5 ${feedbackMode === 'fourInOne' ? 'is-active' : ''}`}
               ><Sparkles className="w-3.5 h-3.5" />四个一</button>
               </div>
+              {viewSwitch && <span className="tb-divider" aria-hidden="true" />}
+              {viewSwitch}
 
             </div>
           </div>
@@ -730,11 +735,11 @@ export function FeedbackGenerator({
                             {hasRecord ? `${recordOf(s)!.totalScore}分 · 第${recordOf(s)!.rank}名` : '本课无记录'}
                           </span>
                         </span>
-                        {/* 一键复制学习建议（精简版）—— 与「四个一」复制的同级快捷入口 */}
+                        {/* 一键复制建议（精简版）—— 与「四个一」复制的同级快捷入口 */}
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); void handleCopyAdvice(s); }}
-                          title="复制学习建议（精简版，可直接发家长）"
+                          title="复制建议（精简版，可直接发家长）"
                           className="p-1.5 rounded-lg text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.08)] flex-shrink-0 transition-opacity"
                         >
                           <Lightbulb className="w-4 h-4" />

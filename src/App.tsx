@@ -128,6 +128,8 @@ function App() {
   // 2026-10-24：校内成绩并入「学情报告」、反馈素材并入「反馈生成」，用二级切换保持独立视图
   const [reportView, setReportView] = useState<'report' | 'school'>('report');
   const [feedbackView, setFeedbackView] = useState<'generate' | 'library'>('generate');
+  // 提前取出布尔值，避免在三元分支内比较被 TS 收窄成单一字面量
+  const showLibrary = feedbackView === 'library';
   const [analysisStudent, setAnalysisStudent] = useState<string | null>(null);
 
   // 团队权限：是否已登录、当前会话用户、成员身份（服务端 RLS 为准）
@@ -960,7 +962,7 @@ function App() {
         </div>
       </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="!block space-y-0">
       {/* 班级选择栏：外层加 class-band —— 让背景色整宽延伸，卡片不再"悬在半空"；
           主 Tab 行并入这一行右侧（2026-10-24），整体只占一屏高度 */}
       <div className="class-band max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
@@ -1111,13 +1113,7 @@ function App() {
 
           {/* 反馈生成 Tab */}
           <TabsContent value="feedback" className="main-tab-panel">
-            <div className="max-w-6xl mx-auto mb-4">
-              <div className="mode-seg" role="tablist" aria-label="反馈视图">
-                <button role="tab" aria-selected={feedbackView === 'generate'} className={`mode-seg-item ${feedbackView === 'generate' ? 'is-active' : ''}`} onClick={() => setFeedbackView('generate')}>反馈生成</button>
-                <button role="tab" aria-selected={feedbackView === 'library'} className={`mode-seg-item ${feedbackView === 'library' ? 'is-active' : ''}`} onClick={() => setFeedbackView('library')}>反馈素材</button>
-              </div>
-            </div>
-            {feedbackView === 'library' ? (
+            {showLibrary ? (
               <Suspense fallback={<ModuleLoading label="反馈素材" />}>
                 <ErrorBoundary label="反馈素材">
                   <FeedbackLibrary
@@ -1145,6 +1141,12 @@ function App() {
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
               onViewStudent={handleViewStudentAnalysis}
+              viewSwitch={(
+                <div className="mode-seg mode-seg--sm" role="tablist" aria-label="反馈视图">
+                  <button role="tab" aria-selected={!showLibrary} className={`mode-seg-item ${!showLibrary ? 'is-active' : ''}`} onClick={() => setFeedbackView('generate')}>反馈生成</button>
+                  <button role="tab" aria-selected={showLibrary} className={`mode-seg-item ${showLibrary ? 'is-active' : ''}`} onClick={() => setFeedbackView('library')}>反馈素材</button>
+                </div>
+              )}
             />
 
 

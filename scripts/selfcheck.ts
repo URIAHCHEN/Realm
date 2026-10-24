@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
+import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
@@ -603,6 +604,51 @@ group('反馈占位符兜底');
   );
   check(named.includes('诗钰家长好'), '称呼用短昵称（诗钰家长好）');
   check(!named.includes('郭诗钰家长好'), '称呼不出现全名');
+}
+
+// ============ 详细版反馈（四段式）：按样例口径验收（2026-10-24） ============
+group('详细版反馈生成器');
+{
+  const qts = [
+    { id: 'v1', name: '词汇', fullScore: 24, order: 0 },
+    { id: 'v2', name: '单选', fullScore: 5, order: 1 },
+    { id: 'v3', name: '默写', fullScore: 14, order: 2 },
+    { id: 'v4', name: '阅读', fullScore: 9, order: 3 },
+  ];
+  const cfgD = {
+    questionTypes: qts, customFields: [], homeworkOptions: ['完成✅', '未完成❌'], listeningOptions: ['很棒哦👏'],
+    attendanceOptions: ['准时👍'], classPerformanceOptions: ['认真积极', '正确率低'], homeworkText: '', passThreshold: 80,
+  } as unknown as import('@/types').LessonConfig;
+  const statsD = { avgScores: { v1: 20, v2: 4, v3: 11, v4: 6 }, registeredCounts: { v1: 20, v2: 20, v3: 20, v4: 20 } } as unknown as import('@/types').ClassStats;
+  const mkD = (o: Partial<Record<string, unknown>> = {}) => ({
+    id: 'd1', studentName: '黎少彬', lessonNumber: 6, seasons: [], attendance: '准时👍',
+    homeworkStatus: '完成✅', listeningStatus: '很棒哦👏', listeningScore: 10, classPerformance: '认真积极',
+    scores: { v1: 24, v2: 5, v3: 14, v4: 9 }, totalScore: 52, correctRate: 100, rank: 1, date: '2026-10-24', ...o,
+  }) as unknown as StudentRecord;
+
+  const top = buildDetailedFeedback(mkD(), cfgD, statsD, '黎少彬', 0, 21);
+  check(top.text1.includes('满分不是靠临场反应'), '详细版：多项满分写"满分不是靠临场反应"');
+  check(!/待提升|还有空间|要盯的是|最需要补/.test(top.text1), '详细版：无弱项时不出"要盯的一处"');
+  check(top.text1.startsWith('黎少彬这次 52/52（100%），班级第 1 名（全班第一）。'), '详细版：段①定位句与样例一致');
+
+  const back = buildDetailedFeedback(mkD({ rank: 15, scores: { v1: 18, v2: 2, v3: 10, v4: 7 }, totalScore: 37 }), cfgD, statsD, '张三', 1, 21);
+  check(back.text1.includes('班级后段'), '详细版：第15/21名写"班级后段"（不写中上）');
+  check(back.text1.includes('比班均低'), '详细版：弱项写出与班均的差距');
+  check(!back.text1.includes('把题干的关键词没划出来就选了处理好'), '详细版：不出现"把…处理好"的病句拼接');
+
+  const badHw = buildDetailedFeedback(mkD({ homeworkStatus: '未完成❌', classPerformance: '正确率低', scores: { v1: 12, v2: 2, v3: 6, v4: 3 }, totalScore: 23, rank: 18 }), cfgD, statsD, '李四', 0, 21);
+  check(!badHw.text1.includes('课堂练习完成得很好'), '详细版：课堂练习未完成时不夸课堂练习');
+
+  const blank = buildDetailedFeedback(mkD({ scores: { v1: 20, v2: 4, v3: 11, v4: 0 }, totalScore: 35, rank: 12 }), cfgD, statsD, '王五', 0, 21);
+  check(blank.text1.includes('基本是空白'), '详细版：0-10% 的项写"基本是空白"');
+  check(!/不是不会/.test(blank.text1), '详细版：空白项不写"不是不会"');
+
+  const len = (top.text1 + '\n\n' + top.text2).replace(/\s/g, '').length;
+  check(len > 180 && len < 420, `详细版：单条字数在合理区间（实际 ${len}）`);
+
+  const e0 = buildDetailedFeedback(mkD({ rank: 8, scores: { v1: 20, v2: 4, v3: 11, v4: 6 }, totalScore: 41 }), cfgD, statsD, '甲', 0, 21).text2;
+  const e1 = buildDetailedFeedback(mkD({ rank: 8, scores: { v1: 20, v2: 4, v3: 11, v4: 6 }, totalScore: 41 }), cfgD, statsD, '甲', 1, 21).text2;
+  check(e0 !== e1, '详细版：换一版措辞时鼓励句轮换（同班不撞句）');
 }
 
 // ============ 题型归类：常见题型必须归到正确板块（2026-10-24 用户反馈"其他"） ============

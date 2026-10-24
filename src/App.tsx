@@ -1137,6 +1137,12 @@ function App() {
                     items={appConfig.savedFeedbacks || []}
                     onChange={(list) => updateAppConfig({ savedFeedbacks: list })}
                     currentLesson={currentLessonNumber}
+                    viewSwitch={(
+                      <div className="mode-seg mode-seg--sm" role="tablist" aria-label="反馈视图">
+                        <button role="tab" aria-selected={!showLibrary} className={`mode-seg-item ${!showLibrary ? 'is-active' : ''}`} onClick={() => setFeedbackView('generate')}>反馈生成</button>
+                        <button role="tab" aria-selected={showLibrary} className={`mode-seg-item ${showLibrary ? 'is-active' : ''}`} onClick={() => setFeedbackView('library')}>反馈素材</button>
+                      </div>
+                    )}
                   />
                 </ErrorBoundary>
               </Suspense>

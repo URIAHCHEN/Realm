@@ -17,12 +17,13 @@ interface FeedbackLibraryProps {
   items: SavedFeedback[];
   onChange: (next: SavedFeedback[]) => void;
   currentLesson: number;
-  /** 供外部（反馈生成）复用的插入回调；此处仅复制 */
+  /** 视图切换（反馈生成 / 反馈素材）：放在卡片头，保证素材页也能切回生成页 */
+  viewSwitch?: React.ReactNode;
 }
 
 const genId = () => 'fb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-export function FeedbackLibrary({ items, onChange, currentLesson }: FeedbackLibraryProps) {
+export function FeedbackLibrary({ items, onChange, currentLesson, viewSwitch }: FeedbackLibraryProps) {
   const [editing, setEditing] = useState<SavedFeedback | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<SavedFeedback>({ id: '', lessonNumber: currentLesson, title: '', content: '', links: [], updatedAt: '' });
@@ -82,6 +83,8 @@ export function FeedbackLibrary({ items, onChange, currentLesson }: FeedbackLibr
             预存反馈素材库
             <Badge variant="secondary" className="ml-1 rounded-full">{items.length}</Badge>
           </div>
+          <div className="flex items-center gap-2 flex-wrap">
+          {viewSwitch}
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="ios-button gap-2" onClick={openNew}><Plus className="w-4 h-4" />新增素材</Button>
@@ -111,6 +114,7 @@ export function FeedbackLibrary({ items, onChange, currentLesson }: FeedbackLibr
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {items.length === 0 ? (

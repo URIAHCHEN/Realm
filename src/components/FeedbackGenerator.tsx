@@ -13,6 +13,7 @@ import { generatePersonalFeedback, generateFourInOne, generateShortNickname, cop
 import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
 import { exportTeacherElfXlsx } from '@/lib/teacherElfExport';
 import { longTermWeakCategories } from '@/lib/longTermWeak';
+import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
@@ -99,6 +100,8 @@ export function FeedbackGenerator({
 
   // 反馈模式：常规模板 / 四个一
   const [feedbackMode, setFeedbackMode] = useState<'normal' | 'fourInOne'>('normal');
+  // 四个一下的「精简版 / 详细版」：详细版走四段式生成器（2026-10-24）
+  const [detailLevel, setDetailLevel] = useState<'brief' | 'detailed'>('brief');
   const [scenario, setScenario] = useState<'daily' | 'afterclass' | 'comm'>('daily');
   const [isNewStudent, setIsNewStudent] = useState(false);
   // 是否附「参考教辅」清单（默认不附——四个一以正文为主，需要时再勾选，避免消息过长）
@@ -161,6 +164,10 @@ export function FeedbackGenerator({
     const record = recordOf(name);
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
+      if (detailLevel === 'detailed') {
+        const d = buildDetailedFeedback(record, lessonConfig, stats, getNickname(name), variant, lessonRecords.filter(isQuizAssessed).length);
+        return `${d.text1}\n\n${d.text2}`;
+      }
       return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' }, weakOf(name));
     }
     return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, { '【学习建议】': adviceMap[name] || '' });
@@ -184,7 +191,7 @@ export function FeedbackGenerator({
     // 内容变了，"已发送"标记失效
     setCopiedSet(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftFeedback, draftFourInOne, scenario, variant, isNewStudent, withMaterials, feedbackMode]);
+  }, [draftFeedback, draftFourInOne, scenario, variant, isNewStudent, withMaterials, feedbackMode, detailLevel]);
 
   // 外部模板变化（保存成功 / 切换课次或班级）时回填草稿
   useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonConfig.feedbackTemplate]);
@@ -375,6 +382,7 @@ export function FeedbackGenerator({
   const ELF_KIND_LABEL: Record<'private' | 'fourInOne' | 'advice', string> = {
     private: '私发反馈', fourInOne: '四个一反馈', advice: '学习建议',
   };
+  const assessedCount = lessonRecords.filter(isQuizAssessed).length;
   const buildElfText = (name: string, kind: 'private' | 'fourInOne' | 'advice'): string => {
     if (kind === 'advice') return adviceMap[name] || '';
     const rec = recordOf(name);
@@ -394,6 +402,23 @@ export function FeedbackGenerator({
       return;
     }
     try {
+      // 详细版：按教师精灵原生结构导出「姓名 | 文本1 | 文本2」（2026-10-24）
+      if (detailLevel === 'detailed') {
+        const dRows = batchRows.map(r => {
+          const rec = recordOf(r.name);
+          if (!rec) return null;
+          const d = buildDetailedFeedback(rec, lessonConfig, stats, getNickname(r.name), variant, assessedCount);
+          return { name: getNickname(r.name), text1: d.text1, text2: d.text2 };
+        }).filter((x): x is { name: string; text1: string; text2: string } => !!x);
+        const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows: dRows, includeText2: true });
+        const notes = [
+          `B-D 列 = 学生姓名 / 详细版·文本1 / 文本2，共 ${dRows.length} 人`,
+          excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',
+          truncated ? `${truncated} 条文本超过模板 1000 字上限，已截断` : '',
+        ].filter(Boolean).join('；');
+        toast.success(`已导出 ${filename}`, { description: notes, duration: 9000 });
+        return;
+      }
       const rows = batchRows.map(r => ({
         name: getNickname(r.name),
         text1: buildElfText(r.name, elfColC),
@@ -534,6 +559,12 @@ export function FeedbackGenerator({
               className={`mode-seg-item inline-flex items-center gap-1.5 ${feedbackMode === 'fourInOne' ? 'is-active' : ''}`}
               ><Sparkles className="w-3.5 h-3.5" />四个一</button>
               </div>
+              {isFourInOne && (
+                <div role="tablist" className="mode-seg mode-seg--sm" aria-label="详细程度">
+                  <button role="tab" aria-selected={detailLevel === 'brief'} className={`mode-seg-item ${detailLevel === 'brief' ? 'is-active' : ''}`} onClick={() => setDetailLevel('brief')}>精简版</button>
+                  <button role="tab" aria-selected={detailLevel === 'detailed'} className={`mode-seg-item ${detailLevel === 'detailed' ? 'is-active' : ''}`} onClick={() => setDetailLevel('detailed')}>详细版</button>
+                </div>
+              )}
               {viewSwitch && <span className="tb-divider" aria-hidden="true" />}
               {viewSwitch}
 

@@ -8,6 +8,7 @@ import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
+import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { planTeacherElfColumns, buildTeacherElfTable } from '@/lib/teacherElfExport';
@@ -926,6 +927,45 @@ group('表扬榜：离班学员有效性');
     { entranceTopN: 1 },
   );
   check(rateRankedPraise.indexOf('正确率高') >= 0 && (rateRankedPraise.indexOf('正确率高') < rateRankedPraise.indexOf('原始分高') || !rateRankedPraise.includes('原始分高')), '班群公示风云榜按正确率优先，不按原始分');
+}
+
+group('题型归并 · 同名跨课次溯源');
+{
+  const cfgOf = (lessonNumber: number, questionTypes: QuestionType[]): LessonConfig => ({
+    lessonNumber, questionTypes, customFields: [], attendanceOptions: ['准时👍'], homeworkOptions: [],
+    listeningOptions: [], classPerformanceOptions: [], feedbackTemplate: '', fourInOneTemplate: '',
+    homeworkText: '', praiseTemplate: '', passThreshold: 80,
+  }) as unknown as LessonConfig;
+  const mergedCfg = {
+    '1': cfgOf(1, [{ id: 'a1', name: '语法选择', fullScore: 10, order: 0 }]),
+    '2': cfgOf(2, [{ id: 'a2', name: '语法选择', fullScore: 20, order: 0 }]),
+  };
+  const twoLessons = [
+    rec({ id: 'qt-r1', lessonNumber: 1, scores: { a1: 8 }, totalScore: 8, correctRate: 80 }),
+    rec({ id: 'qt-r2', lessonNumber: 2, scores: { a2: 15 }, totalScore: 15, correctRate: 75 }),
+  ];
+  const merged = collectQuestionTypeStats(twoLessons, mergedCfg);
+  check(merged.length === 1, '同名题型跨课次合并为 1 条（不再重复出现同一题型卡片）');
+  check(merged[0].lessons.join(',') === '1,2', '保留来源课次（1、2）供卡片溯源');
+  check(merged[0].byLesson.length === 2 && merged[0].byLesson[1].correctRate === 75, '每课明细按该课满分算得分率');
+  check(merged[0].correctRate === 76.7, '合并后得分率按总得分÷总满分加权（23/30）');
+  check(merged[0].avgScore === 11.5 && merged[0].fullScore === 15, '合并后均分与均满分按样本数计算');
+
+  const personal = computeStudentReportStats(twoLessons, mergedCfg, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(!!personal && personal.avgQuestionTypeScores.length === 1 && personal.avgQuestionTypeScores[0].lessons.length === 2, '个人报告统计层同样按名称归并');
+
+  const dupCfg = {
+    '1': cfgOf(1, [
+      { id: 'b1', name: '完形填空', fullScore: 10, order: 0 },
+      { id: 'b2', name: '完形 填空', fullScore: 5, order: 1 },
+    ]),
+  };
+  const dup = collectQuestionTypeStats([rec({ id: 'qt-r3', lessonNumber: 1, scores: { b1: 8, b2: 4 } })], dupCfg);
+  check(dup.length === 1 && dup[0].count === 1 && dup[0].avgScore === 12, '同一课次重复登记的同类题型合并为一条记录，不稀释均分');
+  check(questionTypeKey(' 语法 选择 ') === '语法选择', '题型名称归一化忽略空白');
+
+  const classStats = computeClassReportStats(twoLessons, mergedCfg, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(!!classStats && classStats.questionTypeAvg.length === 1, '班级报告题型均分同样不重复');
 }
 
 group('报告话术：稳定、可比、去模板腔');

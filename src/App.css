@@ -4038,6 +4038,90 @@ html[data-exporting] .praise-root .fengyun-poster {
 }
 .report-detail-kpis strong { color: #1d4ed1; font-family: var(--font-display); font-size: 24px; line-height: 1; }
 .report-detail-kpis span { margin-top: 6px; color: #758499; font-size: 10.5px; }
+/* 卷面得分明细：左百分比堆叠、右失分饼图 */
+.report-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.report-chart-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 12px 6px;
+  border: 1px solid rgba(15, 23, 42, 0.045);
+  border-radius: 14px;
+  background: #fafbfc;
+}
+.report-chart-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 0 4px 6px;
+}
+.report-chart-card-head > span:first-child { color: #25384f; font-size: 12.5px; font-weight: 700; }
+.report-chart-card-head > span:last-child { color: #8a99ac; font-size: 10.5px; }
+.report-chart-card .report-chart-container { padding: 6px 4px 0; border: 0; background: transparent; }
+.report-donut-wrap { position: relative; }
+.report-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.report-donut-center strong { color: #1d4ed1; font-family: var(--font-display); font-size: 26px; line-height: 1; }
+.report-donut-center span { color: #8a99ac; font-size: 10.5px; }
+.report-donut-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 4px 6px 8px;
+}
+.report-donut-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #5d6c80;
+  font-size: 11px;
+}
+.report-donut-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.report-donut-legend b { color: #334155; font-weight: 700; font-variant-numeric: tabular-nums; }
+.report-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #8a99ac;
+  font-size: 12px;
+}
+/* 题型卡片 · 课次溯源 */
+.advice-question-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+.advice-question-source-label { color: #8a99ac; font-size: 10.5px; }
+.advice-question-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #52657d;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+.advice-question-chip.is-rest { background: rgba(15, 23, 42, 0.05); color: #7b8798; }
 .report-parent-note {
   margin-top: 2px;
   padding: 17px 18px;
@@ -4051,6 +4135,10 @@ html[data-exporting] .praise-root .fengyun-poster {
 .report-parent-note > span { display: inline-block; margin-right: 7px; color: #a56c20; font-weight: 700; }
 .dark .report-parent-note { border-color: rgba(210, 153, 65, 0.18); background: rgba(210, 153, 65, 0.09); color: #d9c9ab; }
 
+@media (max-width: 1100px) {
+  .report-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 760px) {
   .report-personal .report-cover { padding: 22px !important; }
   .report-cover-avatar { width: 58px; height: 58px; font-size: 23px; }
@@ -4059,6 +4147,8 @@ html[data-exporting] .praise-root .fengyun-poster {
   .report-overview-stats > div { min-height: 78px; padding: 8px 4px; }
   .report-insight-grid { grid-template-columns: 1fr; }
   .report-personal .report-section-note { width: 100%; margin-left: 40px !important; }
+  .report-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .report-chart-card-head > span:last-child { display: none; }
 }
 .dark .report-personal { background: #131b27 !important; }
 .dark .report-overview-summary { background: rgba(45, 109, 227, 0.10); color: #c3d3e9; }

@@ -17,9 +17,12 @@ import { Badge } from '@/components/ui/badge';
 import { ReportCustomFields } from '@/components/ReportCustomFields';
 import { TeachingAdvice } from '@/components/report/TeachingAdvice';
 import { splitSegments, isReportAssessed, type StudentReportStats, type ClassReportStats } from '@/lib/reportStats';
+import type { QuestionTypeStat } from '@/lib/questionTypeStats';
+import { buildCondensedAdvice } from '@/lib/studentAdvice';
+import { generateShortNickname } from '@/lib/feedbackTemplates';
 import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
-  CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
+  CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES, CHART_FONT_FAMILY,
 } from '@/lib/chartTheme';
 import { CHART_ANIM } from '@/lib/chartMotion';
 import { aggregateByCategory, categoryColor } from '@/lib/qtCategories';
@@ -47,6 +50,9 @@ import {
   ComposedChart,
   ReferenceLine,
   LabelList,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -179,6 +185,83 @@ function categoriesFromRows(rows: Record<string, unknown>[], fixedKeys: string[]
   return names.map(n => ({ name: n, color: categoryColor(n) }));
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+interface ChartPayloadEntry {
+  dataKey?: string | number;
+  value?: string | number;
+  payload?: Record<string, string | number>;
+}
+
+/** 100% 堆叠条的自定义 tooltip：既给百分比，也给原始得分（只写百分比，老师看不出丢了多少分） */
+function CompositionTooltip({ active, label, payload, categories = [] }: {
+  active?: boolean;
+  label?: string | number;
+  payload?: ChartPayloadEntry[];
+  categories?: { name: string; color: string }[];
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload || {};
+  const items = categories
+    .map(cat => ({
+      name: cat.name,
+      color: cat.color,
+      pct: Number(row[`${cat.name}__pct`] ?? 0),
+      score: Number(row[`${cat.name}__score`] ?? 0),
+    }))
+    .filter(item => item.score > 0);
+  return (
+    <div style={TOOLTIP_CONTENT}>
+      <div style={TOOLTIP_LABEL}>
+        {label} · {row.score ?? 0}/{row.fullMark ?? 0} 分 · 得分率 {row.correctRate ?? 0}%
+      </div>
+      {items.map(item => (
+        <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, lineHeight: 1.7, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#475569' }}>
+            <i style={{ width: 8, height: 8, borderRadius: 2, background: item.color }} />
+            {item.name}
+          </span>
+          <span style={{ color: '#334155', fontWeight: 600 }}>{item.score} 分 · {Math.round(item.pct)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 100% 堆叠条内的百分比标签：太窄的段不写，避免文字压边 */
+function StackPercentLabel(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: number | string }) {
+  const value = Number(props.value ?? 0);
+  const width = Number(props.width ?? 0);
+  if (!Number.isFinite(value) || value < 10 || width < 26) return null;
+  return (
+    <text
+      x={Number(props.x ?? 0) + width / 2}
+      y={Number(props.y ?? 0) + Number(props.height ?? 0) / 2 + 3.6}
+      textAnchor="middle"
+      fontSize={10.5}
+      fontWeight={600}
+      fill="#ffffff"
+      style={{ fontFamily: CHART_FONT_FAMILY }}
+    >
+      {Math.round(value)}%
+    </text>
+  );
+}
+
+/** 散点 tooltip：显示学生、课次、正确率与得分 */
+function ScatterPointTooltip({ active, payload }: { active?: boolean; payload?: ChartPayloadEntry[] }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0]?.payload || {};
+  return (
+    <div style={TOOLTIP_CONTENT}>
+      <div style={TOOLTIP_LABEL}>{point.student} · {point.lessonLabel}</div>
+      <div style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+        正确率 {point.rate}% · 得分 {point.score} 分
+      </div>
+    </div>
+  );
+}
+
 export function PersonalReportView({
   studentRecords,
   studentStats,
@@ -205,14 +288,11 @@ export function PersonalReportView({
   customFields,
   personalReportRef
 }: PersonalReportProps) {
-  // 板块序列从数据推导：趋势图用 comboTrend 的动态键；堆叠柱用 barData 的动态键
-  const trendCategories = useMemo(
-    () => categoriesFromRows(comboTrend as unknown as Record<string, unknown>[], ['lesson', '学生正确率', '班级平均', '班级最高', '班级排名']),
-    [comboTrend],
-  );
+  // 统一使用全站板块配色（qtCategories.categoryColor）：
+  // 旧实现在这里另写了一套灰调色板，同一个"语法"在趋势图是蓝、在卷面明细是灰蓝，
+  // 多色叠在一起就显脏（2026-10-25 用户反馈"颜色很丑"）。
   const scoreCategories = useMemo(
-    () => categoriesFromRows(barData as unknown as Record<string, unknown>[], ['lesson', 'lessonNum', 'score', 'correctRate', 'fullMark'])
-      .map((category, index) => ({ ...category, color: ['#6f92b8', '#78a993', '#d0a568', '#b68ca0', '#8b9bbb', '#77a7a3', '#a69a8a'][index % 7] })),
+    () => categoriesFromRows(barData as unknown as Record<string, unknown>[], ['lesson', 'lessonNum', 'score', 'correctRate', 'fullMark']),
     [barData],
   );
   const [isExportingImage, setIsExportingImage] = useState(false);
@@ -242,6 +322,51 @@ export function PersonalReportView({
   const overviewLine = latestRow
     ? `${latestRow.lesson}得分率 ${Number(latestRow.correctRate) || 0}%${Number.isFinite(latestRank) && latestRank > 0 ? `，班级第 ${latestRank} 名` : ''}。${strongestCategory ? `${strongestCategory.name}是当前最稳的一项，得分率 ${Math.round(strongestCategory.rate || 0)}%。` : ''}`
     : '累计学习记录将在完成测评后形成趋势。';
+
+  // 100% 堆叠条：每次课各板块"得分构成"（分母是该课次已登记板块得分之和）。
+  // 用占比而非绝对分：各课次满分不同，绝对高度不可比；占比能看出结构变化。
+  const compositionRows = useMemo(() => barData.map(row => {
+    const parts = scoreCategories.map(cat => ({
+      name: cat.name,
+      score: Number(row[cat.name]) || 0,
+    }));
+    const total = parts.reduce((sum, part) => sum + part.score, 0);
+    const out: Record<string, number | string> = {
+      lesson: String(row.lesson),
+      score: round1(Number(row.score) || 0),
+      fullMark: round1(Number(row.fullMark) || 0),
+      correctRate: round1(Number(row.correctRate) || 0),
+    };
+    parts.forEach(part => {
+      out[`${part.name}__pct`] = total > 0 ? round1((part.score / total) * 100) : 0;
+      out[`${part.name}__score`] = round1(part.score);
+    });
+    return out;
+  }), [barData, scoreCategories]);
+
+  // 失分构成：饼图回答"分丢在哪"，与上方"还可拿回 X 分"同一口径（按课次平均）
+  const lossData = useMemo(() => categoryRanking
+    .map(item => ({
+      name: item.name,
+      value: round1(Math.max(0, (item.full || 0) - (item.value || 0))),
+      color: item.color,
+    }))
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value), [categoryRanking]);
+  const lossTotal = round1(lossData.reduce((sum, item) => sum + item.value, 0));
+
+  // 页尾结语与「反馈生成 · 四个一简洁版」共用同一话术库（lib/studentAdvice.buildCondensedAdvice），
+  // 不再写死一句通用鸡汤：老师复制出去的口径与私发反馈保持一致。
+  const parentNote = useMemo(() => {
+    // 还没参加过测评时不要套用「表现稳定/需加强」这类判断，交给下面的中性兜底句。
+    if (!studentStats || studentStats.learningTrajectory.length === 0) return '';
+    return buildCondensedAdvice(
+      generateShortNickname(getNickname(selectedStudent)),
+      studentRecords,
+      studentStats,
+      lessonConfigs,
+    );
+  }, [selectedStudent, getNickname, studentRecords, studentStats, lessonConfigs]);
 
   const handleExportPersonalImage = async () => {
     if (!targetRef.current || isExportingImage) return;
@@ -343,7 +468,7 @@ export function PersonalReportView({
                 <Checkbox checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} className="translate-y-[1px]" />课后任务
               </label>
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <Checkbox checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} className="translate-y-[1px]" />正确率
+                <Checkbox checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} className="translate-y-[1px]" />课次得分率
               </label>
             </div>
             <div className="flex items-center gap-2">
@@ -404,29 +529,24 @@ export function PersonalReportView({
           <TrendingUp className="w-5 h-5 inline mr-2" />
           学习趋势分析
           <span className="report-section-en">TREND</span>
-          <span className="report-section-note">柱=本生正确率，粗线=班级平均/最高，彩虚线=各板块得分率，红线=目标 80%</span>
+          <span className="report-section-note">柱=本生正确率，实线=班级平均，灰虚线=班级最高，橙虚线=达标 80%</span>
         </h2>
-        <div className="report-chart-container" role="img" aria-label="学习趋势分析：柱为本生正确率，含班级平均/最高线与各大题型板块得分率虚线" style={{ height: 340 }}>
+        <div className="report-chart-container" role="img" aria-label="学习趋势分析：柱为本生正确率，含班级平均、班级最高与 80% 达标线" style={{ height: 330 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={comboTrend}>
+            <ComposedChart data={comboTrend} margin={{ top: 18, right: 18, left: 0, bottom: 0 }}>
               <CartesianGrid {...GRID} />
-              <XAxis dataKey="lesson" stroke="#6b7280" />
-              <YAxis domain={[0, 100]} stroke="#6b7280" />
+              <XAxis dataKey="lesson" stroke="#6b7280" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+              <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={AXIS_TICK} />
               <Tooltip
                 contentStyle={TOOLTIP_CONTENT}
                 labelStyle={TOOLTIP_LABEL}
                 formatter={(v: number, n: string) => [n === '班级排名' ? v : `${v}%`, n]}
               />
-              <Legend />
+              <Legend wrapperStyle={LEGEND_STYLE} />
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
-              <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
-              {/* 大题型板块得分率（2026-10-16 并入）：按板块大类逐课次展开（类别从数据推导） */}
-              {trendCategories.map(cat => (
-                <Line {...CHART_ANIM} key={cat.name} type="monotone" dataKey={cat.name} name={`${cat.name}得分率`} stroke={cat.color}
-                  strokeWidth={1.8} strokeDasharray="5 3" dot={{ r: 2.5 }} connectNulls legendType="plainline" />
-              ))}
+              <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={{ value: '达标 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
-              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={22} />}
+              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={34} />}
               {trendType === 'line' && <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
               {trendType === 'area' && <Area {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
               {/* 班级对比线：定位"自己在班里什么位置" */}
@@ -442,38 +562,101 @@ export function PersonalReportView({
           <BarChart3 className="w-5 h-5 inline mr-2" />
           卷面得分明细
           <span className="report-section-en">DETAILS</span>
-          <span className="report-section-note">柱=各板块得分构成，线=正确率</span>
+          <span className="report-section-note">左=各课次得分构成（百分比堆叠），右=失分去向</span>
         </h2>
         <div className="report-detail-kpis">
           <div><strong>{fullCategoryCount}</strong><span>满分项</span></div>
           <div><strong>{weakCategoryCount}</strong><span>待提升项</span></div>
           <div><strong>{Math.round(recoverablePoints * 10) / 10}</strong><span>还可拿回 · 分</span></div>
         </div>
-        <div className="report-chart-container" role="img" aria-label="各课次成绩分布：堆叠柱为各板块得分构成，折线为正确率" style={{ height: 320 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={barData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid {...GRID} />
-              <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
-              <YAxis yAxisId="l" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
-              {showCorrectRate && <YAxis yAxisId="r" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />}
-              <Tooltip
-                contentStyle={TOOLTIP_CONTENT}
-                labelStyle={TOOLTIP_LABEL}
-                formatter={(v: number | string, n: string) => [n === '正确率%' ? `${v}%` : `${v} 分`, n]}
-              />
-              <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
-              {showCorrectRate && <ReferenceLine yAxisId="r" y={80} stroke="#c39a5f" strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />}
-              {scoreCategories.map(cat => (
-                <Bar {...CHART_ANIM} key={cat.name} yAxisId="l" dataKey={cat.name} name={cat.name} stackId="score" fill={cat.color} maxBarSize={38} />
-              ))}
-              {showCorrectRate && (
-                <Line {...CHART_ANIM} yAxisId="r" type="monotone" dataKey="correctRate" name="正确率%" stroke="#5f8fb0" strokeWidth={2.5}
-                  dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}>
-                  <LabelList dataKey="correctRate" position="bottom" style={{ fontSize: 10, fill: '#0369a1' }} />
-                </Line>
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+        <div className="report-detail-grid">
+          <div className="report-chart-card">
+            <div className="report-chart-card-head">
+              <span>各课次得分构成</span>
+              <span>按板块占比 · 课次后为该课得分率</span>
+            </div>
+            <div className="report-chart-container" role="img" aria-label="各课次得分构成：百分比堆叠条形图，展示每次课各板块得分占比" style={{ height: Math.max(240, compositionRows.length * 46 + 96) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={compositionRows} layout="vertical" margin={{ top: 6, right: 12, left: 0, bottom: 0 }} barCategoryGap="24%">
+                  <CartesianGrid {...GRID} horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} ticks={[0, 50, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
+                  <YAxis
+                    type="category"
+                    dataKey="lesson"
+                    width={showCorrectRate ? 96 : 62}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={(props: { x?: number; y?: number; payload?: { value?: string; index?: number }; textAnchor?: 'end' | 'start' | 'middle' }) => {
+                      const row = compositionRows.find(item => String(item.lesson) === String(props.payload?.value));
+                      return (
+                        <g transform={`translate(${props.x ?? 0},${props.y ?? 0})`}>
+                          <text x={-8} y={4} textAnchor="end" fontSize={11.5} fill="#475569" style={{ fontFamily: CHART_FONT_FAMILY }}>
+                            {props.payload?.value}
+                            {showCorrectRate && row ? <tspan fill="#94a3b8" dx="4">{row.correctRate}%</tspan> : null}
+                          </text>
+                        </g>
+                      );
+                    }}
+                  />
+                  <Tooltip content={<CompositionTooltip categories={scoreCategories} />} />
+                  {scoreCategories.map(cat => (
+                    <Bar {...CHART_ANIM} key={cat.name} dataKey={`${cat.name}__pct`} name={cat.name} stackId="score" fill={cat.color} maxBarSize={26}>
+                      <LabelList dataKey={`${cat.name}__pct`} content={StackPercentLabel} />
+                    </Bar>
+                  ))}
+                  <Legend iconType="circle" wrapperStyle={LEGEND_STYLE} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="report-chart-card">
+            <div className="report-chart-card-head">
+              <span>失分去向</span>
+              <span>按课次平均 · 与「还可拿回」同口径</span>
+            </div>
+            {lossData.length > 0 ? (
+              <>
+                <div className="report-donut-wrap" style={{ height: 226 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        {...CHART_ANIM}
+                        data={lossData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="58%"
+                        outerRadius="86%"
+                        paddingAngle={3}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                      >
+                        {lossData.map(item => <Cell key={item.name} fill={item.color} />)}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_CONTENT} formatter={(value: number, name: string) => [`${value} 分`, name]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="report-donut-center">
+                    <strong>{lossTotal}</strong>
+                    <span>分可拿回</span>
+                  </div>
+                </div>
+                <div className="report-donut-legend">
+                  {lossData.map(item => (
+                    <span key={item.name}>
+                      <i style={{ background: item.color }} />
+                      {item.name}
+                      <b>{item.value}</b>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="report-chart-empty">本次测评各板块均无失分</div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -774,7 +957,7 @@ export function PersonalReportView({
       />
       <div className="report-parent-note">
         <span>给家长的一句话</span>
-        这份报告看的是「下一步做什么」，不是排名。先选一个动作开始，比同时补五六项更有效。
+        {parentNote || '这一阶段先把课堂记录补齐，下一课次我们就能看出变化。'}
       </div>
     </div>
   );
@@ -831,6 +1014,35 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
       excellentRate: Math.round((excellentCount / denom) * 100),
     };
   }, [classReportRecords, lessonConfigs]);
+
+  // 散点图：每个点 = 一名学生在一次测评里的正确率。
+  // 横向加一点确定性抖动（不改变所属课次），避免同分同学完全叠在一个点上"看起来人数变少"。
+  const scatterData = useMemo(() => classReportRecords
+    .filter(record => isReportAssessed(record, lessonConfigs[record.lessonNumber]))
+    .map((record, index) => {
+      const jitter = (((index * 7) % 9) - 4) * 0.035;
+      return {
+        lesson: Math.round((record.lessonNumber + jitter) * 1000) / 1000,
+        lessonLabel: `第${record.lessonNumber}课`,
+        rate: record.correctRate,
+        score: record.totalScore,
+        student: getNickname(record.studentName),
+        band: record.correctRate >= 85 ? '85% 以上'
+          : record.correctRate >= 70 ? '70–84%'
+            : record.correctRate >= 60 ? '60–69%' : '60% 以下',
+      };
+    }), [classReportRecords, lessonConfigs, getNickname]);
+  const scatterLessons = useMemo(
+    () => Array.from(new Set(scatterData.map(point => Math.round(point.lesson)))).sort((a, b) => a - b),
+    [scatterData],
+  );
+  const scatterMaxLesson = scatterLessons.length ? scatterLessons[scatterLessons.length - 1] : 1;
+  const scatterBands = [
+    { label: '85% 以上', color: CHART_GOOD },
+    { label: '70–84%', color: CHART_SERIES[0] },
+    { label: '60–69%', color: CHART_WARN },
+    { label: '60% 以下', color: '#ef4444' },
+  ];
 
   if (!classStats || classReportRecords.length === 0) {
     return (
@@ -928,18 +1140,37 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（按各课次满分换算，跨课次可直接比较）</span>
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="report-chart-container" style={{ height: 280 }}>
+          <div className="report-donut-wrap report-chart-container" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={classStats.distribution}>
-                <CartesianGrid {...GRID} />
-                <XAxis dataKey="label" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                <Bar {...CHART_ANIM} dataKey="count" name="人数" radius={[4, 4, 0, 0]}>
-                  {classStats.distribution.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Bar>
-              </BarChart>
+              <PieChart>
+                <Pie
+                  {...CHART_ANIM}
+                  data={classStats.distribution.filter(item => item.count > 0)}
+                  dataKey="count"
+                  nameKey="label"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius="55%"
+                  outerRadius="84%"
+                  paddingAngle={2}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                >
+                  {classStats.distribution.filter(item => item.count > 0).map(item => (
+                    <Cell key={item.label} fill={item.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={TOOLTIP_CONTENT}
+                  labelStyle={TOOLTIP_LABEL}
+                  formatter={(value: number, name: string) => [`${value} ${selectedLesson === 'all' ? '人次' : '人'}`, name]}
+                />
+              </PieChart>
             </ResponsiveContainer>
+            <div className="report-donut-center">
+              <strong>{classStats.distribution.reduce((sum, item) => sum + item.count, 0)}</strong>
+              <span>{selectedLesson === 'all' ? '总人次' : '参评人数'}</span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3 content-center">
             {classStats.distribution.map((d, i) => (
@@ -998,7 +1229,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           </h2>
           <div className="report-chart-container" role="img" aria-label="各次课班级正确率对比：柱为班级平均，折线为班级最高与最低，含 80% 达标线与 85% 优秀线" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={classComboTrend} margin={{ top: 18, right: 16, left: 0, bottom: 0 }}>
+              <ComposedChart data={classComboTrend} margin={{ top: 18, right: 136, left: 0, bottom: 0 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
                 <YAxis domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK} />
@@ -1008,9 +1239,10 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                   formatter={(v: number, n: string) => [`${v}%`, n]}
                 />
                 <Legend wrapperStyle={LEGEND_STYLE} />
-                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
-                <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_GOOD }} />
-                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={26}>
+                {/* 两条参考线挨得近（80/85），只在一处写合并标签，避免右侧两个标签互相压住 */}
+                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标 80% / 优秀 85%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
+                <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" />
+                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={46}>
                   <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />
                 </Bar>
                 <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
@@ -1020,6 +1252,51 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           </div>
           <p className="text-xs text-[color:var(--ink-4)] mt-2">
             口径：请假/缺勤不计入；正确率 = 得分 ÷ 该课次满分，跨课次可直接比较
+          </p>
+        </div>
+      )}
+
+      {/* 学生正确率散点：看每次课的分布与离群点，而不是只看一个班均 */}
+      {scatterData.length > 0 && (
+        <div className="report-section report-panel class-scatter">
+          <h2 className="report-section-title">
+            <Target className="w-5 h-5 inline mr-2" />
+            各次课学生正确率分布
+            <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（每点=1 名学生 1 次测评；横轴=课次，纵轴=正确率，颜色=分段）</span>
+          </h2>
+          <div className="report-chart-container" role="img" aria-label="各次课学生正确率散点图：每个点代表一名学生一次测评，含 80% 达标线" style={{ height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 16, right: 18, left: 0, bottom: 4 }}>
+                <CartesianGrid {...GRID} />
+                <XAxis
+                  type="number"
+                  dataKey="lesson"
+                  domain={[0.4, scatterMaxLesson + 0.6]}
+                  ticks={scatterLessons}
+                  tickFormatter={(value: number) => `第${value}课`}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={AXIS_TICK}
+                />
+                <YAxis type="number" dataKey="rate" domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+                <ZAxis range={[72, 72]} />
+                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
+                <Tooltip cursor={{ strokeDasharray: '3 3', stroke: '#cbd5e1' }} content={<ScatterPointTooltip />} />
+                <Legend wrapperStyle={LEGEND_STYLE} />
+                {scatterBands.map(band => (
+                  <Scatter
+                    key={band.label}
+                    name={band.label}
+                    data={scatterData.filter(point => point.band === band.label)}
+                    fill={band.color}
+                    fillOpacity={0.78}
+                  />
+                ))}
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-[color:var(--ink-4)] mt-2">
+            看两件事：同一课次的点聚得紧不紧（班级差异大小），以及有没有长期贴在 80% 线下的点（需要单独跟进）。
           </p>
         </div>
       )}
@@ -1153,23 +1430,14 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
 // 个性化反馈组件
 interface StudentFeedbackProps {
   studentRecords: StudentRecord[];
-  studentStats: {
-    totalLessons: number;
-    avgScore: number;
-    maxScore: number;
-    minScore: number;
-    avgQuestionTypeScores: { id: string; name: string; avgScore: number; fullScore: number }[];
-    learningTrajectory: { lesson: number; score: number; correctRate: number; listeningScore: number }[];
-    attendanceStats: { total: number; onTime: number; late: number; absent: number };
-    homeworkStats: { excellent: number; good: number; average: number; poor: number };
-  } | null;
-  avgQuestionTypeScores: { id: string; name: string; avgScore: number }[];
+  studentStats: StudentReportStats | null;
+  avgQuestionTypeScores: QuestionTypeStat[];
 }
 
 function StudentFeedback({ 
   studentRecords, 
   studentStats,
-  avgQuestionTypeScores 
+  avgQuestionTypeScores,
 }: StudentFeedbackProps) {
   
   const attendanceRate = attendanceRateOf(studentRecords.map(record => record.attendance)) / 100;
@@ -1192,14 +1460,28 @@ function StudentFeedback({
     ? trajectoryScores.reduce((sum, value) => sum + value, 0) / trajectoryScores.length
     : 0;
 
+  // 同名题型已在统计层按名称归并（见 lib/questionTypeStats），这里直接逐条渲染，
+  // 不再用 id 反查 —— 旧实现按 id 查找，合并后 id 不再唯一，会查不到而显示 0 分。
   const questionTypeFeedbacks = avgQuestionTypeScores.map(qt => {
-    const stat = studentStats?.avgQuestionTypeScores.find(item => item.id === qt.id);
-    const questionFullScore = stat?.fullScore || 0;
+    const rate = qt.fullScore > 0 ? Math.round((qt.avgScore / qt.fullScore) * 100) : 0;
+    const sameFull = qt.byLesson.length <= 1
+      || qt.byLesson.every(item => item.fullScore === qt.byLesson[0]?.fullScore);
     return {
       name: qt.name,
-      feedback: getQuestionTypeFeedback(qt.name, qt.avgScore, questionFullScore)
+      avgScore: qt.avgScore,
+      fullScore: qt.fullScore,
+      count: qt.count,
+      lessons: qt.lessons,
+      byLesson: qt.byLesson,
+      rate,
+      sameFull,
+      feedback: getQuestionTypeFeedback(qt.name, qt.avgScore, qt.fullScore),
+      sourceTitle: qt.byLesson
+        .map(item => `第${item.lesson}课 ${item.avgScore}/${item.fullScore} 分（${item.correctRate}%）`)
+        .join('\n'),
     };
   });
+
 
   const overallFeedback = studentStats ? getOverallFeedback(overallRate, 100) : '';
   
@@ -1245,29 +1527,43 @@ function StudentFeedback({
                 <span className="text-[11px] text-[color:var(--ink-4)]">按得分率着色：≥85 优 / ≥70 良 / ≥60 中 / &lt;60 需补</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {questionTypeFeedbacks.map((item, index) => {
-                  const stat = studentStats?.avgQuestionTypeScores.find(q => q.name === item.name);
-                  const avg = stat ? Number(stat.avgScore) : 0;
-                  const full = stat?.fullScore || 0;
-                  const rate = full > 0 ? Math.round((avg / full) * 100) : 0;
-                  const tone = rate >= 85 ? '#10b981' : rate >= 70 ? '#3b82f6' : rate >= 60 ? '#f59e0b' : '#ef4444';
+                {questionTypeFeedbacks.map(item => {
+                  const tone = item.rate >= 85 ? '#10b981' : item.rate >= 70 ? '#3b82f6' : item.rate >= 60 ? '#f59e0b' : '#ef4444';
+                  const shownLessons = item.lessons.slice(0, 6);
+                  const restLessons = item.lessons.length - shownLessons.length;
                   return (
-                    <div key={index} className="advice-question-card">
+                    <div key={item.name} className="advice-question-card">
                       <div className="flex items-center justify-between gap-3 mb-1.5">
                         <span className="flex items-center gap-2 min-w-0">
                           <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: tone }} />
                           <span className="text-[13px] font-semibold text-[color:var(--ink)] truncate">{item.name}</span>
                         </span>
-                        {full > 0 && (
+                        {item.fullScore > 0 && (
                           <span className="text-[12px] font-bold shrink-0 tnum" style={{ color: tone }}>
-                            {avg}<span className="text-[11px] font-normal text-[color:var(--ink-4)]">/{full}</span>
-                            <span className="ml-1 text-[11px]">{rate}%</span>
+                            {item.rate}%
+                            <span className="ml-1 text-[11px] font-normal text-[color:var(--ink-4)]">
+                              {item.sameFull
+                                ? `${item.avgScore}/${item.fullScore}`
+                                : `均 ${item.avgScore} 分`}
+                            </span>
                           </span>
                         )}
                       </div>
-                      {full > 0 && (
+                      {/* 溯源：这条结论来自哪些课次（同名题型已合并，避免重复卡片） */}
+                      {item.lessons.length > 0 && (
+                        <div className="advice-question-source" title={item.sourceTitle}>
+                          <span className="advice-question-source-label">
+                            {item.lessons.length > 1 ? `来源 ${item.lessons.length} 课` : '来源'}
+                          </span>
+                          {shownLessons.map(lesson => (
+                            <span key={lesson} className="advice-question-chip">第{lesson}课</span>
+                          ))}
+                          {restLessons > 0 && <span className="advice-question-chip is-rest">+{restLessons}</span>}
+                        </div>
+                      )}
+                      {item.fullScore > 0 && (
                         <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-2">
-                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, rate)}%`, background: tone }} />
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, item.rate)}%`, background: tone }} />
                         </div>
                       )}
                       <p className="text-[12.5px] text-[color:var(--ink-2)] leading-relaxed">

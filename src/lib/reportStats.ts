@@ -8,6 +8,7 @@
 import type { StudentRecord, LessonConfig } from '@/types';
 import { attendanceKind, isAbsentRecord, isQuizAssessed, hasLessonQuizInput } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
+import { collectQuestionTypeStats, type QuestionTypeStat } from '@/lib/questionTypeStats';
 
 export interface OptionalRow { name: string; registered: number; total: number; avg: number }
 
@@ -16,7 +17,8 @@ export interface StudentReportStats {
   avgScore: number;
   maxScore: number;
   minScore: number;
-  avgQuestionTypeScores: { id: string; name: string; avgScore: number; fullScore: number }[];
+  /** 按题型名称归并（同名跨课次合并），lessons/byLesson 供报告溯源 */
+  avgQuestionTypeScores: QuestionTypeStat[];
   learningTrajectory: { lesson: number; score: number; correctRate: number; listeningScore: number }[];
   attendanceStats: { total: number; onTime: number; late: number; absent: number };
   homeworkStats: { excellent: number; good: number; average: number; poor: number };
@@ -31,8 +33,9 @@ export interface ClassReportStats {
   minScore: number;
   avgCorrectRate: number;
   distribution: { label: string; min: number; max: number; color: string; count: number }[];
-  questionTypeAvg: { id: string; name: string; avgScore: number; fullScore: number; count: number; correctRate: number }[];
-  weakPoints: { id: string; name: string; avgScore: number; fullScore: number; count: number; correctRate: number }[];
+  /** 按题型名称归并（同名跨课次合并），lessons/byLesson 供报告溯源 */
+  questionTypeAvg: QuestionTypeStat[];
+  weakPoints: QuestionTypeStat[];
   attendanceSummary: { total: number; onTime: number; late: number; absent: number; leave: number; transfer: number };
   homeworkSummary: { total: number; hwTotal: number; qualityTotal: number; excellent: number; good: number; average: number; poor: number; notBring: number };
   attendanceBreakdown: { option: string; count: number }[];
@@ -85,33 +88,10 @@ export function computeStudentReportStats(
     const maxScore = scoredBase.length > 0 ? Math.max(...scoredBase.map(r => r.totalScore)) : 0;
     const minScore = scoredBase.length > 0 ? Math.min(...scoredBase.map(r => r.totalScore)) : 0;
     
-    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullTotal: number } } = {};
-
-    scoredBase.forEach(record => {
-      const config = lessonConfigs[record.lessonNumber];
-      if (config) {
-        // 附加项（口语等）不属于小测科目，不参与题型均分/正确率统计
-        config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
-          if (!questionTypeScores[qt.id]) {
-            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullTotal: 0 };
-          }
-          const value = record.scores[qt.id];
-          if (value !== undefined && Number.isFinite(value)) {
-            const full = Number(qt.fullScore) || 0;
-            questionTypeScores[qt.id].total += value;
-            questionTypeScores[qt.id].count++;
-            questionTypeScores[qt.id].fullTotal += full;
-          }
-        });
-      }
-    });
-
-    const avgQuestionTypeScores = Object.entries(questionTypeScores).map(([id, data]) => ({
-      id,
-      name: data.name,
-      avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
-      fullScore: data.count > 0 ? Math.round((data.fullTotal / data.count) * 10) / 10 : 0,
-    }));
+    // 题型按「名称」归并：同一题型在不同课次各有独立 id，按 id 聚合会重复展示，
+    // 并把板块分母重复累加（2026-10-25 修复，见 lib/questionTypeStats）。
+    // 附加项（口语等）由 collectQuestionTypeStats 内部按 excludeFromTotal 排除。
+    const avgQuestionTypeScores = collectQuestionTypeStats(scoredBase, lessonConfigs);
 
     // 学习轨迹只画参与评估的课次，避免缺勤课次出现 0 分断崖
     const learningTrajectory = scoredBase.map(r => ({
@@ -193,35 +173,8 @@ export function computeClassReportStats(
     }));
 
     // 各题型平均分（仅到课学员；请假学员的 0 分不计入分子与分母）
-    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullTotal: number } } = {};
-    validRecords.forEach(record => {
-      const config = lessonConfigs[record.lessonNumber];
-      if (config) {
-        // 附加项（口语等）不属于小测科目，不参与题型均分/薄弱 Top3
-        config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
-          if (!questionTypeScores[qt.id]) {
-            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullTotal: 0 };
-          }
-          const value = record.scores[qt.id];
-          if (value !== undefined && Number.isFinite(value)) {
-            const full = Number(qt.fullScore) || 0;
-            questionTypeScores[qt.id].total += value;
-            questionTypeScores[qt.id].count++;
-            questionTypeScores[qt.id].fullTotal += full;
-          }
-        });
-      }
-    });
-
-    const questionTypeAvg = Object.entries(questionTypeScores).map(([id, data]) => ({
-      id,
-      name: data.name,
-      avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
-      fullScore: data.count > 0 ? Math.round((data.fullTotal / data.count) * 10) / 10 : 0,
-      count: data.count,
-      // 总得分 ÷ 各条已登记记录的真实满分之和；不使用跨课次最大满分。
-      correctRate: data.fullTotal > 0 ? Math.round((data.total / data.fullTotal) * 100 * 10) / 10 : 0
-    }));
+    // 与个人报告同一实现：按题型名称归并，避免同名题型重复、板块分母重复累加。
+    const questionTypeAvg = collectQuestionTypeStats(validRecords, lessonConfigs);
 
     // 薄弱题型 Top3
     const weakPoints = [...questionTypeAvg]

@@ -18,7 +18,7 @@ import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildOralRatings, oralDistribution, oralKey, type OralRating } from '@/lib/oralRating';
 import { } from '@/lib/optionTone';
 import { computeStudentReportStats, computeClassReportStats } from '@/lib/reportStats';
-import { aggregateByCategory, categoryOf, KNOWN_CATEGORIES } from '@/lib/qtCategories';
+import { aggregateByCategory, categoryColor, categoryOf, KNOWN_CATEGORIES } from '@/lib/qtCategories';
 import { } from '@/components/ui/checkbox';
 import { } from '@/components/ui/label';
 
@@ -48,11 +48,8 @@ function collectOptions(configs: { [lesson: string]: LessonConfig }, key: 'atten
 
 import { PersonalReportView as PersonalReport, ClassReportView as ClassReport } from '@/components/report/ReportViews';
 
-const REPORT_CATEGORY_COLORS: Record<string, string> = {
-  语法: '#6f92b8', 词汇: '#78a993', 阅读: '#b68ca0', 完形: '#d0a568',
-  写作: '#a58ca8', 听力: '#8b9bbb', 口语: '#77a7a3', 其他: '#a69a8a',
-};
-const reportCategoryColor = (name: string) => REPORT_CATEGORY_COLORS[name] || '#8b9bbb';
+// 报告配色统一走 lib/qtCategories.categoryColor：
+// 旧的一套灰调色板会与趋势图/条形图里的板块颜色对不上，同一个"语法"在两处是两种蓝。
 
 export function StudentReport({
   students,
@@ -187,7 +184,7 @@ export function StudentReport({
       const full = Number(qt.fullScore) || 0;
       if (full <= 0) return;
       const def = categoryOf(qt.name, qtCategoryOverrides);
-      const cur = acc.get(def.name) || { name: def.name, color: reportCategoryColor(def.name), sum: 0, full: 0 };
+      const cur = acc.get(def.name) || { name: def.name, color: categoryColor(def.name), sum: 0, full: 0 };
       cur.sum += Number(qt.avgScore) || 0;
       cur.full += full;
       acc.set(def.name, cur);

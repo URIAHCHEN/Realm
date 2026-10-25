@@ -20,6 +20,7 @@ import { splitSegments, isReportAssessed, type StudentReportStats, type ClassRep
 import type { QuestionTypeStat } from '@/lib/questionTypeStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { generateShortNickname } from '@/lib/feedbackTemplates';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
   CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES, CHART_FONT_FAMILY,
@@ -288,6 +289,8 @@ export function PersonalReportView({
   customFields,
   personalReportRef
 }: PersonalReportProps) {
+  // 窄屏下参考线标签会压在柱子上：移动端只留虚线，含义交给章节说明
+  const isMobile = useIsMobile();
   // 统一使用全站板块配色（qtCategories.categoryColor）：
   // 旧实现在这里另写了一套灰调色板，同一个"语法"在趋势图是蓝、在卷面明细是灰蓝，
   // 多色叠在一起就显脏（2026-10-25 用户反馈"颜色很丑"）。
@@ -535,7 +538,7 @@ export function PersonalReportView({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={comboTrend} margin={{ top: 18, right: 18, left: 0, bottom: 0 }}>
               <CartesianGrid {...GRID} />
-              <XAxis dataKey="lesson" stroke="#6b7280" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+              <XAxis dataKey="lesson" stroke="#6b7280" tickLine={false} axisLine={false} interval={0} tick={isMobile ? { ...AXIS_TICK, fontSize: 10.5 } : AXIS_TICK} />
               <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={AXIS_TICK} />
               <Tooltip
                 contentStyle={TOOLTIP_CONTENT}
@@ -544,7 +547,7 @@ export function PersonalReportView({
               />
               <Legend wrapperStyle={LEGEND_STYLE} />
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
-              <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={{ value: '达标 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
+              <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={isMobile ? undefined : { value: '达标 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
               {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={34} />}
               {trendType === 'line' && <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
@@ -978,6 +981,8 @@ export interface ClassReportProps {
 }
 
 export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields, lessonConfigs, qtCategoryOverrides }: ClassReportProps) {
+  // 窄屏下参考线标签与柱顶数值会互相压住：移动端去掉右侧外置标签、缩窄柱宽，保证 6 次课都读得清
+  const isMobile = useIsMobile();
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
   // 口径：按正确率（各课次满分不同，绝对分不可比）+ 仅统计已评估小测的记录
   const lowScoreStudents = useMemo(() => {
@@ -1229,9 +1234,9 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
           </h2>
           <div className="report-chart-container" role="img" aria-label="各次课班级正确率对比：柱为班级平均，折线为班级最高与最低，含 80% 达标线与 85% 优秀线" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={classComboTrend} margin={{ top: 18, right: 136, left: 0, bottom: 0 }}>
+              <ComposedChart data={classComboTrend} margin={{ top: 18, right: isMobile ? 12 : 136, left: 0, bottom: 0 }}>
                 <CartesianGrid {...GRID} />
-                <XAxis dataKey="lesson" tickLine={false} axisLine={false} tick={AXIS_TICK} />
+                <XAxis dataKey="lesson" tickLine={false} axisLine={false} interval={0} tick={isMobile ? { ...AXIS_TICK, fontSize: 10.5 } : AXIS_TICK} />
                 <YAxis domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK} />
                 <Tooltip
                   contentStyle={TOOLTIP_CONTENT}
@@ -1240,10 +1245,11 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                 />
                 <Legend wrapperStyle={LEGEND_STYLE} />
                 {/* 两条参考线挨得近（80/85），只在一处写合并标签，避免右侧两个标签互相压住 */}
-                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标 80% / 优秀 85%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
+                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={isMobile ? undefined : { value: '达标 80% / 优秀 85%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
                 <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" />
-                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={46}>
-                  <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />
+                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={isMobile ? 18 : 46}>
+                  {/* 窄屏 6 根柱挤在一起，柱顶数值必然互相压住：移动端不画，数值交给纵轴与 tooltip */}
+                  {!isMobile && <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />}
                 </Bar>
                 <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
                 <Line {...CHART_ANIM} type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
@@ -1273,14 +1279,15 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                   dataKey="lesson"
                   domain={[0.4, scatterMaxLesson + 0.6]}
                   ticks={scatterLessons}
+                  interval={0}
                   tickFormatter={(value: number) => `第${value}课`}
                   tickLine={false}
                   axisLine={false}
-                  tick={AXIS_TICK}
+                  tick={isMobile ? { ...AXIS_TICK, fontSize: 10 } : AXIS_TICK}
                 />
                 <YAxis type="number" dataKey="rate" domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={AXIS_TICK} />
                 <ZAxis range={[72, 72]} />
-                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
+                <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={isMobile ? undefined : { value: '达标线 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
                 <Tooltip cursor={{ strokeDasharray: '3 3', stroke: '#cbd5e1' }} content={<ScatterPointTooltip />} />
                 <Legend wrapperStyle={LEGEND_STYLE} />
                 {scatterBands.map(band => (

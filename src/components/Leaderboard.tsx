@@ -12,7 +12,7 @@ import {
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
-import { isFullAttendance } from '@/lib/leaderboardRules';
+import { isFullAttendance, rankForLeaderboard, FENGYUN_LIMIT, buildFengyunRows } from '@/lib/leaderboardRules';
 import { optionToneLevel } from '@/lib/optionTone';
 
 import { getLessonFullScore } from '@/lib/lessonFullScore';
@@ -51,6 +51,8 @@ interface RankingItem {
   totalScore: number;
   correctRate: number;
   rank: number;
+  /** 奖牌档位：同分同牌，下一不同成绩依次为银/铜，不因并列跳档 */
+  awardRank?: number;
   listeningScore?: number;
 }
 
@@ -165,16 +167,7 @@ export function Leaderboard({
         }
       });
 
-    const sorted = Array.from(latestByStudent.values())
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .slice(0, 10);
-    // 并列同名次：与学情表 / 公示导出 / 分析弹窗保持同一口径
-    let lastScore: number | null = null;
-    let lastRank = 0;
-    return sorted.map((r, i) => {
-      const rank = lastScore !== null && r.totalScore === lastScore ? lastRank : i + 1;
-      lastScore = r.totalScore;
-      lastRank = rank;
+    return rankForLeaderboard(Array.from(latestByStudent.values()), 10).map(r => {
       return {
         id: r.id,
         studentName: r.studentName,
@@ -182,7 +175,8 @@ export function Leaderboard({
         shortNickname: generateShortNickname(getNickname(r.studentName)),
         totalScore: r.totalScore,
         correctRate: r.correctRate,
-        rank,
+        rank: r.rank,
+        awardRank: r.awardRank,
       };
     });
   }, [rangeRecords, getNickname]);
@@ -336,9 +330,10 @@ export function Leaderboard({
     } else if (mode === 'fengyun') {
       text += ' 风云榜\n\n';
       if (entranceRankings.length > 0) {
-        entranceRankings.slice(0, 3).forEach((r) => {
-          const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : `第${r.rank}名`;
-          text += `${medal} ${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
+        const awardRows = buildFengyunRows(entranceRankings.slice(0, FENGYUN_LIMIT));
+        awardRows.forEach((row) => {
+          const medal = row.awardRank === 1 ? '🥇' : row.awardRank === 2 ? '🥈' : '🥉';
+          text += `${row.continuation ? '　' : medal} ${row.entries.map(r => `${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）`).join('　')}\n`;
         });
       } else {
         text += '暂无数据\n';
@@ -416,7 +411,7 @@ export function Leaderboard({
     } else if (format === 'csv') {
       if (mode === 'fengyun') {
         content = '排名,姓名,昵称,总分,正确率\n';
-        entranceRankings.slice(0, 3).forEach(r => {
+        entranceRankings.slice(0, FENGYUN_LIMIT).forEach(r => {
           content += [r.rank, r.studentName, r.nickname, r.totalScore, `${r.correctRate}%`].map(csvCell).join(',') + '\n';
         });
       } else if (mode === 'top10' || mode === 'champion') {
@@ -449,7 +444,7 @@ export function Leaderboard({
     } else if (format === 'json') {
       let data: unknown;
       if (mode === 'top10') data = { type: 'top10', range: rangeText, rankings: entranceRankings };
-      else if (mode === 'fengyun') data = { type: 'fengyun', range: rangeText, rankings: entranceRankings.slice(0, 3) };
+      else if (mode === 'fengyun') data = { type: 'fengyun', range: rangeText, rankings: entranceRankings.slice(0, FENGYUN_LIMIT) };
       else if (mode === 'champion') data = { type: 'champion', range: rangeText, champion };
       else if (mode === 'progress') data = { type: 'progress', range: rangeText, stars: progressStars };
       else if (mode === 'listening') data = { type: 'listening', range: rangeText, rankings: listeningRankings };
@@ -534,31 +529,39 @@ export function Leaderboard({
 
   // 渲染主内容
   const renderContent = () => {
-    // 风云榜：底图 = 用户提供的正式模板 PNG（红幕/奖杯/人偶全保留），人名与奖牌动态叠加。
-    // 名次规则：同分并列同牌；若并列第 1 的人数 ≥5（含满分大丰收），只显示 2 行（不展示铜牌位）。
+    // 风云榜：最多 8 人；奖牌档位纵向排列，同一档的并列姓名横向排列。
     if (mode === 'fengyun') {
-      const tieCountAt1 = entranceRankings.filter(r => r.rank === 1).length;
-      const shown = entranceRankings.slice(0, tieCountAt1 >= 5 ? 2 : 3);
-      const medalOf = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `第${rank}名`;
+      const shown = entranceRankings.slice(0, FENGYUN_LIMIT);
+      const awardRows = buildFengyunRows(shown);
+      const longestRow = Math.max(1, ...awardRows.map(row => {
+        const characters = row.entries.reduce((sum, entry) => sum + getNickname(entry.studentName).length, 0);
+        return characters + (row.entries.length - 1) * 0.7;
+      }));
+      const tierFontSize = Math.min(2.8, 32 / longestRow);
+      const medalOf = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
       return (
         <div className="fengyun-wrap">
           <div className="fengyun-poster" ref={fengyunExportRef}>
             <img src={fengyunPoster} alt="本次测试风云榜" className="fengyun-bg" />
-            <div className={`fengyun-slots slots-${shown.length}`}>
-              {shown.map((r, i) => (
-                <div key={r.id} className={`fengyun-row row-${i + 1}`}>
-                  <span className="fengyun-medal">{medalOf(r.rank)}</span>
-                  <span className="fengyun-name">{r.nickname}</span>
-                </div>
-              ))}
+            <div className="fengyun-slots slots-grouped">
+              {awardRows.map((row, rowIndex) => {
+                return (
+                  <div key={`${row.awardRank}-${rowIndex}`} className={`fengyun-tier tier-${row.awardRank}`}>
+                    {row.continuation
+                      ? <span className="fengyun-medal-spacer" aria-hidden="true" />
+                      : <span className="fengyun-medal">{medalOf(row.awardRank)}</span>}
+                    <span className="fengyun-tier-names" style={{ fontSize: `${tierFontSize}cqw` }}>
+                      {row.entries.map(entry => <span key={entry.id} className="fengyun-name">{getNickname(entry.studentName)}</span>)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <p className="fengyun-hint">
             {shown.length === 0
               ? '当日小测暂无到课学员数据'
-              : shown.length < 3
-                ? (tieCountAt1 >= 5 ? `并列第一 ${tieCountAt1} 人，展示前 2 名` : `当日到课 ${shown.length} 人，空位留白`)
-                : '名单随当日小测成绩自动更新 · 同分并列' }
+              : `本次展示 ${shown.length} 人 · 按正确率排名 · 同分并列横向排列${entranceRankings.length > FENGYUN_LIMIT ? ' · 已截取前 8 人' : ''}`}
           </p>
         </div>
       );

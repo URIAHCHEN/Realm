@@ -5,3 +5,65 @@ import { attendanceKind } from '@/lib/attendance';
 export function isFullAttendance(records: StudentRecord[]): boolean {
   return records.length > 0 && records.every(record => attendanceKind(record.attendance) === 'onTime');
 }
+
+export interface RankableScore {
+  studentName: string;
+  totalScore: number;
+  correctRate: number;
+}
+
+/** 竞争排名：按正确率降序，同率并列并跳过已占位次；满分不同的课次不直接比较原始分。 */
+export function rankForLeaderboard<T extends RankableScore>(records: T[], limit = 10): (T & { rank: number; awardRank: number })[] {
+  const sorted = [...records].sort((a, b) =>
+    b.correctRate - a.correctRate
+    || b.totalScore - a.totalScore
+    || a.studentName.localeCompare(b.studentName, 'zh-CN'));
+  let lastRate: number | null = null;
+  let lastRank = 0;
+  let awardRank = 0;
+  return sorted.map((record, index) => {
+    const rank = lastRate !== null && record.correctRate === lastRate ? lastRank : index + 1;
+    if (record.correctRate !== lastRate) awardRank++;
+    lastRate = record.correctRate;
+    lastRank = rank;
+    // rank 用于数字名次（并列后跳号）；awardRank 用于金银铜（按不同成绩档位，不跳档）。
+    return { ...record, rank, awardRank };
+  }).slice(0, Math.max(0, limit));
+}
+
+export const FENGYUN_LIMIT = 8;
+
+/** 风云榜只展示金银铜三档；第 4 名起不再标数字，统一归入铜牌档。 */
+export function groupFengyunAwards<T extends { rank: number; awardRank?: number }>(
+  records: T[],
+): { awardRank: number; entries: T[] }[] {
+  const groups = new Map<number, T[]>();
+  records.forEach(record => {
+    const awardRank = Math.min(3, record.awardRank ?? record.rank);
+    const entries = groups.get(awardRank) || [];
+    entries.push(record);
+    groups.set(awardRank, entries);
+  });
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([awardRank, entries]) => ({ awardRank, entries }));
+}
+
+export const FENGYUN_NAMES_PER_ROW = 4;
+
+/** 同档超过 4 个姓名时向下续行；续行不重复奖牌、不显示数字名次。 */
+export function buildFengyunRows<T extends { rank: number; awardRank?: number }>(
+  records: T[],
+): { awardRank: number; entries: T[]; continuation: boolean }[] {
+  return groupFengyunAwards(records).flatMap(group => {
+    const rows: { awardRank: number; entries: T[]; continuation: boolean }[] = [];
+    for (let index = 0; index < group.entries.length; index += FENGYUN_NAMES_PER_ROW) {
+      rows.push({
+        awardRank: group.awardRank,
+        entries: group.entries.slice(index, index + FENGYUN_NAMES_PER_ROW),
+        continuation: index > 0,
+      });
+    }
+    return rows;
+  });
+}

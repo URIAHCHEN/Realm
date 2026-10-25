@@ -2718,6 +2718,70 @@ html[data-exporting] * { animation: none !important; }
 .praise-root .slots-2 .row-1 { top: 43.7%; }
 .praise-root .slots-2 .row-2 { top: 58.8%; }
 .praise-root .slots-1 .row-1 { top: 51.2%; }
+/* 奖牌档位纵向、同档并列姓名横向；最多 8 人按档位行数自适应。 */
+.praise-root .fengyun-slots.slots-grouped {
+  left: 32%;
+  width: 38%;
+  top: 38.5%;
+  height: 27%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 0.3cqw;
+}
+.praise-root .fengyun-tier {
+  display: grid;
+  grid-template-columns: 4.6cqw minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.6cqw;
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  line-height: 1;
+}
+.praise-root .slots-grouped .fengyun-medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 3.5cqw;
+  font-size: 3.5cqw;
+  text-align: center;
+}
+.praise-root .fengyun-medal-spacer {
+  display: block;
+  width: 100%;
+}
+/* 三个 emoji 的实际字形留白不同，做极小水平校正，让可见奖牌中心同线。 */
+.praise-root .slots-grouped .tier-1 .fengyun-medal { transform: translateX(0.4cqw); }
+.praise-root .slots-grouped .tier-3 .fengyun-medal { transform: translateX(-1.2cqw); }
+.praise-root .fengyun-tier-names {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0.7cqw;
+  min-width: 0;
+}
+.praise-root .fengyun-tier-names .fengyun-name {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: inherit;
+}
+.praise-root .fengyun-rank {
+  flex: 0 0 auto;
+  min-width: 1.55em;
+  margin-right: 0.45em;
+  color: #8a6a45;
+  font-size: 2.15cqw;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .praise-root .fengyun-medal {
   display: inline-block; vertical-align: middle; margin-right: 0.9cqw;
   font-size: 43px; font-size: 4.3cqw;   /* 底图 2000px 宽时 ≈86px */

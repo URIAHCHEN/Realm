@@ -25,7 +25,7 @@ import {
 } from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
 import { pushSnapshotConditional } from '@/lib/cloudSync';
-import { isFullAttendance } from '@/lib/leaderboardRules';
+import { isFullAttendance, rankForLeaderboard, FENGYUN_LIMIT, groupFengyunAwards, buildFengyunRows } from '@/lib/leaderboardRules';
 import { getOverallFeedback, getTrajectoryFeedback } from '@/lib/reportFeedback';
 
 let passed = 0;
@@ -783,6 +783,33 @@ group('风云榜全勤口径');
   check(!isFullAttendance([rec({ attendance: '迟到' })]), '迟到不计全勤');
   check(!isFullAttendance([rec({ attendance: '调课' })]), '调课不计全勤');
   check(!isFullAttendance([]), '无记录不计全勤');
+  const ranked = rankForLeaderboard([
+    { studentName: 'A', totalScore: 50, correctRate: 100 },
+    { studentName: 'B', totalScore: 100, correctRate: 100 },
+    { studentName: 'C', totalScore: 45, correctRate: 90 },
+    { studentName: 'D', totalScore: 90, correctRate: 90 },
+    { studentName: 'E', totalScore: 40, correctRate: 80 },
+    { studentName: 'F', totalScore: 35, correctRate: 70 },
+    { studentName: 'G', totalScore: 30, correctRate: 60 },
+    { studentName: 'H', totalScore: 25, correctRate: 50 },
+    { studentName: 'I', totalScore: 20, correctRate: 40 },
+    { studentName: 'J', totalScore: 15, correctRate: 30 },
+  ], FENGYUN_LIMIT);
+  check(ranked.length === 8 && ranked[7].studentName === 'H', '风云榜最多展示 8 人，第 9 人起不进入海报');
+  check(ranked[0].rank === 1 && ranked[1].rank === 1, '不同满分但正确率相同：并列第 1，不按原始分改名次');
+  check(ranked[2].rank === 3 && ranked[3].rank === 3, '两组并列后按占位数跳号：下一名为第 3');
+  check(ranked[0].awardRank === 1 && ranked[1].awardRank === 1 && ranked[2].awardRank === 2 && ranked[3].awardRank === 2 && ranked[4].awardRank === 3, '金银铜按成绩档位：并列金后下一档为银，不出现有铜无银');
+  check(ranked[4].rank === 5 && ranked[7].rank === 8, '并列后的后续名次连续符合竞争排名');
+  const groups = groupFengyunAwards(ranked);
+  check(groups.map(group => group.awardRank).join(',') === '1,2,3', '风云榜只保留金、银、铜三档，不再显示第 4 名后的数字');
+  check(groups[0].entries.length === 2 && groups[1].entries.length === 2 && groups[2].entries.length === 4, '同分并列姓名进入同一档位，第 4 名起归入铜牌档');
+  const groupedRows = buildFengyunRows([
+    { studentName: 'A', totalScore: 10, correctRate: 100, rank: 1, awardRank: 1 },
+    { studentName: 'B', totalScore: 9, correctRate: 90, rank: 2, awardRank: 2 },
+    ...Array.from({ length: 6 }, (_, i) => ({ studentName: `C${i}`, totalScore: 8, correctRate: 80, rank: 3 + i, awardRank: 3 + i })),
+  ]);
+  check(groupedRows.length === 4 && groupedRows[3].continuation, '同档超过 4 个姓名向下续行，不标数字名次');
+  check(groupedRows.every(row => row.awardRank >= 1 && row.awardRank <= 3), '所有续行仍只属于金、银、铜三档');
 }
 
 group('报告话术：稳定、可比、去模板腔');

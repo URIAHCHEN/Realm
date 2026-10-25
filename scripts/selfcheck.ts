@@ -810,6 +810,12 @@ group('风云榜全勤口径');
   ]);
   check(groupedRows.length === 4 && groupedRows[3].continuation, '同档超过 4 个姓名向下续行，不标数字名次');
   check(groupedRows.every(row => row.awardRank >= 1 && row.awardRank <= 3), '所有续行仍只属于金、银、铜三档');
+  const allTiersWrap = buildFengyunRows(Array.from({ length: 8 }, (_, i) => ({
+    studentName: `S${i}`, totalScore: 10 - i, correctRate: 100 - i,
+    rank: i + 1, awardRank: i < 5 ? 1 : i < 7 ? 2 : 3,
+  })));
+  check(allTiersWrap.filter(row => row.awardRank === 1).length === 2, '金牌并列超过 4 人也向下续行');
+  check(allTiersWrap.filter(row => row.awardRank === 2).length === 1 && allTiersWrap.at(-1)?.continuation === false, '银、铜档遵循同一续行规则');
 }
 
 group('报告话术：稳定、可比、去模板腔');

@@ -537,7 +537,7 @@ export function Leaderboard({
         const characters = row.entries.reduce((sum, entry) => sum + getNickname(entry.studentName).length, 0);
         return characters + (row.entries.length - 1) * 0.7;
       }));
-      const tierFontSize = Math.min(2.8, 32 / longestRow);
+      const tierFontSize = Math.min(2.9, 34.5 / longestRow);
       const medalOf = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
       return (
         <div className="fengyun-wrap">

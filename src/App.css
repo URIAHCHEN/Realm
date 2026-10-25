@@ -2752,9 +2752,9 @@ html[data-exporting] * { animation: none !important; }
   display: block;
   width: 100%;
 }
-/* 三个 emoji 的实际字形留白不同，做极小水平校正，让可见奖牌中心同线。 */
-.praise-root .slots-grouped .tier-1 .fengyun-medal { transform: translateX(0.4cqw); }
-.praise-root .slots-grouped .tier-3 .fengyun-medal { transform: translateX(-1.2cqw); }
+/* emoji 字形自带的左右留白不同：只校正可见图形中心，不改姓名列起点。 */
+.praise-root .slots-grouped .tier-2 .fengyun-medal { transform: translateX(0.4cqw); }
+.praise-root .slots-grouped .tier-3 .fengyun-medal { transform: translateX(2.6cqw); }
 .praise-root .fengyun-tier-names {
   display: inline-flex;
   align-items: baseline;

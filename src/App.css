@@ -4038,6 +4038,18 @@ html[data-exporting] .praise-root .fengyun-poster {
 }
 .report-detail-kpis strong { color: #1d4ed1; font-family: var(--font-display); font-size: 24px; line-height: 1; }
 .report-detail-kpis span { margin-top: 6px; color: #758499; font-size: 10.5px; }
+.report-parent-note {
+  margin-top: 2px;
+  padding: 17px 18px;
+  border: 1px solid rgba(210, 153, 65, 0.16);
+  border-radius: 14px;
+  background: #fff8eb;
+  color: #5b4a2f;
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+.report-parent-note > span { display: inline-block; margin-right: 7px; color: #a56c20; font-weight: 700; }
+.dark .report-parent-note { border-color: rgba(210, 153, 65, 0.18); background: rgba(210, 153, 65, 0.09); color: #d9c9ab; }
 
 @media (max-width: 760px) {
   .report-personal .report-cover { padding: 22px !important; }

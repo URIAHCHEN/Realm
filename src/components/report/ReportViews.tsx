@@ -772,6 +772,10 @@ export function PersonalReportView({
         studentStats={studentStats}
         avgQuestionTypeScores={studentStats?.avgQuestionTypeScores || []}
       />
+      <div className="report-parent-note">
+        <span>给家长的一句话</span>
+        这份报告看的是「下一步做什么」，不是排名。先选一个动作开始，比同时补五六项更有效。
+      </div>
     </div>
   );
 }

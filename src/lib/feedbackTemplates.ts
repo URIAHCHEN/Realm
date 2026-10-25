@@ -671,7 +671,7 @@ export function generatePraise(
   
   if ((praiseType === 'entrance' || praiseType === 'comprehensive') && included('entrance')) {
     // 入门测风云榜（请假/缺勤学员不计入）
-    // 默认表彰前三名；同分并列一并纳入；表彰总人数控制在 6 人以内
+    // 默认表彰前三档；同分并列一并纳入；人数上限随 topN 配置变化。
     const scored = eligibleCurrent
       .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
       .sort((a, b) => b.correctRate - a.correctRate || b.totalScore - a.totalScore);

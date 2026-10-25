@@ -28,7 +28,6 @@ import {
 import { CHART_ANIM } from '@/lib/chartMotion';
 import { aggregateByCategory, categoryColor } from '@/lib/qtCategories';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { 
   BarChart, 
   Bar, 
@@ -118,6 +117,33 @@ const TONE_BADGE: Record<string, string> = {
  * 选项词云（2026-10-16）：只渲染出现过的选项，字号随出现次数放大 —— 替代"整片 0 次占位"的磁贴墙。
  * 用于班级报告的出勤/作业/课后任务概况。
  */
+/**
+ * 频次条：一行一个选项，长度=相对最高频项，右侧给次数与占比。
+ * 用于出勤 / 课堂练习 / 课后任务 —— 原来用 2 列大数字磁贴，选项少时留下大片空白、
+ * 选项多时又上下错位（2026-10-25 用户反馈），改成等高的行式频次图后三栏对齐。
+ */
+function FrequencyBars({ items, emptyText }: { items: { option: string; count: number }[]; emptyText: string }) {
+  const visible = items.filter(item => item.count > 0);
+  const total = visible.reduce((sum, item) => sum + item.count, 0);
+  if (visible.length === 0 || total === 0) return <p className="freq-empty">{emptyText}</p>;
+  const max = Math.max(...visible.map(item => item.count));
+  return (
+    <div className="freq-list">
+      {visible.map(item => {
+        const level = optionToneLevel(item.option);
+        return (
+          <div key={item.option} className={`freq-row is-${level}`}>
+            <span className="freq-label" title={item.option}>{item.option}</span>
+            <span className="freq-track"><i style={{ width: `${Math.max(8, (item.count / max) * 100)}%` }} /></span>
+            <span className="freq-value">{item.count}<small>次</small></span>
+            <span className="freq-share">{Math.round((item.count / total) * 100)}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function OptionCloud({ items, emptyText }: { items: { option: string; count: number }[]; emptyText: string }) {
   const present = items.filter(x => (x.count || 0) > 0).sort((a, b) => b.count - a.count);
   if (present.length === 0) {
@@ -301,6 +327,8 @@ export function PersonalReportView({
   const [isExportingImage, setIsExportingImage] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
+  // 出勤率（0-100）：迟到算到场，请假/调课与未知项不进分母 —— 与全站 attendanceRateOf 同口径
+  const attendanceRatePct = Math.round(attendanceRateOf(studentRecords.map(record => record.attendance)));
   const personalRates = studentStats?.learningTrajectory.map(item => item.correctRate).filter(Number.isFinite) || [];
   const averageRate = personalRates.length ? Math.round(personalRates.reduce((sum, value) => sum + value, 0) / personalRates.length * 10) / 10 : 0;
   const bestRate = personalRates.length ? Math.max(...personalRates) : 0;
@@ -440,59 +468,14 @@ export function PersonalReportView({
         </div>
       </div>
 
-      <Card className="mb-6 liquid-glass-card" data-html2canvas-ignore="true">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">趋势图类型</Label>
-              <Select value={trendType} onValueChange={(v) => setTrendType(v as typeof trendType)}>
-                <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="line">折线图</SelectItem>
-                  <SelectItem value="bar">组合图（柱+线）</SelectItem>
-                  <SelectItem value="area">面积图</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">课次排序</Label>
-              <Select value={scoreSort} onValueChange={(v) => setScoreSort(v as typeof scoreSort)}>
-                <SelectTrigger className="w-36 h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="lesson">按课次正序</SelectItem>
-                  <SelectItem value="asc">成绩从低到高</SelectItem>
-                  <SelectItem value="desc">成绩从高到低</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-4">
-              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">展示指标</Label>
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <Checkbox checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} className="translate-y-[1px]" />课后任务
-              </label>
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <Checkbox checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} className="translate-y-[1px]" />课次得分率
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-[color:var(--ink-2)] whitespace-nowrap">题型分布图</Label>
-              <Select value={distType} onValueChange={(v) => setDistType(v as typeof distType)}>
-                <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pie">饼图</SelectItem>
-                  <SelectItem value="bar">柱状图</SelectItem>
-                  <SelectItem value="radar">雷达图</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" className="gap-2 h-8" data-html2canvas-ignore="true" onClick={handleExportPersonalImage} disabled={isExportingImage}>
-              <ImageIcon className="w-4 h-4" />
-              {isExportingImage ? '生成中...' : '导出图片'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* 控制项不再集中堆在顶部：各自贴到对应图表上方，
+          改完立刻在视野内看到变化（原先改完要往下翻好几屏，像"点了没反应"）。 */}
+      <div className="report-actions" data-html2canvas-ignore="true">
+        <Button variant="outline" size="sm" className="gap-2 h-8" onClick={handleExportPersonalImage} disabled={isExportingImage}>
+          <ImageIcon className="w-4 h-4" />
+          {isExportingImage ? '生成中...' : '导出图片'}
+        </Button>
+      </div>
 
       <div className="report-section report-overview">
         <h2 className="report-section-title">
@@ -534,6 +517,17 @@ export function PersonalReportView({
           <span className="report-section-en">TREND</span>
           <span className="report-section-note">柱=本生正确率，实线=班级平均，灰虚线=班级最高，橙虚线=达标 80%</span>
         </h2>
+        <div className="report-section-toolbar" data-html2canvas-ignore="true">
+          <span className="report-toolbar-label">图表类型</span>
+          <Select value={trendType} onValueChange={(v) => setTrendType(v as typeof trendType)}>
+            <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="line">折线图</SelectItem>
+              <SelectItem value="bar">组合图（柱+线）</SelectItem>
+              <SelectItem value="area">面积图</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="report-chart-container" role="img" aria-label="学习趋势分析：柱为本生正确率，含班级平均、班级最高与 80% 达标线" style={{ height: 330 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={comboTrend} margin={{ top: 18, right: 18, left: 0, bottom: 0 }}>
@@ -567,6 +561,20 @@ export function PersonalReportView({
           <span className="report-section-en">DETAILS</span>
           <span className="report-section-note">左=各课次得分构成（百分比堆叠），右=失分去向</span>
         </h2>
+        <div className="report-section-toolbar" data-html2canvas-ignore="true">
+          <span className="report-toolbar-label">课次排序</span>
+          <Select value={scoreSort} onValueChange={(v) => setScoreSort(v as typeof scoreSort)}>
+            <SelectTrigger className="h-8 w-[152px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lesson">按课次正序</SelectItem>
+              <SelectItem value="asc">成绩从低到高</SelectItem>
+              <SelectItem value="desc">成绩从高到低</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="report-toolbar-check">
+            <Checkbox checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} />显示课次总分
+          </label>
+        </div>
         <div className="report-detail-kpis">
           <div><strong>{fullCategoryCount}</strong><span>满分项</span></div>
           <div><strong>{weakCategoryCount}</strong><span>待提升项</span></div>
@@ -576,7 +584,7 @@ export function PersonalReportView({
           <div className="report-chart-card">
             <div className="report-chart-card-head">
               <span>各课次得分构成</span>
-              <span>按板块占比 · 课次后为该课得分率</span>
+              <span>按板块占比 · 课次下方为该课总分</span>
             </div>
             <div className="report-chart-container" role="img" aria-label="各课次得分构成：百分比堆叠条形图，展示每次课各板块得分占比" style={{ height: Math.max(240, compositionRows.length * 46 + 96) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -586,24 +594,32 @@ export function PersonalReportView({
                   <YAxis
                     type="category"
                     dataKey="lesson"
-                    width={showCorrectRate ? 96 : 62}
+                    width={showCorrectRate ? 106 : 64}
                     tickLine={false}
                     axisLine={false}
                     tick={(props: { x?: number; y?: number; payload?: { value?: string; index?: number }; textAnchor?: 'end' | 'start' | 'middle' }) => {
                       const row = compositionRows.find(item => String(item.lesson) === String(props.payload?.value));
                       return (
                         <g transform={`translate(${props.x ?? 0},${props.y ?? 0})`}>
-                          <text x={-8} y={4} textAnchor="end" fontSize={11.5} fill="#475569" style={{ fontFamily: CHART_FONT_FAMILY }}>
+                          {/* 两行标签：课次 + 该课总分。原先把「得分率 %」直接跟在课次后面，
+                              和条形里的「板块占比 %」是两套分母，读起来像对不上（2026-10-25 修正）。 */}
+                          <text x={-8} y={showCorrectRate ? -3 : 4} textAnchor="end" fontSize={11.5} fill="#475569" style={{ fontFamily: CHART_FONT_FAMILY }}>
                             {props.payload?.value}
-                            {showCorrectRate && row ? <tspan fill="#94a3b8" dx="4">{row.correctRate}%</tspan> : null}
                           </text>
+                          {showCorrectRate && row ? (
+                            <text x={-8} y={11} textAnchor="end" fontSize={10} fill="#94a3b8" style={{ fontFamily: CHART_FONT_FAMILY }}>
+                              {row.score}/{row.fullMark} 分
+                            </text>
+                          ) : null}
                         </g>
                       );
                     }}
                   />
                   <Tooltip content={<CompositionTooltip categories={scoreCategories} />} />
                   {scoreCategories.map(cat => (
-                    <Bar {...CHART_ANIM} key={cat.name} dataKey={`${cat.name}__pct`} name={cat.name} stackId="score" fill={cat.color} maxBarSize={26}>
+                    // 不启用入场动画：动画过程中色块还在生长、百分比标签已是终值，
+                    // 截图/导出会得到「83% 只占半条」这种自相矛盾的画面（2026-10-25 修正）。
+                    <Bar key={cat.name} dataKey={`${cat.name}__pct`} name={cat.name} stackId="score" fill={cat.color} maxBarSize={26} isAnimationActive={false}>
                       <LabelList dataKey={`${cat.name}__pct`} content={StackPercentLabel} />
                     </Bar>
                   ))}
@@ -670,6 +686,17 @@ export function PersonalReportView({
             知识表现
             <span className="report-section-en">KNOWLEDGE MAP</span>
           </h2>
+          <div className="report-section-toolbar" data-html2canvas-ignore="true">
+            <span className="report-toolbar-label">分布图</span>
+            <Select value={distType} onValueChange={(v) => setDistType(v as typeof distType)}>
+              <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="radar">雷达图</SelectItem>
+                <SelectItem value="pie">饼图</SelectItem>
+                <SelectItem value="bar">柱状图</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="report-category-grid grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] gap-6">
             <div className="report-chart-container" style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -765,100 +792,71 @@ export function PersonalReportView({
         </div>
       )}
 
-      <div className="report-habit-grid grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock className="w-5 h-5 text-[color:var(--brand)]" />
-              考勤统计
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* 2026-10-16 磁贴化：大数字 + 语义底色，扫一眼就能看出哪项多、哪项少 */}
-            <div className="grid grid-cols-2 gap-3">
-              {(studentStats?.attendanceBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
-                const lv = optionToneLevel(option);
-                const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                  : lv === 'bad' ? 'bg-red-50 text-red-700' : lv === 'info' ? 'bg-blue-50 text-blue-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                return (
-                  <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
-                    <p className="text-2xl font-bold tnum">{count}</p>
-                    <p className="text-xs mt-0.5">{option}</p>
-                  </div>
-                );
-              })}
-              {(studentStats?.attendanceBreakdown || []).filter(x => x.count > 0).length === 0 && (
-                <p className="col-span-2 text-sm text-[color:var(--ink-4)] text-center py-2">暂无考勤记录</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <BookOpen className="w-5 h-5 text-[color:var(--brand)]" />
-              课堂练习 / 课后任务
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
-                  const lv = optionToneLevel(option);
-                  const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                    : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                  return (
-                    <div key={option} className={`p-3 rounded-xl text-center ${box}`}>
-                      <p className="text-2xl font-bold tnum">{count}</p>
-                      <p className="text-xs mt-0.5">{option}</p>
-                    </div>
-                  );
-                })}
-                {(showListening ? (studentStats?.listeningBreakdown || []) : []).filter(x => x.count > 0).map(({ option, count }) => {
-                  const lv = optionToneLevel(option);
-                  const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
-                    : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
-                  return (
-                    <div key={'l-' + option} className={`p-3 rounded-xl text-center ${box}`}>
-                      <p className="text-2xl font-bold tnum">{count}</p>
-                      <p className="text-xs mt-0.5">课后任务 · {option}</p>
-                    </div>
-                  );
-                })}
+      <Card className="report-frequency-card mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <CheckSquare className="w-5 h-5 text-[color:var(--brand)]" />
+            出勤与作业频次
+            <span className="text-xs font-normal text-[color:var(--ink-4)] ml-1">按登记次数统计 · 右侧为占比</span>
+            <label className="report-toolbar-check ml-auto font-normal" data-html2canvas-ignore="true">
+              <Checkbox checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} />显示课后任务
+            </label>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="freq-columns" data-cols={showListening ? 3 : 2}>
+            <div className="freq-col">
+              <div className="freq-col-head">
+                <Clock className="w-4 h-4 text-[color:var(--brand)]" />
+                出勤
+                <small>出勤率 {attendanceRatePct}%</small>
               </div>
-              {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).length === 0 && (showListening ? (studentStats?.listeningBreakdown || []) : []).filter(x => x.count > 0).length === 0 && (
-                <p className="text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
-              )}
-              {showListening && optionalRows.length > 0 && (
-                <div className="pt-2 mt-1 border-t border-black/5 space-y-2">
-                  <p className="text-xs text-[color:var(--ink-4)]">口语类（作业成绩，不计入小测总分）</p>
-                  {optionalRows.map(st => (
-                    <div key={st.name} className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[color:var(--ink-2)]">{st.name}</span>
-                        <Badge className={TONE_BADGE.muted}>
-                          {st.registered > 0 ? `平均 ${st.avg} 分 · 已登记 ${st.registered}/${st.total} 次` : '尚未登记'}
-                        </Badge>
-                      </div>
-                      {/* 档位分布：只列实际出现的档，全 0（无人拿到判定）时整行不渲染 */}
-                      {(st.ratedCount ?? 0) > 0 && (st.distribution || []).some(d => d.count > 0) && (
-                        <div className="flex flex-wrap gap-1 justify-end">
-                          {(st.distribution || []).filter(d => d.count > 0).map(d => (
-                            <span key={d.label} className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-black/5 bg-slate-50 text-[11px] font-medium text-[color:var(--ink-2)] whitespace-nowrap">
-                              {d.label} × {d.count}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <FrequencyBars items={studentStats?.attendanceBreakdown || []} emptyText="暂无考勤记录" />
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="freq-col">
+              <div className="freq-col-head">
+                <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />
+                课堂练习
+              </div>
+              <FrequencyBars items={studentStats?.homeworkBreakdown || []} emptyText="暂无课堂练习记录" />
+            </div>
+            {showListening && (
+              <div className="freq-col">
+                <div className="freq-col-head">
+                  <CheckSquare className="w-4 h-4 text-[color:var(--brand)]" />
+                  课后任务
+                </div>
+                <FrequencyBars items={studentStats?.listeningBreakdown || []} emptyText="暂无课后任务记录" />
+              </div>
+            )}
+          </div>
+          {showListening && optionalRows.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-black/5 space-y-2">
+              <p className="text-xs text-[color:var(--ink-4)]">口语类（作业成绩，不计入小测总分）</p>
+              {optionalRows.map(st => (
+                <div key={st.name} className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[color:var(--ink-2)]">{st.name}</span>
+                    <Badge className={TONE_BADGE.muted}>
+                      {st.registered > 0 ? `平均 ${st.avg} 分 · 已登记 ${st.registered}/${st.total} 次` : '尚未登记'}
+                    </Badge>
+                  </div>
+                  {/* 档位分布：只列实际出现的档，全 0（无人拿到判定）时整行不渲染 */}
+                  {(st.ratedCount ?? 0) > 0 && (st.distribution || []).some(d => d.count > 0) && (
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {(st.distribution || []).filter(d => d.count > 0).map(d => (
+                        <span key={d.label} className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-black/5 bg-slate-50 text-[11px] font-medium text-[color:var(--ink-2)] whitespace-nowrap">
+                          {d.label} × {d.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {examTableData.length > 0 && (
         <div className="report-section report-panel report-school-scores">

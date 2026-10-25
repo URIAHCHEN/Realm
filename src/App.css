@@ -4101,6 +4101,83 @@ html[data-exporting] .praise-root .fengyun-poster {
   color: #8a99ac;
   font-size: 12px;
 }
+/* 报告内联控制条：每个开关贴在它影响的图表上方，改完立刻能看到结果 */
+.report-actions { display: flex; justify-content: flex-end; margin: 10px 0 14px; }
+.report-section-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: -2px 0 12px;
+}
+.report-toolbar-label { color: #7b8798; font-size: 11.5px; }
+.report-toolbar-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5d6c80;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.report-toolbar-check [role='checkbox'] { flex: none; }
+
+/* 出勤与作业频次：三栏等宽，行式频次条（替代原先高低不齐的大数字磁贴） */
+.report-frequency-card {
+  border: 1px solid rgba(15, 23, 42, 0.055) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 8px 24px -22px rgba(15, 23, 42, 0.34) !important;
+}
+.freq-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.freq-columns[data-cols='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.freq-col {
+  min-width: 0;
+  padding: 12px 13px 13px;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 13px;
+  background: #f8fafb;
+}
+.freq-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: #25384f;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.freq-col-head small { margin-left: auto; color: #8a99ac; font-size: 10.5px; font-weight: 500; }
+.freq-list { display: flex; flex-direction: column; gap: 9px; }
+.freq-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(54px, 1.15fr) 30px 34px;
+  align-items: center;
+  gap: 8px;
+}
+.freq-label {
+  overflow: hidden;
+  color: #5d6c80;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.freq-track { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(15, 23, 42, 0.065); }
+.freq-track i { display: block; height: 100%; border-radius: 999px; background: #94a3b8; }
+.freq-row.is-good .freq-track i { background: #10b981; }
+.freq-row.is-warn .freq-track i { background: #f59e0b; }
+.freq-row.is-bad .freq-track i { background: #ef4444; }
+.freq-row.is-info .freq-track i { background: #3b82f6; }
+.freq-value { color: #25384f; font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.freq-value small { margin-left: 1px; color: #94a3b8; font-size: 9.5px; font-weight: 500; }
+.freq-share { color: #8a99ac; font-size: 10.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.freq-empty { margin: 0; padding: 8px 0; color: #94a3b8; font-size: 11.5px; }
+
 /* 题型卡片 · 课次溯源 */
 .advice-question-source {
   display: flex;
@@ -4149,6 +4226,8 @@ html[data-exporting] .praise-root .fengyun-poster {
   .report-personal .report-section-note { width: 100%; margin-left: 40px !important; }
   .report-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .report-chart-card-head > span:last-child { display: none; }
+  .freq-columns,
+  .freq-columns[data-cols='2'] { grid-template-columns: minmax(0, 1fr); }
 }
 .dark .report-personal { background: #131b27 !important; }
 .dark .report-overview-summary { background: rgba(45, 109, 227, 0.10); color: #c3d3e9; }

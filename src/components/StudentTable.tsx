@@ -565,7 +565,12 @@ export function StudentTable({
   /** 进入课次时自动弹一次离班提醒（可标记本课次不再提示） */
   const [leaveHintOpen, setLeaveHintOpen] = useState(false);
   useEffect(() => {
-    if (missingNames.length === 0) return;
+    // 数据异步补齐后名单可能从“有缺失”变为 0；必须同步关闭旧弹窗，
+    // 否则会停在“共有 0 位学员没有记录”的空提醒上。
+    if (missingNames.length === 0) {
+      setLeaveHintOpen(false);
+      return;
+    }
     let dismissed = false;
     try { dismissed = sessionStorage.getItem('leaveHintDismissed.' + lessonNumber) === '1'; } catch { /* ignore */ }
     if (!dismissed) setLeaveHintOpen(true);
@@ -1177,7 +1182,7 @@ export function StudentTable({
 
       {/* 离班提醒：必须挂在「添加学员」Dialog 之外——否则它只在外层弹窗打开时才存在于 DOM，
           进入课次的自动提醒永远不出现（2026-10-17 修正） */}
-      <Dialog open={leaveHintOpen} onOpenChange={setLeaveHintOpen}>
+      <Dialog open={leaveHintOpen && missingNames.length > 0} onOpenChange={setLeaveHintOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

@@ -1,9 +1,28 @@
 import type { StudentRecord } from '@/types';
-import { attendanceKind } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord } from '@/lib/attendance';
 
 /** 全勤：范围内至少有一条记录，且每条已记录考勤均为按时。 */
 export function isFullAttendance(records: StudentRecord[]): boolean {
   return records.length > 0 && records.every(record => attendanceKind(record.attendance) === 'onTime');
+}
+
+/** 累计全勤：截至目标课次必须仍有记录，且全部历史考勤均为按时。 */
+export function isCumulativeFullAttendance(records: StudentRecord[], lessonNumber: number): boolean {
+  return records.some(record => record.lessonNumber === lessonNumber) && isFullAttendance(records);
+}
+
+const NEGATIVE_LISTENING_STATUS = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
+
+/** 课后任务是否形成可表彰记录：数值分或正向定性状态都算。 */
+export function isListeningEligible(record: StudentRecord): boolean {
+  if (isAbsentRecord(record)) return false;
+  if (Number(record.listeningScore) > 0) return true;
+  const status = String(record.listeningStatus || '').trim();
+  return !!status && !NEGATIVE_LISTENING_STATUS.test(status);
+}
+
+export function listeningScoreOf(record: StudentRecord): number {
+  return Number(record.listeningScore) || 0;
 }
 
 export interface RankableScore {

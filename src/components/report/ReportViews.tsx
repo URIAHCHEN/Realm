@@ -147,7 +147,7 @@ export interface PersonalReportProps {
   barData: Record<string, number | string>[];
   comboTrend: Record<string, number | string | null>[];
   optionalRows: OptionalFieldRow[];
-  radarData: { subject: string; A: number; fullMark: number }[];
+  radarData: { subject: string; A: number; B?: number; fullMark: number }[];
   currentClassName: string;
   selectedStudent: string;
   getNickname: (name: string) => string;
@@ -221,6 +221,27 @@ export function PersonalReportView({
   const personalRates = studentStats?.learningTrajectory.map(item => item.correctRate).filter(Number.isFinite) || [];
   const averageRate = personalRates.length ? Math.round(personalRates.reduce((sum, value) => sum + value, 0) / personalRates.length * 10) / 10 : 0;
   const bestRate = personalRates.length ? Math.max(...personalRates) : 0;
+  const latestRow = useMemo(
+    () => [...barData].sort((a, b) => Number(a.lessonNum) - Number(b.lessonNum)).at(-1),
+    [barData],
+  );
+  const categoryRanking = useMemo(
+    () => [...pieData].filter(item => (item.full || 0) > 0).sort((a, b) => (b.rate || 0) - (a.rate || 0)),
+    [pieData],
+  );
+  const strongestCategory = categoryRanking[0];
+  // 参考报告以 60% 为“待提升”线，避免把 90% 的相对最低项写成短板。
+  const weakestCategory = categoryRanking.find(item => (item.rate || 0) < 60);
+  const fullCategoryCount = categoryRanking.filter(item => (item.rate || 0) >= 99.5).length;
+  const weakCategoryCount = categoryRanking.filter(item => (item.rate || 0) < 60).length;
+  const recoverablePoints = categoryRanking.reduce((sum, item) => sum + Math.max(0, (item.full || 0) - (item.value || 0)), 0);
+  const latestTrend = latestRow
+    ? comboTrend.find(row => String(row.lesson) === String(latestRow.lesson))
+    : undefined;
+  const latestRank = Number(latestTrend?.班级排名);
+  const overviewLine = latestRow
+    ? `${latestRow.lesson}得分率 ${Number(latestRow.correctRate) || 0}%${Number.isFinite(latestRank) && latestRank > 0 ? `，班级第 ${latestRank} 名` : ''}。${strongestCategory ? `${strongestCategory.name}是当前最稳的一项，得分率 ${Math.round(strongestCategory.rate || 0)}%。` : ''}`
+    : '累计学习记录将在完成测评后形成趋势。';
 
   const handleExportPersonalImage = async () => {
     if (!targetRef.current || isExportingImage) return;
@@ -278,12 +299,17 @@ export function PersonalReportView({
 
   return (
     <div className="report-container report-personal" ref={targetRef}>
-      <div className="report-header">
-        <span className="report-eyebrow">个人成长档案</span>
-        <h1 className="report-title">{getNickname(selectedStudent)}的学情报告</h1>
-        <p className="report-subtitle">
-          {currentClassName} · 已记录 {studentStats?.totalLessons || 0} 课 · 已测评 {personalRates.length} 课
-        </p>
+      <div className="report-header report-cover">
+        <div className="report-cover-copy">
+          <span className="report-eyebrow">ENGLISH LEARNING REPORT</span>
+          <h1 className="report-title">{getNickname(selectedStudent)} · 阶段学情报告</h1>
+          <p className="report-subtitle">
+            看见已经做到的，也找到下一步的起点 · {currentClassName}
+          </p>
+        </div>
+        <div className="report-cover-avatar" aria-hidden="true">
+          {getNickname(selectedStudent).slice(0, 1)}
+        </div>
       </div>
 
       <Card className="mb-6 liquid-glass-card" data-html2canvas-ignore="true">
@@ -340,26 +366,34 @@ export function PersonalReportView({
         </CardContent>
       </Card>
 
-      <div className="report-info-grid">
-        <div className="report-info-item" data-kpi="lessons">
-          <p className="report-info-label">累计记录</p>
-          <p className="report-info-value">{studentStats?.totalLessons}<span className="report-kpi-unit">课</span></p>
-          <p className="report-kpi-note">含请假与未测评记录</p>
+      <div className="report-section report-overview">
+        <h2 className="report-section-title">
+          学情概览
+          <span className="report-section-en">OVERVIEW</span>
+        </h2>
+        <p className="report-overview-summary">{overviewLine}</p>
+        <div className="report-overview-hero">
+          <div className="report-overview-primary" data-kpi="latest">
+            <p className="report-overview-kicker">最近一次测评</p>
+            <p className="report-overview-score">
+              {latestRow ? Number(latestRow.score) : '—'}
+              <span>/ {latestRow ? Number(latestRow.fullMark) : '—'} 分</span>
+            </p>
+            <div className="report-overview-meta">
+              <span>得分率 {latestRow ? Number(latestRow.correctRate) : 0}%</span>
+              <span>累计记录 {studentStats?.totalLessons || 0} 课</span>
+              <span>有效测评 {personalRates.length} 课</span>
+            </div>
+          </div>
+          <div className="report-overview-stats">
+            <div data-kpi="average"><strong>{averageRate}<small>%</small></strong><span>平均正确率</span></div>
+            <div data-kpi="best"><strong>{bestRate}<small>%</small></strong><span>最佳正确率</span></div>
+            <div data-kpi="assessed"><strong>{personalRates.length}<small>课</small></strong><span>有效测评</span></div>
+          </div>
         </div>
-        <div className="report-info-item" data-kpi="assessed">
-          <p className="report-info-label">有效测评</p>
-          <p className="report-info-value">{personalRates.length}<span className="report-kpi-unit">课</span></p>
-          <p className="report-kpi-note">仅统计已登记题型</p>
-        </div>
-        <div className="report-info-item" data-kpi="average">
-          <p className="report-info-label">平均正确率</p>
-          <p className="report-info-value">{averageRate}<span className="report-kpi-unit">%</span></p>
-          <p className="report-kpi-note">跨课次按正确率比较</p>
-        </div>
-        <div className="report-info-item" data-kpi="best">
-          <p className="report-info-label">最佳正确率</p>
-          <p className="report-info-value">{bestRate}<span className="report-kpi-unit">%</span></p>
-          <p className="report-kpi-note">已测评课次中的最高值</p>
+        <div className="report-overview-tags">
+          {strongestCategory && <span className="is-good">最稳：{strongestCategory.name} {Math.round(strongestCategory.rate || 0)}%</span>}
+          {weakestCategory && strongestCategory?.name !== weakestCategory.name && <span className="is-warn">待提升：{weakestCategory.name} {Math.round(weakestCategory.rate || 0)}%</span>}
         </div>
       </div>
 
@@ -369,7 +403,8 @@ export function PersonalReportView({
         <h2 className="report-section-title">
           <TrendingUp className="w-5 h-5 inline mr-2" />
           学习趋势分析
-          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=本生正确率，粗线=班级平均/最高，彩虚线=各板块得分率·按大类归类，红线=目标 80%）</span>
+          <span className="report-section-en">TREND</span>
+          <span className="report-section-note">柱=本生正确率，粗线=班级平均/最高，彩虚线=各板块得分率，红线=目标 80%</span>
         </h2>
         <div className="report-chart-container" role="img" aria-label="学习趋势分析：柱为本生正确率，含班级平均/最高线与各大题型板块得分率虚线" style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -405,9 +440,15 @@ export function PersonalReportView({
       <div className="report-section report-panel report-score-distribution">
         <h2 className="report-section-title">
           <BarChart3 className="w-5 h-5 inline mr-2" />
-          各课次成绩分布
-          <span className="text-xs font-normal text-[color:var(--ink-4)] ml-2">（柱=得分按大题型板块拆解堆叠，线=正确率%）</span>
+          卷面得分明细
+          <span className="report-section-en">DETAILS</span>
+          <span className="report-section-note">柱=各板块得分构成，线=正确率</span>
         </h2>
+        <div className="report-detail-kpis">
+          <div><strong>{fullCategoryCount}</strong><span>满分项</span></div>
+          <div><strong>{weakCategoryCount}</strong><span>待提升项</span></div>
+          <div><strong>{Math.round(recoverablePoints * 10) / 10}</strong><span>还可拿回 · 分</span></div>
+        </div>
         <div className="report-chart-container" role="img" aria-label="各课次成绩分布：堆叠柱为各板块得分构成，折线为正确率" style={{ height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={barData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
@@ -440,7 +481,8 @@ export function PersonalReportView({
         <div className="report-section report-panel report-category-distribution">
           <h2 className="report-section-title">
             <PieChartIcon className="w-5 h-5 inline mr-2" />
-            题型得分分布
+            知识表现
+            <span className="report-section-en">KNOWLEDGE MAP</span>
           </h2>
           <div className="report-category-grid grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] gap-6">
             <div className="report-chart-container" style={{ height: 300 }}>
@@ -487,8 +529,10 @@ export function PersonalReportView({
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
                     <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar {...CHART_ANIM} name="得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
-                      fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
+                    <Radar {...CHART_ANIM} name="个人得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                      fill="rgb(var(--brand-rgb))" fillOpacity={0.28} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
+                    <Radar {...CHART_ANIM} name="班级平均" dataKey="B" stroke="#9aa8b8" strokeWidth={1.6}
+                      strokeDasharray="5 4" fill="none" dot={false} />
                     <Legend />
                     <Tooltip />
                   </RadarChart>
@@ -520,27 +564,17 @@ export function PersonalReportView({
               })}
             </div>
           </div>
-        </div>
-      )}
-
-      {radarData.length > 0 && (
-        <div className="report-section report-panel report-ability">
-          <h2 className="report-section-title">
-            <Activity className="w-5 h-5 inline mr-2" />
-            能力维度分析
-          </h2>
-          <div className="report-chart-container" style={{ height: 350 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                <PolarGrid stroke="#e6ebf2" />
-                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#475569' }} />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <Radar {...CHART_ANIM} name="当前水平（得分率）" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
-                  fill="rgb(var(--brand-rgb))" fillOpacity={0.35} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
-                <Legend />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
+          <div className="report-insight-grid">
+            <div className="report-insight-card is-good">
+              <span>学习亮点</span>
+              <strong>{strongestCategory ? `${strongestCategory.name} ${Math.round(strongestCategory.rate || 0)}%` : '等待更多测评'}</strong>
+              <p>{strongestCategory ? `${Math.round(strongestCategory.value || 0)} / ${Math.round(strongestCategory.full || 0)} 分，这是目前最稳的一项。` : '完成更多课次后会形成稳定画像。'}</p>
+            </div>
+            <div className="report-insight-card is-warn">
+              <span>待提升</span>
+              <strong>{weakestCategory ? `${weakestCategory.name} ${Math.round(weakestCategory.rate || 0)}%` : '暂无短板项'}</strong>
+              <p>{weakestCategory ? `${Math.round(weakestCategory.value || 0)} / ${Math.round(weakestCategory.full || 0)} 分，是当前最值得先补的一块。` : '各板块表现均衡，继续保持。'}</p>
+            </div>
           </div>
         </div>
       )}
@@ -645,6 +679,7 @@ export function PersonalReportView({
           <h2 className="report-section-title">
             <School className="w-5 h-5 inline mr-2" />
             校内考试成绩
+            <span className="report-section-en">SCHOOL SCORES</span>
           </h2>
           <div className="overflow-x-auto">
             <Table className="report-table">
@@ -685,6 +720,7 @@ export function PersonalReportView({
         <h2 className="report-section-title">
           <Calendar className="w-5 h-5 inline mr-2" />
           详细学习记录
+          <span className="report-section-en">RECORDS</span>
         </h2>
         <div className="overflow-x-auto">
           <Table className="report-table">
@@ -1175,7 +1211,8 @@ function StudentFeedback({
     <div className="report-section report-panel report-advice">
       <h2 className="report-section-title">
         <Lightbulb className="w-5 h-5 inline mr-2" />
-        学习建议
+        提升动作
+        <span className="report-section-en">NEXT ACTIONS</span>
       </h2>
       
       {/* 合并板块：整体表现 + 各题型分析。

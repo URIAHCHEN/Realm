@@ -822,16 +822,22 @@ export function useClassData() {
   }, [currentClassId, classes]);
 
   // 添加学生到班级
-  const addStudentToClass = useCallback((classId: string, studentName: string) => {
+  const addStudentToClass = useCallback((classId: string, studentName: string, joinLesson?: number) => {
     setClasses(prev => {
       const classData = prev[classId];
       if (!classData || classData.students.includes(studentName)) return prev;
+      const joinMap = { ...(classData.studentJoinLesson || {}) };
+      const leaveMap = { ...(classData.studentLeaveLesson || {}) };
+      if (joinLesson != null && joinMap[studentName] == null) joinMap[studentName] = joinLesson;
+      delete leaveMap[studentName];
 
       return {
         ...prev,
         [classId]: {
           ...classData,
-          students: [...classData.students, studentName]
+          students: [...classData.students, studentName],
+          studentJoinLesson: joinMap,
+          studentLeaveLesson: leaveMap,
         }
       };
     });
@@ -854,13 +860,18 @@ export function useClassData() {
       // 记录新学员的加入课次：后续判断"该课次不该有 TA"完全依赖这个值，
       // 不再靠"最早记录"反推（新学员可能还没有任何记录）
       const joinMap = { ...(classData.studentJoinLesson || {}) };
-      if (joinLesson != null) newStudents.forEach(n => { joinMap[n] = joinLesson; });
+      const leaveMap = { ...(classData.studentLeaveLesson || {}) };
+      if (joinLesson != null) newStudents.forEach(n => {
+        if (joinMap[n] == null) joinMap[n] = joinLesson;
+      });
+      newStudents.forEach(n => { delete leaveMap[n]; });
       return {
         ...prev,
         [classId]: {
           ...classData,
           students: [...classData.students, ...newStudents],
           studentJoinLesson: joinMap,
+          studentLeaveLesson: leaveMap,
         }
       };
     });
@@ -902,9 +913,16 @@ export function useClassData() {
       const affected = new Set(targets.map(r => r.lessonNumber));
       let records = cls.records.filter(r => !(r.studentName === studentName && r.lessonNumber >= fromLesson));
       affected.forEach(l => { records = rerankLesson(records, l); });
+      const leaveMap = { ...(cls.studentLeaveLesson || {}) };
+      leaveMap[studentName] = fromLesson;
       return {
         ...prev,
-        [classId]: { ...cls, students: cls.students.filter(x => x !== studentName), records },
+        [classId]: {
+          ...cls,
+          students: cls.students.filter(x => x !== studentName),
+          records,
+          studentLeaveLesson: leaveMap,
+        },
       };
     });
     return removed;
@@ -917,12 +935,18 @@ export function useClassData() {
       const lessons = new Set(cls.records.filter(r => r.studentName === studentName).map(r => r.lessonNumber));
       let records = cls.records.filter(r => r.studentName !== studentName);
       lessons.forEach(l => { records = rerankLesson(records, l); });
+      const joinMap = { ...(cls.studentJoinLesson || {}) };
+      const leaveMap = { ...(cls.studentLeaveLesson || {}) };
+      delete joinMap[studentName];
+      delete leaveMap[studentName];
       return {
         ...prev,
         [classId]: {
           ...cls,
           students: cls.students.filter(s => s !== studentName),
-          records
+          records,
+          studentJoinLesson: joinMap,
+          studentLeaveLesson: leaveMap,
         }
       };
     });
@@ -935,15 +959,28 @@ export function useClassData() {
       const from = prev[fromClassId];
       if (!from) return prev;
       const next = { ...prev };
-      next[fromClassId] = { ...from, students: from.students.filter(s => s !== studentName) };
+      const fromLeave = { ...(from.studentLeaveLesson || {}) };
+      fromLeave[studentName] = currentLessonNumber;
+      next[fromClassId] = {
+        ...from,
+        students: from.students.filter(s => s !== studentName),
+        studentLeaveLesson: fromLeave,
+      };
       if (toClassId && next[toClassId] && !next[toClassId].students.includes(studentName)) {
         const to = next[toClassId];
         // 修复（2026-10-11 审查）：转入班必须记 joinLesson = 当前课次。
         // 否则 rosterForLesson 的 joinMap[name] 为空、firstLessonByStudent 也还没有 TA，
         // 转入生会在转入班的所有历史课次里被当成"本课次没有记录"的疑似离班学员（离班提醒误报）。
         const joinMap = { ...(to.studentJoinLesson || {}) };
-        joinMap[studentName] = currentLessonNumber;
-        next[toClassId] = { ...to, students: [...to.students, studentName], studentJoinLesson: joinMap };
+        const leaveMap = { ...(to.studentLeaveLesson || {}) };
+        if (joinMap[studentName] == null) joinMap[studentName] = currentLessonNumber;
+        delete leaveMap[studentName];
+        next[toClassId] = {
+          ...to,
+          students: [...to.students, studentName],
+          studentJoinLesson: joinMap,
+          studentLeaveLesson: leaveMap,
+        };
       }
       return next;
     });
@@ -954,7 +991,12 @@ export function useClassData() {
     setClasses(prev => {
       const cls = prev[classId];
       if (!cls || cls.students.includes(studentName)) return prev;
-      return { ...prev, [classId]: { ...cls, students: [...cls.students, studentName] } };
+      const leaveMap = { ...(cls.studentLeaveLesson || {}) };
+      delete leaveMap[studentName];
+      return {
+        ...prev,
+        [classId]: { ...cls, students: [...cls.students, studentName], studentLeaveLesson: leaveMap },
+      };
     });
   }, []);
 
@@ -963,7 +1005,19 @@ export function useClassData() {
     setClasses(prev => {
       const cls = prev[classId];
       if (!cls) return prev;
-      return { ...prev, [classId]: { ...cls, students: cls.students.filter(s => s !== studentName) } };
+      const joinMap = { ...(cls.studentJoinLesson || {}) };
+      const leaveMap = { ...(cls.studentLeaveLesson || {}) };
+      delete joinMap[studentName];
+      delete leaveMap[studentName];
+      return {
+        ...prev,
+        [classId]: {
+          ...cls,
+          students: cls.students.filter(s => s !== studentName),
+          studentJoinLesson: joinMap,
+          studentLeaveLesson: leaveMap,
+        },
+      };
     });
   }, []);
 
@@ -1478,7 +1532,17 @@ export function useClassData() {
         newRecords = rerankLesson(newRecords, lesson);
       });
 
-      return { ...prev, [classId]: { ...classData, students, records: newRecords } };
+      const leaveMap = { ...(classData.studentLeaveLesson || {}) };
+      delete leaveMap[studentName];
+      return {
+        ...prev,
+        [classId]: {
+          ...classData,
+          students,
+          records: newRecords,
+          studentLeaveLesson: leaveMap,
+        },
+      };
     });
   }, []);
 

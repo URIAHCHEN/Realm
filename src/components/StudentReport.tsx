@@ -75,7 +75,7 @@ export function StudentReport({
   const [scoreSort, setScoreSort] = useState<'lesson' | 'asc' | 'desc'>('lesson');
   const [showListening, setShowListening] = useState(true);
   const [showCorrectRate, setShowCorrectRate] = useState(true);
-  const [distType, setDistType] = useState<'pie' | 'bar' | 'radar'>('bar');
+  const [distType, setDistType] = useState<'pie' | 'bar' | 'radar'>('radar');
   const classReportRef = useRef<HTMLDivElement>(null);
   const personalReportRef = useRef<HTMLDivElement>(null);
 
@@ -297,20 +297,45 @@ export function StudentReport({
   }, [studentRecords, records, lessonConfigs, qtCategoryOverrides]);
 
 
+  // 班级板块得分率：与个人雷达使用同一归类，给「知识表现」提供班级平均对照。
+  const classCategoryRates = useMemo(() => {
+    const acc = new Map<string, { score: number; full: number }>();
+    records.forEach(record => {
+      const cfg = lessonConfigs[record.lessonNumber];
+      if (!cfg || !isReportAssessed(record, cfg)) return;
+      (cfg.questionTypes || []).filter(qt => !qt.excludeFromTotal).forEach(qt => {
+        const raw = record.scores?.[qt.id];
+        if (raw == null || String(raw).trim() === '') return;
+        const score = Number(raw);
+        if (!Number.isFinite(score)) return;
+        const category = categoryOf(qt.name, qtCategoryOverrides).name;
+        const cur = acc.get(category) || { score: 0, full: 0 };
+        cur.score += score;
+        cur.full += Number(qt.fullScore) || 0;
+        acc.set(category, cur);
+      });
+    });
+    return new Map([...acc.entries()].map(([name, value]) => [
+      name,
+      value.full > 0 ? Math.round(value.score / value.full * 1000) / 10 : 0,
+    ]));
+  }, [records, lessonConfigs, qtCategoryOverrides]);
+
   // 雷达图数据 - 能力维度（坐标轴上限取各题型真实满分，而非写死 100）
   const radarData = useMemo(() => {
     if (!studentStats) return [];
-    // 2026-10-16：能力维度（雷达）按大题型板块归类 —— 轴=语法/词汇/阅读/听说/写作，
-    // 轴值=板块得分率（成员合计得分 ÷ 合计满分），口径与分布图一致
+    // 能力维度（雷达）按大题型板块归类 —— 轴=语法/词汇/阅读/听说/写作，
+    // 轴值=板块得分率（成员合计得分 ÷ 合计满分），口径与分布图一致。
     const items = studentStats.avgQuestionTypeScores
       .filter(qt => (Number(qt.fullScore) || 0) > 0)
       .map(qt => ({ name: qt.name, rate: (Number(qt.avgScore) || 0) / (Number(qt.fullScore) || 1) * 100 }));
     return aggregateByCategory(items, qtCategoryOverrides).map(c => ({
       subject: c.name,
-      A: c.rate,       // 板块得分率 %
+      A: c.rate,
+      B: classCategoryRates.get(c.name) ?? 0,
       fullMark: 100,
     }));
-  }, [studentStats, qtCategoryOverrides]);
+  }, [studentStats, qtCategoryOverrides, classCategoryRates]);
 
   // 校内成绩表格数据
   const examTableData = useMemo(() => {

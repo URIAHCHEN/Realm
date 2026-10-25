@@ -4,6 +4,8 @@ import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { rateOralScore } from '@/lib/oralRating';
 import { optionToneLevel } from '@/lib/optionTone';
+import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
+import { isCumulativeFullAttendance, isListeningEligible, listeningScoreOf } from '@/lib/leaderboardRules';
 
 // 生成短昵称（三字取后两字，两字取最后一字叠词）
 export function generateShortNickname(fullName: string): string {
@@ -629,6 +631,10 @@ export function generatePraise(
     entranceTopN?: number;
     listeningTopN?: number;
     sections?: { entrance?: boolean; listening?: boolean; homework?: boolean; allPresent?: boolean; progress?: boolean };
+    /** 班级名单与在读区间：离班学员的历史记录不能进入本课及之后的公示 */
+    students?: string[];
+    studentJoinLesson?: Record<string, number>;
+    studentLeaveLesson?: Record<string, number>;
   }
 ): string {
   // 兜底：旧备份 / 部分云同步可能缺 praiseTemplate，不能让它 undefined.replace 崩掉
@@ -639,27 +645,44 @@ export function generatePraise(
   const sections = opts?.sections ?? {};
   const included = (k: 'entrance' | 'listening' | 'homework' | 'allPresent' | 'progress') => sections[k] !== false;
   const all = opts?.allRecords ?? records;
+  const activity = createStudentActivityContext(
+    opts?.students ?? [],
+    opts?.studentJoinLesson,
+    opts?.studentLeaveLesson,
+    all,
+  );
+  const eligibleCurrent = records.filter(r =>
+    isStudentActiveForRange(activity, r.studentName, lessonNumber)
+    && isStudentActiveAtLesson(activity, r.studentName, r.lessonNumber)
+  );
   const byStudent = new Map<string, StudentRecord[]>();
-  all.forEach(r => {
-    const arr = byStudent.get(r.studentName);
-    if (arr) arr.push(r); else byStudent.set(r.studentName, [r]);
-  });
+  all
+    .filter(r =>
+      r.lessonNumber <= lessonNumber
+      && isStudentActiveForRange(activity, r.studentName, lessonNumber)
+      && isStudentActiveAtLesson(activity, r.studentName, r.lessonNumber)
+    )
+    .forEach(r => {
+      const arr = byStudent.get(r.studentName);
+      if (arr) arr.push(r); else byStudent.set(r.studentName, [r]);
+    });
   
   let praiseContent = '';
   
   if ((praiseType === 'entrance' || praiseType === 'comprehensive') && included('entrance')) {
     // 入门测风云榜（请假/缺勤学员不计入）
     // 默认表彰前三名；同分并列一并纳入；表彰总人数控制在 6 人以内
-    const scored = records
+    const scored = eligibleCurrent
       .filter(r => r.totalScore > 0 && !isAbsentRecord(r))
-      .sort((a, b) => b.totalScore - a.totalScore);
+      .sort((a, b) => b.correctRate - a.correctRate || b.totalScore - a.totalScore);
     const topN = Math.max(1, Math.min(20, opts?.entranceTopN ?? opts?.topN ?? 3));
-    const distinctScores = Array.from(new Set(scored.map(r => r.totalScore)));
-    const cutoffScore = distinctScores[topN - 1];
-    const tiered = cutoffScore != null ? scored.filter(r => r.totalScore >= cutoffScore) : scored;
+    // 与榜单页一致：先按正确率比较，满分不同的课次不直接比原始分。
+    const distinctRates = Array.from(new Set(scored.map(r => r.correctRate)));
+    const cutoffRate = distinctRates[topN - 1];
+    const tiered = cutoffRate != null ? scored.filter(r => r.correctRate >= cutoffRate) : scored;
     const rankedStudents = tiered.slice(0, topN * 2);
-    const medalFor = (score: number): string => {
-      const rk = distinctScores.indexOf(score) + 1;
+    const medalFor = (correctRate: number): string => {
+      const rk = distinctRates.indexOf(correctRate) + 1;
       return rk === 1 ? '🥇' : rk === 2 ? '🥈' : rk === 3 ? '🥉' : `${rk}️⃣`;
     };
 
@@ -667,7 +690,7 @@ export function generatePraise(
       praiseContent += '🏆【入门测风云榜】\n';
       rankedStudents.forEach(r => {
         const nickname = getNickname(r.studentName);
-        praiseContent += `${medalFor(r.totalScore)} ${nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
+        praiseContent += `${medalFor(r.correctRate)} ${nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
       });
       praiseContent += '\n';
     }
@@ -678,12 +701,9 @@ export function generatePraise(
     // 也常常只填定性状态不填数值分（很棒哦👏 / 完成✅）；前两版要求数值分>0 → 真实数据仍空。
     // 现在：有数值分按分排；无数值分回退到"课后任务登记为正向状态"的学员，
     // 同分（含都无分）按总分降序兜底，保证有登记就有名单。
-    const NEG = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
-    const scoreOf = (r: StudentRecord) => Number(r.listeningScore) || 0;
-    const positiveStatus = (r: StudentRecord) => !!r.listeningStatus && !NEG.test(String(r.listeningStatus));
-    const listeningRanked = records
-      .filter(r => !isAbsentRecord(r) && (scoreOf(r) > 0 || positiveStatus(r)))
-      .sort((a, b) => (scoreOf(b) - scoreOf(a)) || (Number(b.totalScore) - Number(a.totalScore)))
+    const listeningRanked = eligibleCurrent
+      .filter(isListeningEligible)
+      .sort((a, b) => listeningScoreOf(b) - listeningScoreOf(a) || Number(b.totalScore) - Number(a.totalScore))
       .slice(0, Math.max(1, Math.min(20, opts?.listeningTopN ?? opts?.topN ?? 5)));
     
     if (listeningRanked.length > 0) {
@@ -691,8 +711,9 @@ export function generatePraise(
       const rankIcons = ['🏆', '🥈', '🥉', '📌', '📌', '📌', '📌', '📌'];
       listeningRanked.forEach((r, i) => {
         const nickname = getNickname(r.studentName);
-        const tail = scoreOf(r) > 0
-          ? `${scoreOf(r)}分`
+        const score = listeningScoreOf(r);
+        const tail = score > 0
+          ? `${score}分`
           : (r.listeningStatus && r.listeningStatus !== '具体分数' ? String(r.listeningStatus) : '完成');
         praiseContent += `${rankIcons[i]} ${nickname}：${tail}\n`;
       });
@@ -702,7 +723,7 @@ export function generatePraise(
   
   if (praiseType === 'comprehensive') {
     // 作业优秀
-    const homeworkExcellent = included('homework') ? records
+    const homeworkExcellent = included('homework') ? eligibleCurrent
       .filter(r => optionToneLevel(r.homeworkStatus) === 'good' && !isAbsentRecord(r))
       .map(r => getNickname(r.studentName)) : [];
     
@@ -716,10 +737,7 @@ export function generatePraise(
     // 原来只看本课，导致"之前请过假也算全勤"（用户反馈）
     const allPresent = included('allPresent')
       ? [...byStudent.entries()]
-        .filter(([, recs]) => {
-          const kinds = recs.map(r => attendanceKind(r.attendance)).filter(k => k !== 'unknown');
-          return kinds.length > 0 && kinds.every(k => k === 'onTime');
-        })
+        .filter(([, recs]) => isCumulativeFullAttendance(recs, lessonNumber))
         .map(([name]) => getNickname(name))
       : [];
     
@@ -729,7 +747,7 @@ export function generatePraise(
       praiseContent += '\n\n';
     }
     
-    // 稳步前进（2026-10-24 修口径）：与本生此前几次的平均比，提升最多者；
+    // 进步之星（2026-10-24 修口径）：与本生此前几次的平均比，提升最多者；
     // 原实现是"与班均差距最小"，那不是进步，会选到中等生（用户质疑后修正）。
     const progressStudents = included('progress')
       ? [...byStudent.entries()]
@@ -747,7 +765,7 @@ export function generatePraise(
       : [];
     
     if (progressStudents.length > 0) {
-      praiseContent += `📈【稳步前进】\n`;
+      praiseContent += `📈【进步之星】\n`;
       praiseContent += progressStudents.map(s => s.nickname).join('、');
       praiseContent += '\n\n';
     }

@@ -12,7 +12,8 @@ import {
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
 import { isAbsentRecord } from '@/lib/attendance';
-import { isFullAttendance, rankForLeaderboard, FENGYUN_LIMIT, buildFengyunRows } from '@/lib/leaderboardRules';
+import { isCumulativeFullAttendance, isListeningEligible, listeningScoreOf, rankForLeaderboard, FENGYUN_LIMIT, buildFengyunRows } from '@/lib/leaderboardRules';
+import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
 import { optionToneLevel } from '@/lib/optionTone';
 
 import { getLessonFullScore } from '@/lib/lessonFullScore';
@@ -27,6 +28,10 @@ interface LeaderboardProps {
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  /** 当前班级名单与在读区间，用于排除已离班学员的历史记录 */
+  students?: string[];
+  studentJoinLesson?: Record<string, number>;
+  studentLeaveLesson?: Record<string, number>;
 }
 
 /** 剧场空状态（4 处同形、仅图标与文案不同 → 抽组件消除重复 JSX） */
@@ -54,6 +59,8 @@ interface RankingItem {
   /** 奖牌档位：同分同牌，下一不同成绩依次为银/铜，不因并列跳档 */
   awardRank?: number;
   listeningScore?: number;
+  /** 课后任务展示值：有分数显示分数，只有定性状态时显示状态文案 */
+  listeningLabel?: string;
 }
 
 interface ProgressItem {
@@ -89,7 +96,10 @@ export function Leaderboard({
   lessonConfig,
   lessonNumber,
   getNickname,
-  calculateClassStats
+  calculateClassStats,
+  students = [],
+  studentJoinLesson,
+  studentLeaveLesson,
 }: LeaderboardProps) {
   const [copied, setCopied] = useState(false);
   // 默认展开风云榜（用户指定）：榜单首页即当日风云榜
@@ -128,25 +138,55 @@ export function Leaderboard({
     return lessons.sort((a, b) => a - b);
   }, [records]);
 
-  // 当前选择的课次范围
+  // 当前选择的课次范围（“全部课次”只到当前课次，不把未来/残留记录算进来）
   const effectiveRange = useMemo(() => {
     if (lessonRange === 'current') return [lessonNumber];
-    if (lessonRange === 'all') return allLessons;
+    if (lessonRange === 'all') return allLessons.filter(l => l <= lessonNumber);
     const start = Math.min(customStart, customEnd);
     const end = Math.max(customStart, customEnd);
     return allLessons.filter(l => l >= start && l <= end);
   }, [lessonRange, lessonNumber, allLessons, customStart, customEnd]);
 
-  // 范围内的记录
+  const activity = useMemo(
+    () => createStudentActivityContext(students, studentJoinLesson, studentLeaveLesson, records),
+    [students, studentJoinLesson, studentLeaveLesson, records],
+  );
+
+  // 累计全勤的范围终点：当前/全部到本课，自定义到用户所选结束课次。
+  const rangeEnd = useMemo(() => {
+    if (lessonRange === 'all') return lessonNumber;
+    if (lessonRange === 'custom') return Math.max(customStart, customEnd);
+    return lessonNumber;
+  }, [lessonRange, lessonNumber, customStart, customEnd]);
+
+  // 本期表彰只纳入截至范围终点仍在读的学员；离班前历史仍可切到具体历史范围查看。
   const rangeRecords = useMemo(() =>
-    records.filter(r => effectiveRange.includes(r.lessonNumber)),
-    [records, effectiveRange]
+    records.filter(r =>
+      effectiveRange.includes(r.lessonNumber)
+      && isStudentActiveForRange(activity, r.studentName, rangeEnd)
+      && isStudentActiveAtLesson(activity, r.studentName, r.lessonNumber)
+    ),
+    [records, effectiveRange, activity, rangeEnd]
+  );
+
+  // 全勤是“截至当前/所选终点”的累计表彰，必须整段都在读；离班后不能继续获奖。
+  const allPresentRecords = useMemo(() =>
+    records.filter(r =>
+      r.lessonNumber <= rangeEnd
+      && isStudentActiveForRange(activity, r.studentName, rangeEnd)
+      && isStudentActiveAtLesson(activity, r.studentName, r.lessonNumber)
+    ),
+    [records, rangeEnd, activity]
   );
 
   // 当前课次记录（用于显示统计卡片）
   const lessonRecords = useMemo(() =>
-    records.filter(r => r.lessonNumber === lessonNumber),
-    [records, lessonNumber]
+    records.filter(r =>
+      r.lessonNumber === lessonNumber
+      && isStudentActiveForRange(activity, r.studentName, lessonNumber)
+      && isStudentActiveAtLesson(activity, r.studentName, lessonNumber)
+    ),
+    [records, lessonNumber, activity]
   );
 
   const stats = useMemo(() =>
@@ -241,11 +281,11 @@ export function Leaderboard({
       .slice(0, 10);
   }, [rangeRecords, getNickname, progressMinLessons]);
 
-  // 课后任务排名
+  // 课后任务排名：与班群公示同口径，数值分或正向定性状态均可入榜。
   const listeningRankings: RankingItem[] = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
     rangeRecords
-      .filter(r => !isAbsentRecord(r) && Number(r.listeningScore) > 0)
+      .filter(isListeningEligible)
       .forEach(r => {
         const existing = latestByStudent.get(r.studentName);
         if (!existing || r.lessonNumber > existing.lessonNumber) {
@@ -254,27 +294,32 @@ export function Leaderboard({
       });
 
     const top = Array.from(latestByStudent.values())
-      .sort((a, b) => b.listeningScore - a.listeningScore)
-      .slice(0, 5);
-    // 并列同名次：同分复用前一名次（修复原 `rank || (i>0?0:1)` 并列恒 0 并写进导出的 bug）
-    let lastScore: number | null = null;
+      .sort((a, b) => listeningScoreOf(b) - listeningScoreOf(a) || b.totalScore - a.totalScore)
+      .slice(0, Math.max(1, lessonConfig.praiseParams?.listeningTopN ?? 5));
+    let lastNumericScore: number | null = null;
     let lastRank = 0;
     return top.map((r, i) => {
-      const rank = lastScore !== null && r.listeningScore === lastScore ? lastRank : i + 1;
-      lastScore = r.listeningScore;
-      lastRank = rank;
+      const score = listeningScoreOf(r);
+      // 数值分同分才并列；纯定性状态没有可比值，按当前顺序给出名次。
+      const rank = score > 0 && lastNumericScore !== null && score === lastNumericScore ? lastRank : i + 1;
+      if (score > 0) {
+        lastNumericScore = score;
+        lastRank = rank;
+      }
+      const status = String(r.listeningStatus || '').trim();
       return {
         id: r.id,
         studentName: r.studentName,
         nickname: getNickname(r.studentName),
         shortNickname: generateShortNickname(getNickname(r.studentName)),
-        totalScore: r.listeningScore,
+        totalScore: score,
         correctRate: r.correctRate,
         rank,
-        listeningScore: r.listeningScore,
+        listeningScore: score,
+        listeningLabel: score > 0 ? String(score) : (status || '完成'),
       };
     });
-  }, [rangeRecords, getNickname]);
+  }, [rangeRecords, getNickname, lessonConfig.praiseParams?.listeningTopN]);
 
   // 作业优秀学生
   const homeworkExcellent = useMemo(() => {
@@ -295,23 +340,21 @@ export function Leaderboard({
     }));
   }, [rangeRecords, getNickname]);
 
-  // 全勤学生：区间内该生所有记录考勤均为「按时」（关键词归类），而非仅最近一条
+  // 全勤学生：截至范围终点全部按时，且范围终点仍有有效记录。
   const allPresent = useMemo(() => {
     const byStudent = new Map<string, StudentRecord[]>();
-    rangeRecords.forEach(r => {
+    allPresentRecords.forEach(r => {
       const arr = byStudent.get(r.studentName) || [];
       arr.push(r);
       byStudent.set(r.studentName, arr);
     });
     const list: { name: string; nickname: string; shortNickname: string }[] = [];
     byStudent.forEach((recs, name) => {
-      if (recs.length === 0) return;
-      // 全勤要求区间内每条已记录考勤都为按时；请假、迟到、缺勤、调课均不算全勤。
-      if (!isFullAttendance(recs)) return;
+      if (!isCumulativeFullAttendance(recs, rangeEnd)) return;
       list.push({ name, nickname: getNickname(name), shortNickname: generateShortNickname(getNickname(name)) });
     });
     return list;
-  }, [rangeRecords, getNickname]);
+  }, [allPresentRecords, rangeEnd, getNickname]);
 
   // 范围显示文本
   const rangeText = useMemo(() => {
@@ -329,8 +372,10 @@ export function Leaderboard({
       text += ' 入门测前十名\n\n';
       if (entranceRankings.length > 0) {
         const rankEmojis = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-        entranceRankings.forEach((r, i) => {
-          text += `${rankEmojis[i]} ${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
+        entranceRankings.forEach(r => {
+          const award = r.awardRank ?? r.rank;
+          const badge = rankEmojis[award - 1] || `${r.rank}.`;
+          text += `${badge} ${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）\n`;
         });
       } else {
         text += '暂无数据\n';
@@ -434,9 +479,9 @@ export function Leaderboard({
           content += [i + 1, s.studentName, s.nickname, `第${s.firstLesson}课`, s.firstScore, `第${s.lastLesson}课`, s.lastScore, s.improvement, `${s.improvementRate.toFixed(1)}%`].map(csvCell).join(',') + '\n';
         });
       } else if (mode === 'listening') {
-        content = '排名,姓名,昵称,课后任务分数\n';
+        content = '排名,姓名,昵称,课后任务分数或状态\n';
         listeningRankings.forEach(r => {
-          content += `${r.rank},${r.studentName},${r.nickname},${r.listeningScore}\n`;
+          content += `${r.rank},${r.studentName},${r.nickname},${csvCell(r.listeningLabel ?? String(r.listeningScore ?? ''))}\n`;
         });
       } else if (mode === 'homework') {
         content = '类别,姓名,昵称\n';
@@ -727,8 +772,8 @@ export function Leaderboard({
                     <p className="listening-fullname">{r.nickname}</p>
                   </div>
                   <div className="listening-score">
-                    <span className="score-number">{r.listeningScore}</span>
-                    <span className="score-label">分</span>
+                    <span className="score-number">{r.listeningLabel ?? r.listeningScore}</span>
+                    {(r.listeningScore || 0) > 0 && <span className="score-label">分</span>}
                   </div>
                   {i === 0 && <Sparkles className="sparkle-icon" />}
                 </div>

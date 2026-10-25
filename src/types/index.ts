@@ -140,6 +140,11 @@ export interface Class {
    * 也不应为他补建记录（否则会以 0 分污染早前课次的统计）。
    */
   studentJoinLesson?: { [studentName: string]: number };
+  /**
+   * 学员离班课次（可选）：{ 学员名: 课次号 }。
+   * 从该课次起学员不再属于本班；历史记录保留，但不得再进入该课次及之后的表扬榜/全勤统计。
+   */
+  studentLeaveLesson?: { [studentName: string]: number };
 }
 
 // 预存反馈素材（全局按课次组织；素材以链接形式存储）

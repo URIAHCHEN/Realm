@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Copy, Check, Sparkles } from 'lucide-react';
 import { generatePraise, copyToClipboard } from '@/lib/feedbackTemplates';
+import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats } from '@/types';
 
 type PraiseType = 'entrance' | 'listening' | 'comprehensive';
@@ -21,12 +22,16 @@ interface PraiseGeneratorProps {
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
   /** 保存本课次的公示参数（名额/板块） */
   onSaveLessonConfig?: (lessonNumber: number, config: Partial<LessonConfig>) => void;
+  /** 当前班级名单与在读区间，用于排除已离班学员 */
+  students?: string[];
+  studentJoinLesson?: Record<string, number>;
+  studentLeaveLesson?: Record<string, number>;
 }
 
 const PRAISE_META: Record<PraiseType, { label: string; desc: string }> = {
-  entrance: { label: '入门测表扬榜', desc: '成绩前十风云榜' },
-  listening: { label: '课后任务表扬榜', desc: '课后任务分数前五名' },
-  comprehensive: { label: '综合表彰', desc: '风云榜+达人+作业+全勤+稳步前进' },
+  entrance: { label: '入门测表扬榜', desc: '按正确率分档' },
+  listening: { label: '课后任务表扬榜', desc: '分数或完成状态' },
+  comprehensive: { label: '综合表彰', desc: '风云榜、达人、作业、全勤、进步之星' },
 };
 
 export function PraiseGenerator({
@@ -36,6 +41,9 @@ export function PraiseGenerator({
   getNickname,
   calculateClassStats,
   onSaveLessonConfig,
+  students = [],
+  studentJoinLesson,
+  studentLeaveLesson,
 }: PraiseGeneratorProps) {
   const [praiseType, setPraiseType] = useState<PraiseType>('comprehensive');
   // 表彰模板选择：'default' 为默认模板，其余为多模板管理中的自定义模板
@@ -54,16 +62,28 @@ export function PraiseGenerator({
   const saveParams = (patch: Partial<NonNullable<LessonConfig['praiseParams']>>) => {
     onSaveLessonConfig?.(lessonNumber, { praiseParams: { ...pParams, ...patch } });
   };
+  const activity = useMemo(
+    () => createStudentActivityContext(students, studentJoinLesson, studentLeaveLesson, records),
+    [students, studentJoinLesson, studentLeaveLesson, records],
+  );
+
   const praiseOpts = {
     allRecords: records,
     entranceTopN,
     listeningTopN,
     sections,
+    students,
+    studentJoinLesson,
+    studentLeaveLesson,
   };
 
   const lessonRecords = useMemo(() =>
-    records.filter(r => r.lessonNumber === lessonNumber),
-    [records, lessonNumber]
+    records.filter(r =>
+      r.lessonNumber === lessonNumber
+      && isStudentActiveForRange(activity, r.studentName, lessonNumber)
+      && isStudentActiveAtLesson(activity, r.studentName, lessonNumber)
+    ),
+    [records, lessonNumber, activity]
   );
 
   const stats = useMemo(() =>
@@ -131,7 +151,7 @@ export function PraiseGenerator({
       praiseOpts
     );
     setPraise(next);
-  }, [lessonConfig.praiseTemplate, lessonConfig.praiseTemplates, praiseType, templateId, lessonNumber, lessonRecords]);
+  }, [lessonConfig, praiseType, templateId, lessonNumber, lessonRecords]);
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const handleCopy = async () => {
@@ -214,7 +234,7 @@ export function PraiseGenerator({
             >前 {n} 名</button>
           ))}
           {praiseType === 'comprehensive' && ([
-            ['entrance', '风云榜'], ['listening', '任务达人'], ['homework', '作业'], ['allPresent', '全勤之星'], ['progress', '稳步前进'],
+            ['entrance', '风云榜'], ['listening', '任务达人'], ['homework', '作业'], ['allPresent', '全勤之星'], ['progress', '进步之星'],
           ] as const).map(([key, label]) => {
             const on = sections[key] !== false;
             return (

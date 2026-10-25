@@ -26,7 +26,8 @@ import {
 } from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
 import { pushSnapshotConditional } from '@/lib/cloudSync';
-import { isFullAttendance, rankForLeaderboard, FENGYUN_LIMIT, groupFengyunAwards, buildFengyunRows } from '@/lib/leaderboardRules';
+import { isFullAttendance, isCumulativeFullAttendance, isListeningEligible, rankForLeaderboard, FENGYUN_LIMIT, groupFengyunAwards, buildFengyunRows } from '@/lib/leaderboardRules';
+import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
 import { getOverallFeedback, getTrajectoryFeedback } from '@/lib/reportFeedback';
 
 let passed = 0;
@@ -839,6 +840,92 @@ group('教师精灵导出列映射');
     { name: '李四', text1: '私发正文', text2: '四个一正文', text3: '不应导出' },
   ], true, false);
   check(noThird.header.length === 4 && noThird.data[0].length === 4, '未选择第三段时不额外输出 E 列');
+}
+
+group('表扬榜：离班学员有效性');
+{
+  const history = [
+    rec({ studentName: '已离班', lessonNumber: 1 }),
+    rec({ studentName: '已离班', lessonNumber: 2 }),
+    rec({ studentName: '在读甲', lessonNumber: 1 }),
+    rec({ studentName: '在读甲', lessonNumber: 2 }),
+    rec({ studentName: '在读甲', lessonNumber: 3 }),
+  ];
+  // 旧数据没有 leave 标记：离班学员不在当前名单，以最后记录第 2 课推得第 3 课起离班。
+  const inferred = createStudentActivityContext(['在读甲'], {}, {}, history);
+  check(isStudentActiveForRange(inferred, '已离班', 2), '离班前历史课次仍可进入当时榜单');
+  check(!isStudentActiveForRange(inferred, '已离班', 3), '离班后课次不再具备表扬资格（兼容旧数据）');
+  check(isStudentActiveForRange(inferred, '在读甲', 3), '在读学员保持表扬资格');
+  check(!isStudentActiveAtLesson(inferred, '已离班', 3), '离班后无有效记录');
+
+  const explicit = createStudentActivityContext(
+    ['在读甲'],
+    { 已离班: 1, 在读甲: 1 },
+    { 已离班: 3 },
+    history,
+  );
+  check(isStudentActiveForRange(explicit, '已离班', 2) && !isStudentActiveForRange(explicit, '已离班', 3), '显式离班课次优先于最后记录推断');
+  const staleRoster = createStudentActivityContext(
+    ['已离班', '在读甲'],
+    { 已离班: 1 },
+    { 已离班: 3 },
+    history,
+  );
+  check(!isStudentActiveForRange(staleRoster, '已离班', 3), '名单残留时仍以显式离班课次为准');
+  const lateJoin = createStudentActivityContext(['插班生'], { 插班生: 3 }, {}, [
+    rec({ studentName: '插班生', lessonNumber: 3 }),
+  ]);
+  check(!isStudentActiveForRange(lateJoin, '插班生', 2) && isStudentActiveForRange(lateJoin, '插班生', 3), '插班前的课次不参与评选');
+
+  const praiseCfg = {
+    questionTypes: [], feedbackTemplate: '', praiseTemplate: '【表彰内容】', homeworkText: '', passThreshold: 80,
+  } as unknown as LessonConfig;
+  const praise = generatePraise(
+    3,
+    [rec({ studentName: '在读甲', lessonNumber: 3, attendance: '准时👍' })],
+    praiseCfg,
+    { avgScore: 0 } as unknown as ClassStats,
+    n => n,
+    'comprehensive',
+    undefined,
+    {
+      allRecords: history,
+      students: ['在读甲'],
+      studentJoinLesson: { 已离班: 1, 在读甲: 1 },
+      studentLeaveLesson: { 已离班: 3 },
+      sections: { entrance: false, listening: false, homework: false, progress: false, allPresent: true },
+    },
+  );
+  check(praise.includes('在读甲') && !praise.includes('已离班'), '班群公示的全勤之星排除已离班历史记录');
+  check(praise.includes('全勤之星'), '全勤板块仍正常生成');
+
+  const cumulative = [
+    rec({ studentName: '全勤生', lessonNumber: 1, attendance: '准时👍' }),
+    rec({ studentName: '全勤生', lessonNumber: 2, attendance: '准时👍' }),
+  ];
+  check(!isCumulativeFullAttendance(cumulative, 3), '累计全勤：目标课次无记录不能仅靠历史获奖');
+  check(isCumulativeFullAttendance([...cumulative, rec({ studentName: '全勤生', lessonNumber: 3, attendance: '准时👍' })], 3), '累计全勤：历史与本课全部按时才获奖');
+  check(!isCumulativeFullAttendance([...cumulative, rec({ studentName: '全勤生', lessonNumber: 3, attendance: '迟到⏰' })], 3), '累计全勤：任一次迟到即不获奖');
+
+  check(isListeningEligible(rec({ listeningScore: 0, listeningStatus: '很棒哦👏' })), '课后任务：正向定性状态也能进入榜单');
+  check(!isListeningEligible(rec({ listeningScore: 0, listeningStatus: '未完成' })), '课后任务：负面状态不进入榜单');
+  check(!isListeningEligible(rec({ listeningScore: 12, attendance: '请假🏫' })), '课后任务：请假即使残留分数也不入榜');
+
+  const mixedFullScores = [
+    rec({ id: 'raw-high', studentName: '原始分高', lessonNumber: 3, totalScore: 90, correctRate: 80 }),
+    rec({ id: 'rate-high', studentName: '正确率高', lessonNumber: 3, totalScore: 20, correctRate: 100 }),
+  ];
+  const rateRankedPraise = generatePraise(
+    3,
+    mixedFullScores,
+    { questionTypes: [], feedbackTemplate: '', praiseTemplate: '【表彰内容】', homeworkText: '', passThreshold: 80 } as unknown as LessonConfig,
+    { avgScore: 0 } as unknown as ClassStats,
+    n => n,
+    'entrance',
+    undefined,
+    { entranceTopN: 1 },
+  );
+  check(rateRankedPraise.indexOf('正确率高') >= 0 && (rateRankedPraise.indexOf('正确率高') < rateRankedPraise.indexOf('原始分高') || !rateRankedPraise.includes('原始分高')), '班群公示风云榜按正确率优先，不按原始分');
 }
 
 group('报告话术：稳定、可比、去模板腔');

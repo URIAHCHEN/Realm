@@ -577,7 +577,7 @@ function App() {
       toast.error('该学生已存在');
       return;
     }
-    addStudentToClass(currentClassId, studentName);
+    addStudentToClass(currentClassId, studentName, currentLessonNumber);
     toast.success(`已添加学生：${studentName}`);
   };
 
@@ -1109,6 +1109,9 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+              students={currentClass?.students || []}
+              studentJoinLesson={currentClass?.studentJoinLesson}
+              studentLeaveLesson={currentClass?.studentLeaveLesson}
             />
             <PraiseGenerator
               records={currentClass?.records || []}
@@ -1116,6 +1119,9 @@ function App() {
               lessonNumber={currentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
+              students={currentClass?.students || []}
+              studentJoinLesson={currentClass?.studentJoinLesson}
+              studentLeaveLesson={currentClass?.studentLeaveLesson}
               onSaveLessonConfig={handleSaveLessonConfig}
             />
             <PraiseTemplateEditor

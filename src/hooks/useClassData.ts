@@ -9,7 +9,7 @@ import type {
   ClassStats,
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
-import { hasQuizScores,  isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
+import { hasLessonQuizInput, isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
@@ -190,7 +190,7 @@ function computeTotals(
     return { totalScore: 0, correctRate: 0 };
   }
   // 调课分两种（2026-10-16 用户口径）：有小测数据＝调入 → 正常计算参与统计；无数据＝调出 → 清零
-  if (kind === 'transfer' && !hasQuizScores(scores)) {
+  if (kind === 'transfer' && !hasLessonQuizInput(scores, customValues, lessonConfig)) {
     return { totalScore: 0, correctRate: 0 };
   }
   const total =

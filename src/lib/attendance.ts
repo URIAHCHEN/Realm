@@ -1,6 +1,6 @@
 // 考勤口径统一：请假/缺勤学员不参与总分与平均分统计
 // 说明：使用「关键词包含」匹配而非全等，兼容自定义考勤选项与附带 emoji 的选项（如"准时👍"、"缺勤😷"）
-import type { StudentRecord } from '@/types';
+import type { StudentRecord, LessonConfig } from '@/types';
 
 export type AttendanceKind = 'onTime' | 'late' | 'absent' | 'leave' | 'transfer' | 'unknown';
 
@@ -69,9 +69,30 @@ export function hasQuizScores(scores: { [key: string]: unknown } | undefined | n
   });
 }
 
+/** 本课是否登记了任一计分输入：题型分或计入总分的数值自定义列，真实 0 分也算。 */
+export function hasLessonQuizInput(
+  scores: StudentRecord['scores'] | undefined,
+  customValues: StudentRecord['customValues'] | undefined,
+  config?: LessonConfig,
+): boolean {
+  const questionTypes = config?.questionTypes?.filter(qt => !qt.excludeFromTotal);
+  const hasQuestionScore = questionTypes
+    ? questionTypes.some(qt => {
+      const value = scores?.[qt.id];
+      return value !== undefined && value !== null && String(value).trim() !== '' && Number.isFinite(Number(value));
+    })
+    : hasQuizScores(scores);
+  const hasCustomScore = (config?.customFields || []).some(cf => {
+    if (cf.kind !== 'number' || !cf.includeInTotal) return false;
+    const value = customValues?.[cf.id];
+    return value !== undefined && value !== null && String(value).trim() !== '' && Number.isFinite(Number(value));
+  });
+  return hasQuestionScore || hasCustomScore;
+}
+
 /** 调课细分：调入（有小测数据）→ 正常参与统计；否则为调出 */
-export function isTransferIn(r: StudentRecord): boolean {
-  return attendanceKind(r.attendance) === 'transfer' && hasQuizScores(r.scores);
+export function isTransferIn(r: StudentRecord, config?: LessonConfig): boolean {
+  return attendanceKind(r.attendance) === 'transfer' && hasLessonQuizInput(r.scores, r.customValues, config);
 }
 
 /** 调课显示文案（只改显示、不改存储值）：调入 ↩️ / 调出 ➡️（2026-10-16 用户指定） */
@@ -88,8 +109,8 @@ export function transferDisplayLabel(r: StudentRecord): string {
  * 注意：作业（课堂练习/课后任务）与口头（口语得分等附加项）不受此限制 ——
  * 调课学生这些照常记录，也要进对应统计（由各调用点按需选择）。
  */
-export function isQuizAssessed(r: StudentRecord): boolean {
+export function isQuizAssessed(r: StudentRecord, config?: LessonConfig): boolean {
   if (isAbsentRecord(r)) return false;
-  if (isTransferRecord(r)) return isTransferIn(r);
+  if (isTransferRecord(r)) return isTransferIn(r, config);
   return true;
 }

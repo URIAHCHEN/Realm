@@ -13,7 +13,7 @@ import {
   Image as ImageIcon,
   } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore, OralRatingConfig } from '@/types';
-import { isQuizAssessed } from '@/lib/attendance';
+import { isReportAssessed } from '@/lib/reportStats';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { buildOralRatings, oralDistribution, oralKey, type OralRating } from '@/lib/oralRating';
 import { } from '@/lib/optionTone';
@@ -47,6 +47,12 @@ function collectOptions(configs: { [lesson: string]: LessonConfig }, key: 'atten
 }
 
 import { PersonalReportView as PersonalReport, ClassReportView as ClassReport } from '@/components/report/ReportViews';
+
+const REPORT_CATEGORY_COLORS: Record<string, string> = {
+  语法: '#6f92b8', 词汇: '#78a993', 阅读: '#b68ca0', 完形: '#d0a568',
+  写作: '#a58ca8', 听力: '#8b9bbb', 口语: '#77a7a3', 其他: '#a69a8a',
+};
+const reportCategoryColor = (name: string) => REPORT_CATEGORY_COLORS[name] || '#8b9bbb';
 
 export function StudentReport({
   students,
@@ -181,7 +187,7 @@ export function StudentReport({
       const full = Number(qt.fullScore) || 0;
       if (full <= 0) return;
       const def = categoryOf(qt.name, qtCategoryOverrides);
-      const cur = acc.get(def.name) || { name: def.name, color: def.color, sum: 0, full: 0 };
+      const cur = acc.get(def.name) || { name: def.name, color: reportCategoryColor(def.name), sum: 0, full: 0 };
       cur.sum += Number(qt.avgScore) || 0;
       cur.full += full;
       acc.set(def.name, cur);
@@ -201,7 +207,7 @@ export function StudentReport({
   // 柱状图数据 - 各课次成绩（支持排序切换）
   // 2026-10-16：附加「大题型板块」分项得分 —— 图表做成分板块堆叠柱，把板块构成合并进来
   const barData = useMemo(() => {
-    const list = studentRecords.map(r => {
+    const list = studentRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber])).map(r => {
       const row: Record<string, number | string> = {
         lesson: `第${r.lessonNumber}课`,
         lessonNum: r.lessonNumber,
@@ -240,7 +246,7 @@ export function StudentReport({
 
   // 班级组合图数据：每次课「班级平均正确率（柱）+ 最高/最低（线）+ 目标线 + 达标人数」
   const classComboTrend = useMemo(() => {
-    const scored = classReportRecords.filter(r => isQuizAssessed(r));
+    const scored = classReportRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber]));
     const lessons = Array.from(new Set(scored.map(r => r.lessonNumber))).sort((a, b) => a - b);
     return lessons.map(ln => {
       const rs = scored.filter(r => r.lessonNumber === ln);
@@ -254,13 +260,13 @@ export function StudentReport({
         人数: rs.length,
       };
     });
-  }, [classReportRecords]);
+  }, [classReportRecords, lessonConfigs]);
 
   // 组合图数据：每次课「本生正确率（柱）+ 班级平均/最高（线）+ 目标线」
   // 统一用正确率口径，跨课次可比（各次满分不同，绝对分不可比）
   const comboTrend = useMemo(() => {
-    const classPresent = records.filter(r => isQuizAssessed(r));
-    return studentRecords.map(r => {
+    const classPresent = records.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber]));
+    return studentRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber])).map(r => {
       const sameLesson = classPresent.filter(x => x.lessonNumber === r.lessonNumber);
       const rates = sameLesson.map(x => x.correctRate);
       const avg = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10 : 0;
@@ -358,9 +364,10 @@ export function StudentReport({
     rows.push(['最高分', classStats.maxScore].join(','));
     rows.push(['最低分', classStats.minScore].join(','));
     rows.push(['平均正确率', `${classStats.avgCorrectRate}%`].join(','));
-    rows.push(['有效记录数', classStats.validCount].join(','));
+    rows.push(['参评学生数（去重）', classStats.validCount].join(','));
+    rows.push(['有效测评记录数', classStats.validRecordCount].join(','));
     rows.push('');
-    rows.push(['分数段', '人数'].join(','));
+    rows.push(['分数段', selectedLesson === 'all' ? '人次' : '人数'].join(','));
     classStats.distribution.forEach(d => rows.push([d.label, d.count].join(',')));
     rows.push('');
     rows.push(['题型', '平均分', '满分', '正确率'].join(','));
@@ -487,7 +494,7 @@ export function StudentReport({
           personalReportRef={personalReportRef}
         />
       ) : (
-        <div ref={classReportRef} className="space-y-6 bg-white p-6 rounded-2xl">
+        <div ref={classReportRef} className="class-report-shell space-y-6">
           <ClassReport
             qtCategoryOverrides={qtCategoryOverrides}
             currentClassName={currentClassName}

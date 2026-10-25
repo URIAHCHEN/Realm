@@ -373,9 +373,9 @@ export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOn
       '您在家若看到什么，随时告诉我。',
       '就这些，想细聊随时找我。',
       '需要的话，我可以再整理一份本讲的个性化练习建议。',
-      '孩子的点滴进步我都记着，下节课接着来。',
+      '这几处我下节课接着核对，有变化再跟您同步。',
       '这两处我下节课重点看，有变化第一时间告诉您。',
-      '这一件事您帮我盯一周，孩子会有看得见的变化。',
+      '这一项先练一周，下次反馈我给您看同类题的变化。',
     ],
   },
   afterclass: {
@@ -498,18 +498,18 @@ export function generateFourInOne(
     const s0 = strong[0];
     const gap = Math.max(0, Math.round(s0.s - s0.avg));
     praise = pick([
-      `${s0.name}这次很亮眼——${s0.s}/${s0.full}，比班级平均高出 ${gap} 分`,
-      `${s0.name}是这次的强项，${s0.s}/${s0.full}，高出班均 ${gap} 分，看得出是真会了`,
+      `${s0.name}本次得分 ${s0.s}/${s0.full}，比班级平均高 ${gap} 分`,
+      `${s0.name}是相对突出的一项，${s0.s}/${s0.full}，高出班均 ${gap} 分`,
     ]);
   } else if (record.correctRate >= 90) {
     praise = pick([
-      `入门测正确率 ${record.correctRate}%，整张卷子掌握得比较扎实`,
-      `这次正确率 ${record.correctRate}%，整体很稳，没有明显短板`,
+      `入门测正确率 ${record.correctRate}%，本次各板块完成得比较稳`,
+      `这次正确率 ${record.correctRate}%，已登记板块没有明显短板`,
     ]);
   } else if (homeworkGood) {
     praise = pick(['书面作业完成质量很高', '书面作业做得认真，完成质量很高']);
   } else {
-    praise = pick(['课堂状态稳定，能跟上节奏', '这堂课跟得比较稳，课堂状态在线']);
+    praise = pick(['本课学习记录完整，课堂练习照常完成', '这堂课的学习任务已按要求记录']);
   }
 
   const issueParts: string[] = [];
@@ -528,7 +528,7 @@ export function generateFourInOne(
   const issue = issueParts.join('；');
 
   const nextAction = weak.length
-    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）练几道同类题，错题收进错题本；有余力让孩子把思路讲给您听，胜过再做十道`
+    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）先做几道同类题，错题标出出错步骤；隔天不看答案再做一次，确认是否真正改过来`
     : homeworkBad
       ? '今晚把这次的作业补齐并订正，下次课带来我看看'
       : attendBad

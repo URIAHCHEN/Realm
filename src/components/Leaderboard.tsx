@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/select';
 import { Trophy, Star, TrendingUp, Mic, BookOpen, Users, Copy, Check, Crown, Sparkles, Award, PartyPopper, Download, FileSpreadsheet, FileJson, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
 import { copyToClipboard , csvCell, sanitizeFileName } from '@/lib/feedbackTemplates';
-import { isAbsentRecord, attendanceKind } from '@/lib/attendance';
+import { isAbsentRecord } from '@/lib/attendance';
+import { isFullAttendance } from '@/lib/leaderboardRules';
 import { optionToneLevel } from '@/lib/optionTone';
 
 import { getLessonFullScore } from '@/lib/lessonFullScore';
@@ -303,10 +304,8 @@ export function Leaderboard({
     const list: { name: string; nickname: string; shortNickname: string }[] = [];
     byStudent.forEach((recs, name) => {
       if (recs.length === 0) return;
-      // 先排除请假/缺勤/调课：否则"有一次请假"就会让全勤榜恒为 0
-      const presentRecs = recs.filter(r => !isAbsentRecord(r));
-      if (presentRecs.length === 0) return;
-      if (!presentRecs.every(r => attendanceKind(r.attendance) === 'onTime')) return;
+      // 全勤要求区间内每条已记录考勤都为按时；请假、迟到、缺勤、调课均不算全勤。
+      if (!isFullAttendance(recs)) return;
       list.push({ name, nickname: getNickname(name), shortNickname: generateShortNickname(getNickname(name)) });
     });
     return list;
@@ -475,16 +474,19 @@ export function Leaderboard({
   const handleExportImage = async () => {
     resetPosterTilt();
     setShowExportMenu(false);
-    if (!posterExportRef.current || isExportingImage) return;
+    if (!posterExportRef.current || (mode === 'fengyun' && !fengyunExportRef.current) || isExportingImage) return;
     setIsExportingImage(true);
     try {
       await new Promise(r => setTimeout(r, 120));
-      // 只导出海报本体（KPI/控制条/页脚提示都不进图）
-      const target = posterExportRef.current;
+      // 风云榜只截红底海报节点；其他榜单沿用各自海报容器。
+      const target = (mode === 'fengyun' ? fengyunExportRef.current : posterExportRef.current)!;
+      document.documentElement.setAttribute('data-exporting', '1');
+      await new Promise(r => setTimeout(r, 80));
       const html2canvas = (await import('html2canvas')).default;
+      const exportScale = mode === 'fengyun' ? 2000 / Math.max(1, target.offsetWidth) : 2;
       const canvas = await html2canvas(target, {
-        backgroundColor: document.documentElement.classList.contains('dark') ? '#101826' : '#ffffff',
-        scale: 2,
+        backgroundColor: mode === 'fengyun' ? null : (document.documentElement.classList.contains('dark') ? '#101826' : '#ffffff'),
+        scale: exportScale,
         useCORS: true,
         logging: false,
         width: target.offsetWidth,
@@ -501,6 +503,7 @@ export function Leaderboard({
       console.error('导出图片失败:', err);
       toast.error('图片导出失败：' + err);
     } finally {
+      document.documentElement.removeAttribute('data-exporting');
       setIsExportingImage(false);
     }
   };
@@ -512,6 +515,7 @@ export function Leaderboard({
   const posterFrameRef = useRef<HTMLDivElement>(null);
   /** 导出只用海报本体（2026-10-24 用户口径：不要带上 KPI/控制条等页面内容） */
   const posterExportRef = useRef<HTMLDivElement>(null);
+  const fengyunExportRef = useRef<HTMLDivElement>(null);
   const resetPosterTilt = () => {
     posterFrameRef.current?.style.setProperty('--tilt-x', '0deg');
     posterFrameRef.current?.style.setProperty('--tilt-y', '0deg');
@@ -538,7 +542,7 @@ export function Leaderboard({
       const medalOf = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `第${rank}名`;
       return (
         <div className="fengyun-wrap">
-          <div className="fengyun-poster">
+          <div className="fengyun-poster" ref={fengyunExportRef}>
             <img src={fengyunPoster} alt="本次测试风云榜" className="fengyun-bg" />
             <div className={`fengyun-slots slots-${shown.length}`}>
               {shown.map((r, i) => (

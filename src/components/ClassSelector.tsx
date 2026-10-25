@@ -173,15 +173,15 @@ export function ClassSelector({
   return (
     <div className="ios-glass-card p-4 sm:p-6 mx-auto max-w-[1600px]">
       {/* 标题行 */}
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[color:var(--ink)] font-semibold text-base flex items-center gap-3">
+      <div className="class-selector-head flex items-center justify-between gap-3">
+        <h2 className="class-selector-title text-[color:var(--ink)] font-semibold text-base flex items-center gap-3">
           <span className="w-9 h-9 bg-[rgb(var(--brand-rgb)/0.1)] rounded-[var(--r-md)] flex items-center justify-center">
             <Users className="w-5 h-5 text-[color:var(--brand)]" />
           </span>
           班级选择
           {!totalEmpty && <span className="text-[color:var(--ink-4)] text-sm font-normal">· {visibleClasses.length}/{allClasses.length}</span>}
         </h2>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="class-selector-actions flex items-center gap-2 flex-wrap justify-end">
           {rightSlot}
           {ManageButton}
         </div>

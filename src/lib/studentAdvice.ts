@@ -17,7 +17,6 @@ import {
   getListeningFeedback,
   getTrajectoryFeedback,
 } from '@/lib/reportFeedback';
-import { getLessonFullScore } from '@/lib/lessonFullScore';
 
 export interface CondensedAdviceStats {
   avgScore: number;
@@ -48,14 +47,6 @@ const clampSentence = (s: string, max = 46): string => {
   return (idx >= 10 ? cut.slice(0, idx) : cut) + '。';
 };
 
-/** 与个人报告同口径的整体满分（多课次取平均；配置缺失回退 100） */
-function avgFullScore(studentRecords: StudentRecord[], lessonConfigs: { [lesson: string]: LessonConfig }): number {
-  const known = studentRecords
-    .map(r => getLessonFullScore(lessonConfigs[r.lessonNumber]))
-    .filter(v => Number.isFinite(v) && v > 0);
-  return known.length ? Math.round(known.reduce((a, b) => a + b, 0) / known.length) : 100;
-}
-
 /**
  * 生成精简版学习建议（家长可直接粘贴）。
  * @param nickname 学生展示名
@@ -70,12 +61,15 @@ export function buildCondensedAdvice(
   lessonConfigs: { [lesson: string]: LessonConfig },
 ): string {
   if (!stats || studentRecords.length === 0) return '';
-  const full = avgFullScore(studentRecords, lessonConfigs);
-  const overallRate = full > 0 ? (stats.avgScore / full) * 100 : 0;
+  void lessonConfigs; // 保留既有调用签名；整体与趋势结论统一使用正确率，不跨满分比较原始分。
+  const comparableRates = stats.learningTrajectory.map(t => t.correctRate).filter(Number.isFinite);
+  const overallRate = comparableRates.length
+    ? comparableRates.reduce((sum, value) => sum + value, 0) / comparableRates.length
+    : 0;
 
   const parts: string[] = [];
   // ① 总评：话术池首句（带名字前缀，独立成句）
-  parts.push(`${nickname}，${firstSentence(getOverallFeedback(stats.avgScore, full))}`);
+  parts.push(`${nickname}，${firstSentence(getOverallFeedback(overallRate, 100))}`);
 
   // ② 重点题型：得分率最低且 <85% 的题型 → 该题型"怎么做"（末句），带题型名便于家长定位
   const ranked = stats.avgQuestionTypeScores
@@ -97,10 +91,10 @@ export function buildCondensedAdvice(
   const hwTotal = (hw.excellent + hw.good + hw.average + hw.poor) || 1;
   const hwRate = hw.excellent / hwTotal;
   const listening = studentRecords
-    .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0)
+    .filter(r => r.listeningStatus === '具体分数' && Number.isFinite(r.listeningScore))
     .map(r => r.listeningScore);
   const avgListening = listening.length ? listening.reduce((a, b) => a + b, 0) / listening.length : 0;
-  const traj = stats.learningTrajectory.map(t => t.score);
+  const traj = stats.learningTrajectory.map(t => t.correctRate);
   let status = '';
   const trajFeedback = traj.length >= 3 ? getTrajectoryFeedback(traj) : '';
   if (attRate < 0.85) status = firstSentence(getAttendanceFeedback(attRate));

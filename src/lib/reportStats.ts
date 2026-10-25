@@ -6,7 +6,7 @@
 // 现在：入参明确、返回类型明确（见 reportStats.types.ts 的使用处），
 // 组件只负责装配数据与渲染，统计逻辑可被单独断言。
 import type { StudentRecord, LessonConfig } from '@/types';
-import { attendanceKind, isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
+import { attendanceKind, isAbsentRecord, isQuizAssessed, hasLessonQuizInput } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
 
 export interface OptionalRow { name: string; registered: number; total: number; avg: number }
@@ -38,7 +38,10 @@ export interface ClassReportStats {
   attendanceBreakdown: { option: string; count: number }[];
   homeworkBreakdown: { option: string; count: number }[];
   listeningBreakdown: { option: string; count: number }[];
+  /** 去重后的参评学生数（全部课次不把同一学生重复计人） */
   validCount: number;
+  /** 有效测评记录数（CSV 与图表人次口径） */
+  validRecordCount: number;
 }
 
 /** 分数段按正确率分档（各次小测满分不同，绝对分不可比） */
@@ -51,6 +54,16 @@ export const SCORE_RANGES = [
 ];
 
 export interface OptionLists { attendanceOptions: string[]; homeworkOptions: string[]; listeningOptions: string[] }
+
+/** 至少登记一个计入总分的题型；真实 0 分属于已登记，仅口语附加项不算小测。 */
+export function hasRegisteredQuizScore(record: StudentRecord, config?: LessonConfig): boolean {
+  return hasLessonQuizInput(record.scores, record.customValues, config);
+}
+
+/** 报告成绩池：实际参测且至少一个计分题型已登记。 */
+export function isReportAssessed(record: StudentRecord, config?: LessonConfig): boolean {
+  return isQuizAssessed(record, config) && hasRegisteredQuizScore(record, config);
+}
 
 /** 个人报告统计 */
 export function computeStudentReportStats(
@@ -65,27 +78,30 @@ export function computeStudentReportStats(
     // 成绩类指标只统计「实际参与评估」的课次（请假/缺勤/调出不计入）：
     // 与班级口径（computeClassReportStats 用 isQuizAssessed 过滤）保持一致，
     // 否则一次请假就会把个人均分与题型均分拉成 0 分点（2026-10-17 修正）。
-    const scoredRecords = studentRecords.filter(isQuizAssessed);
-    const scoredBase = scoredRecords.length > 0 ? scoredRecords : studentRecords;
-    const avgScore = scoredBase.reduce((sum, r) => sum + r.totalScore, 0) / scoredBase.length;
-    const maxScore = Math.max(...scoredBase.map(r => r.totalScore));
-    const minScore = Math.min(...scoredBase.map(r => r.totalScore));
+    const scoredBase = studentRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber]));
+    const avgScore = scoredBase.length > 0
+      ? scoredBase.reduce((sum, r) => sum + r.totalScore, 0) / scoredBase.length
+      : 0;
+    const maxScore = scoredBase.length > 0 ? Math.max(...scoredBase.map(r => r.totalScore)) : 0;
+    const minScore = scoredBase.length > 0 ? Math.min(...scoredBase.map(r => r.totalScore)) : 0;
     
-    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullScore: number } } = {};
-    
+    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullTotal: number } } = {};
+
     scoredBase.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
         // 附加项（口语等）不属于小测科目，不参与题型均分/正确率统计
         config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
           if (!questionTypeScores[qt.id]) {
-            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullScore: qt.fullScore || 0 };
+            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullTotal: 0 };
           }
-          if (record.scores[qt.id] !== undefined) {
-            questionTypeScores[qt.id].total += record.scores[qt.id];
+          const value = record.scores[qt.id];
+          if (value !== undefined && Number.isFinite(value)) {
+            const full = Number(qt.fullScore) || 0;
+            questionTypeScores[qt.id].total += value;
             questionTypeScores[qt.id].count++;
+            questionTypeScores[qt.id].fullTotal += full;
           }
-          questionTypeScores[qt.id].fullScore = Math.max(questionTypeScores[qt.id].fullScore, qt.fullScore || 0);
         });
       }
     });
@@ -94,7 +110,7 @@ export function computeStudentReportStats(
       id,
       name: data.name,
       avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
-      fullScore: data.fullScore
+      fullScore: data.count > 0 ? Math.round((data.fullTotal / data.count) * 10) / 10 : 0,
     }));
 
     // 学习轨迹只画参与评估的课次，避免缺勤课次出现 0 分断崖
@@ -159,8 +175,7 @@ export function computeClassReportStats(
     if (classReportRecords.length === 0) return null;
 
     // 统计口径：请假/缺勤学员不参与任何成绩类统计（平均分/正确率/题型均分与正确率/分数段分布）
-    const scoredRecords = classReportRecords.filter(r => isQuizAssessed(r));
-    const validRecords = scoredRecords.filter(r => r.totalScore > 0);
+    const validRecords = classReportRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber]));
     const avgScore = validRecords.length > 0
       ? validRecords.reduce((sum, r) => sum + r.totalScore, 0) / validRecords.length
       : 0;
@@ -178,18 +193,21 @@ export function computeClassReportStats(
     }));
 
     // 各题型平均分（仅到课学员；请假学员的 0 分不计入分子与分母）
-    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullScore: number } } = {};
-    scoredRecords.forEach(record => {
+    const questionTypeScores: { [key: string]: { total: number; count: number; name: string; fullTotal: number } } = {};
+    validRecords.forEach(record => {
       const config = lessonConfigs[record.lessonNumber];
       if (config) {
         // 附加项（口语等）不属于小测科目，不参与题型均分/薄弱 Top3
         config.questionTypes.filter(qt => !qt.excludeFromTotal).forEach(qt => {
           if (!questionTypeScores[qt.id]) {
-            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullScore: qt.fullScore };
+            questionTypeScores[qt.id] = { total: 0, count: 0, name: qt.name, fullTotal: 0 };
           }
-          if (record.scores[qt.id] !== undefined) {
-            questionTypeScores[qt.id].total += record.scores[qt.id];
+          const value = record.scores[qt.id];
+          if (value !== undefined && Number.isFinite(value)) {
+            const full = Number(qt.fullScore) || 0;
+            questionTypeScores[qt.id].total += value;
             questionTypeScores[qt.id].count++;
+            questionTypeScores[qt.id].fullTotal += full;
           }
         });
       }
@@ -199,11 +217,10 @@ export function computeClassReportStats(
       id,
       name: data.name,
       avgScore: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
-      fullScore: data.fullScore,
+      fullScore: data.count > 0 ? Math.round((data.fullTotal / data.count) * 10) / 10 : 0,
       count: data.count,
-      correctRate: data.fullScore > 0 && data.count > 0
-        ? Math.round(((data.total / data.count) / data.fullScore) * 100 * 10) / 10
-        : 0
+      // 总得分 ÷ 各条已登记记录的真实满分之和；不使用跨课次最大满分。
+      correctRate: data.fullTotal > 0 ? Math.round((data.total / data.fullTotal) * 100 * 10) / 10 : 0
     }));
 
     // 薄弱题型 Top3
@@ -275,7 +292,8 @@ export function computeClassReportStats(
       attendanceBreakdown,
       homeworkBreakdown,
       listeningBreakdown,
-      validCount: validRecords.length
+      validCount: new Set(validRecords.map(r => r.studentName)).size,
+      validRecordCount: validRecords.length
     };
 }
 

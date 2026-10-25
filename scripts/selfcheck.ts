@@ -7,7 +7,7 @@ import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
 import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
-import { computeStudentReportStats } from '@/lib/reportStats';
+import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
@@ -25,6 +25,8 @@ import {
 } from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
 import { pushSnapshotConditional } from '@/lib/cloudSync';
+import { isFullAttendance } from '@/lib/leaderboardRules';
+import { getOverallFeedback, getTrajectoryFeedback } from '@/lib/reportFeedback';
 
 let passed = 0;
 const failures: string[] = [];
@@ -627,7 +629,7 @@ group('详细版反馈生成器');
   }) as unknown as StudentRecord;
 
   const top = buildDetailedFeedback(mkD(), cfgD, statsD, '黎少彬', 0, 21);
-  check(top.text1.includes('满分不是靠临场反应'), '详细版：多项满分写"满分不是靠临场反应"');
+  check(top.text1.includes('这几项本次没有失分'), '详细版：多项满分只陈述事实，不使用套路化夸奖');
   check(!/待提升|还有空间|要盯的是|最需要补/.test(top.text1), '详细版：无弱项时不出"要盯的一处"');
   check(top.text1.startsWith('黎少彬这次 52/52（100%），班级第 1 名（全班第一）。'), '详细版：段①定位句与样例一致');
 
@@ -640,7 +642,7 @@ group('详细版反馈生成器');
   check(!badHw.text1.includes('课堂练习完成得很好'), '详细版：课堂练习未完成时不夸课堂练习');
 
   const blank = buildDetailedFeedback(mkD({ scores: { v1: 20, v2: 4, v3: 11, v4: 0 }, totalScore: 35, rank: 12 }), cfgD, statsD, '王五', 0, 21);
-  check(blank.text1.includes('基本是空白'), '详细版：0-10% 的项写"基本是空白"');
+  check(blank.text1.includes('已登记的得分很少'), '详细版：低得分项如实描述，不夸大为能力空白');
   check(!/不是不会/.test(blank.text1), '详细版：空白项不写"不是不会"');
 
   const len = (top.text1 + '\n\n' + top.text2).replace(/\s/g, '').length;
@@ -719,6 +721,79 @@ group('四个一生成器');
   const fourMat = generateFourInOne(mk({ v1: 4, v2: 8 }) as unknown as StudentRecord, cfg4 as unknown as import('@/types').LessonConfig, stats4 as unknown as import('@/types').ClassStats, '郭诗钰', false, [], 0, undefined, 'daily', true, undefined, {}, ['完形']);
   check(/完形：《哈佛英语》/.test(fourMat), '参考教辅：按长期弱项（完形）推荐对应资料');
   check(!/时文阅读/.test(fourMat), '参考教辅：不推与弱项无关的资料');
+}
+
+// ============ 2026-10-25：报告成绩池、全勤与稳定话术 ============
+group('报告成绩池：未登记与真实 0 分');
+{
+  const reportCfg = {
+    lessonNumber: 1,
+    questionTypes: [
+      { id: 'q1', name: '语法选择', fullScore: 10, order: 0 },
+      { id: 'oral', name: '口语得分', fullScore: 100, order: 1, excludeFromTotal: true },
+    ],
+    customFields: [], attendanceOptions: ['准时👍', '请假'], homeworkOptions: [], listeningOptions: [],
+  } as unknown as LessonConfig;
+  const configs = { 1: reportCfg, 2: { ...reportCfg, lessonNumber: 2 } } as unknown as { [lesson: string]: LessonConfig };
+  const zero = rec({ id: 'zero', studentName: '零分生', scores: { q1: 0 }, totalScore: 0, correctRate: 0 });
+  const blank = rec({ id: 'blank', studentName: '未登记生', scores: {}, totalScore: 0, correctRate: 0 });
+  const oralOnly = rec({ id: 'oral-only', studentName: '口语生', scores: { oral: 90 }, totalScore: 0, correctRate: 0 });
+  const absentZero = rec({ id: 'absent-zero', studentName: '请假生', attendance: '请假', scores: { q1: 0 }, totalScore: 0, correctRate: 0 });
+  check(isReportAssessed(zero, reportCfg), '真实 0 分：属于有效测评');
+  check(!isReportAssessed(blank, reportCfg), '未登记题型：不属于有效测评');
+  check(!isReportAssessed(oralOnly, reportCfg), '只有口语附加项：不当作已参加小测');
+  check(!isReportAssessed(absentZero, reportCfg), '请假即使残留 0 分也不计入');
+  const classResult = computeClassReportStats([zero, blank, oralOnly, absentZero], configs, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(classResult?.validRecordCount === 1 && classResult.validCount === 1, '班级成绩池只保留真实 0 分这一条有效记录');
+  check(classResult?.minScore === 0 && classResult.avgCorrectRate === 0, '真实 0 分进入最低分与平均正确率');
+  check(classResult?.distribution.find(d => d.label === '60% 以下')?.count === 1, '真实 0 分进入低分分布，未登记不进入');
+  check(classResult?.questionTypeAvg[0]?.count === 1, '题型分母只含已登记记录');
+  const personalResult = computeStudentReportStats([zero, blank, oralOnly, absentZero], configs, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(personalResult?.learningTrajectory.length === 1 && personalResult.avgScore === 0, '个人与班级使用同一成绩池');
+  const secondZero = rec({ id: 'zero-2', studentName: '零分生', lessonNumber: 2, scores: { q1: 5 }, totalScore: 5, correctRate: 50 });
+  const other = rec({ id: 'other', studentName: '另一生', scores: { q1: 8 }, totalScore: 8, correctRate: 80 });
+  const dedup = computeClassReportStats([zero, secondZero, other], configs, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(dedup?.validCount === 2 && dedup.validRecordCount === 3, '全部课次：人数去重、记录数保留');
+
+  const customCfg = {
+    ...reportCfg,
+    questionTypes: reportCfg.questionTypes.filter(q => q.id !== 'oral'),
+    customFields: [{ id: 'bonus', name: '课堂加分', kind: 'number', includeInTotal: true, fullScore: 5, order: 0 }],
+  } as unknown as LessonConfig;
+  const customOnly = rec({ id: 'custom-only', scores: {}, customValues: { bonus: 0 }, totalScore: 0, correctRate: 0 });
+  check(isReportAssessed(customOnly, customCfg), '仅登记计分自定义列且为真实 0 分：仍属于有效测评');
+  const transferCustom = rec({ id: 'transfer-custom', attendance: '调课', scores: {}, customValues: { bonus: 5 }, totalScore: 5, correctRate: 100 });
+  check(isReportAssessed(transferCustom, customCfg), '调课调入仅登记计分自定义列：正常参与报告');
+
+  const variableConfigs = {
+    1: reportCfg,
+    2: { ...reportCfg, lessonNumber: 2, questionTypes: reportCfg.questionTypes.map(q => q.id === 'q1' ? { ...q, fullScore: 100 } : q) },
+  } as unknown as { [lesson: string]: LessonConfig };
+  const fullTen = rec({ id: 'full-ten', lessonNumber: 1, scores: { q1: 10 }, totalScore: 10, correctRate: 100 });
+  const fullHundred = rec({ id: 'full-hundred', lessonNumber: 2, scores: { q1: 100 }, totalScore: 100, correctRate: 100 });
+  const variable = computeClassReportStats([fullTen, fullHundred], variableConfigs, { attendanceOptions: [], homeworkOptions: [], listeningOptions: [] });
+  check(variable?.questionTypeAvg[0]?.correctRate === 100, '同一题型跨课次满分 10/100：两次满分仍得 100%');
+  check(variable?.questionTypeAvg[0]?.fullScore === 55 && variable.questionTypeAvg[0].avgScore === 55, '跨满分题型展示平均原始分与平均满分，不用最大满分拉低比例');
+}
+
+group('风云榜全勤口径');
+{
+  check(isFullAttendance([rec({ attendance: '准时👍' }), rec({ attendance: '按时出勤' })]), '全部按时才计全勤');
+  check(!isFullAttendance([rec({ attendance: '准时👍' }), rec({ attendance: '请假' })]), '曾请假不计全勤');
+  check(!isFullAttendance([rec({ attendance: '迟到' })]), '迟到不计全勤');
+  check(!isFullAttendance([rec({ attendance: '调课' })]), '调课不计全勤');
+  check(!isFullAttendance([]), '无记录不计全勤');
+}
+
+group('报告话术：稳定、可比、去模板腔');
+{
+  const a = getOverallFeedback(82, 100);
+  const b = getOverallFeedback(82, 100);
+  check(a === b && a.length > 0, '同一报告输入反复渲染与导出时话术不变');
+  check(getTrajectoryFeedback([50, 60, 70]).includes('正确率比前段高'), '不同满分课次按正确率判断上升趋势');
+  check(getTrajectoryFeedback([80, 70, 60]).includes('正确率有所回落'), '按正确率判断回落趋势');
+  const sample = `${a}${getTrajectoryFeedback([80, 70, 60])}`;
+  check(!/爆发点|性价比|不是运气|大概能多拿/.test(sample), '报告话术不使用营销化或机械套话');
 }
 
 console.log('');

@@ -89,19 +89,19 @@ export function actionFor(name: string): string {
 
 // ---------- 鼓励库：三档 × 3 句 ----------
 const ENCOURAGE_TOP = [
-  '这个分数不是运气——该拿的分基本都拿到了，方法是对的。',
-  '能稳定在这个位置，说明课上的东西是真听进去了，不只是刷题刷出来的。',
-  '这一档分数在班里是标杆，接下来可以往「更难的题也不丢分」上走。',
+  '这次的优势板块继续保留少量复习即可，把时间留给仍有扣分的地方。',
+  '整体已经比较稳，后面更重要的是减少犹豫和细节失分。',
+  '这份成绩和本次各板块得分是相互印证的，下一次继续按同样标准检查。',
 ];
 const ENCOURAGE_MID = [
-  '进步是看得见的，只是还没到爆发点，再稳两次就上去了。',
-  '这个位置最容易再往上跳一档，因为地基已经在了，缺的是把某一项补稳。',
-  '整体状态在往上走，接下来把最弱那一项解决，分数会更整齐。',
+  '先集中改这一类问题，后两次课我们再对比同一板块的得分率。',
+  '目前不需要全面加量，把这项练稳，整体会更整齐。',
+  '接下来的目标很具体：同类题先能独立做对，再逐步提高速度。',
 ];
 const ENCOURAGE_LOW = [
-  '分数低不等于学不会，很多时候只是某几个动作没形成习惯。',
-  '这次能拿到这些分，说明基础不是空的，缺的是把会做的做对。',
-  '不用急着全面补，先把一件事做扎实，下一次就能看到变化。',
+  '先不追求一次补完，每天完成这一小项并留下订正记录。',
+  '这次先把最容易改的一步练熟，完成后我再看孩子的答题过程。',
+  '练习量不用大，但每道错题都要弄懂并隔天重做。',
 ];
 
 function encourageFor(tier: 'top' | 'mid' | 'low', variant: number): string {
@@ -201,14 +201,14 @@ export function buildDetailedFeedback(
   if (perfect.length >= 2) {
     const names = perfect.slice(0, 5).map(i => i.name).join('、');
     const detail = perfect.slice(0, 2).map(i => `${i.name} ${i.score}/${i.full}`).join('、');
-    praise = `最值得说的是${names}这几块全部拿满——${detail}。满分不是靠临场反应，是知识已经形成了稳定的手感，这一块后面可以少花时间。`;
+    praise = `${names}这几块全部拿满（${detail}）。这几项本次没有失分，后续保持少量复习即可。`;
   } else if (perfect.length === 1) {
     const p0 = perfect[0];
     const extra = above.sort((a, b) => b.diff - a.diff)[0];
     praise = `${p0.name}拿了满分（${p0.score}/${p0.full}），这是最扎实的一块。`;
     if (extra) praise += `另外${extra.name}也高出班均 ${Math.round(extra.diff * 10) / 10} 分，说明会的不止一处。`;
   } else if (best && best.diff >= 1.5) {
-    praise = `${best.name}是这次最稳的一块，${best.score}/${best.full}，比班均高 ${Math.round(best.diff * 10) / 10} 分。这一项能稳住，说明平时练的量和方向都对，不是碰巧做对。`;
+    praise = `${best.name}是本次相对突出的一项，${best.score}/${best.full}，比班均高 ${Math.round(best.diff * 10) / 10} 分。可以把这项的答题过程保留下来，作为其他板块的检查参考。`;
   } else if (above.length > 0) {
     const a0 = above.sort((a, b) => b.diff - a.diff)[0];
     praise = `${a0.name}在班均之上（${a0.score}/${a0.full}），${above.length} 个板块高于班均，基础是有的。`;
@@ -220,11 +220,11 @@ export function buildDetailedFeedback(
   // 习惯补充（后段学生不写，避免"分数低还夸习惯"的违和）
   if (tier !== 'low') {
     if (homeworkGood && listeningGood) {
-      praise += ' 课堂练习和课后任务都给到了「很棒」，课上跟得住、课下能落地——这套习惯比一次高分更值钱。';
+      praise += ' 课堂练习和课后任务也都按要求完成，课内外的记录比较完整。';
     } else if (listeningGood) {
-      praise += ' 课后任务完成得很扎实，课下的功夫没落下，这一点比单次分数更值得肯定。';
+      praise += ' 课后任务完成得扎实，这部分继续保持现在的安排。';
     } else if (homeworkGood) {
-      praise += ' 课堂练习完成得很好，课上跟得住，说明听讲是有效的。';
+      praise += ' 课堂练习完成得很好，课上的落实比较到位。';
     }
   }
 
@@ -235,21 +235,21 @@ export function buildDetailedFeedback(
   let issue = '';
   if (!weak) {
     issue = tier === 'top'
-      ? '目前没有明显短板，各板块都在班均之上。接下来不是补漏，而是把会做的做更快、更稳，把时间省给难题。'
-      : '这次没有明显的弱项，各板块比较均衡，说明基础面是完整的，下一步是提速度。';
+      ? '本次没有同时低于 85% 和班均的板块。接下来继续看答题时间与细节检查，优势项不必重复加量。'
+      : '本次各板块差距不大，暂时没有需要单独重讲的弱项。下一轮重点看同类题能否连续做对。';
   } else {
     const gapPct = Math.round(Math.abs(weak.diffRate) * 100);
     const weakRate = Math.round(weak.rate * 100);
     const classRate = Math.round(weak.classRate * 100);
     const cause = causeHintFor(weak.name);
     if (weak.rate < BLANK_RATE) {
-      issue = `最需要补的是${weak.name}：${weak.score}/${weak.full}，这一项基本是空白。好消息是空白项的提分空间最大——它考的是固定步骤，把「${cause}」这一步学会，分数立刻就能拿到。`;
+      issue = `${weak.name}本次为 ${weak.score}/${weak.full}，已登记的得分很少。建议先核对错题，重点检查是否存在「${cause}」这一情况，再从最基础的同类题补起。`;
     } else if (weak.classRate < CLASS_HARD && weak.rate < CLASS_HARD) {
-      issue = `要说需要再抓的，是${weak.name}（${weak.score}/${weak.full}）。这次这一项全班都不高（班均 ${classRate}%），不是他一个人的问题——题目对这一步的要求比较细，孩子做到了大部分，卡在最后收口上。`;
+      issue = `${weak.name}本次为 ${weak.score}/${weak.full}，班均得分率也只有 ${classRate}%。这一项全班都有失分，课上会统一复盘；孩子还要重点检查「${cause}」。`;
     } else if (weak.rate < 0.6) {
-      issue = `要盯的是${weak.name}：${weak.score}/${weak.full}，得分率 ${weakRate}%，比班均低 ${gapPct} 个百分点。不是不会，问题出在「${cause}」，属于练几次就能稳下来的类型。`;
+      issue = `${weak.name}需要优先补：${weak.score}/${weak.full}，得分率 ${weakRate}%，比班均低 ${gapPct} 个百分点。先对照错题检查是否「${cause}」，再做同类题验证。`;
     } else {
-      issue = `还有空间的是${weak.name}：${weak.score}/${weak.full}，比班均低 ${gapPct} 个点。差距不算大，但这是最容易再涨的一块——扣分点很具体：「${cause}」，把这一步改过来，这几分的性价比最高。`;
+      issue = `${weak.name}还有扣分空间：${weak.score}/${weak.full}，比班均低 ${gapPct} 个百分点。建议先核对是否「${cause}」，把对应步骤改稳后再复测。`;
     }
   }
 
@@ -261,13 +261,12 @@ export function buildDetailedFeedback(
   } else {
     const action = actionFor(weak.name);
     const steps = action.split('；').filter(Boolean);
-    const gain = Math.max(1, Math.round((1 - weak.rate) * weak.full * 0.6));
     const plan = weak.rate < 0.45 && steps.length > 1
       ? `${weak.name}先只做第一步——${steps[0]}。这一步稳了，再往下加。`
       : steps.length > 1
         ? `${weak.name}分两步走：${steps[0]}；${steps[1]}。`
         : `${weak.name}就练这一件事：${steps[0]}。`;
-    text2 = `下一步：${plan} 这一项补起来大概能多拿 ${gain} 分左右，下次课我先看这里的变化。 ${encourage}`;
+    text2 = `下一步：${plan} 练完隔两天重做一组同类题，下次课我重点核对这一步有没有改过来。 ${encourage}`;
   }
 
   return {

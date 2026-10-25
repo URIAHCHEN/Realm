@@ -7,7 +7,7 @@
 // 注意：视图的 props 接口与 lib/reportStats.ts 的返回类型保持一致，
 // 统计字段改动时只需改那一处类型定义。
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { attendanceRateOf } from '@/lib/attendance';
 
 import { useState, useMemo, useRef, } from 'react';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { ReportCustomFields } from '@/components/ReportCustomFields';
 import { TeachingAdvice } from '@/components/report/TeachingAdvice';
-import { splitSegments, type StudentReportStats, type ClassReportStats } from '@/lib/reportStats';
+import { splitSegments, isReportAssessed, type StudentReportStats, type ClassReportStats } from '@/lib/reportStats';
 import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
   CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES,
@@ -68,7 +68,6 @@ import {
   CheckSquare
 } from 'lucide-react';
 import type { StudentRecord, LessonConfig, } from '@/types';
-import { isQuizAssessed } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -212,12 +211,16 @@ export function PersonalReportView({
     [comboTrend],
   );
   const scoreCategories = useMemo(
-    () => categoriesFromRows(barData as unknown as Record<string, unknown>[], ['lesson', 'lessonNum', 'score', 'correctRate', 'fullMark']),
+    () => categoriesFromRows(barData as unknown as Record<string, unknown>[], ['lesson', 'lessonNum', 'score', 'correctRate', 'fullMark'])
+      .map((category, index) => ({ ...category, color: ['#6f92b8', '#78a993', '#d0a568', '#b68ca0', '#8b9bbb', '#77a7a3', '#a69a8a'][index % 7] })),
     [barData],
   );
   const [isExportingImage, setIsExportingImage] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
+  const personalRates = studentStats?.learningTrajectory.map(item => item.correctRate).filter(Number.isFinite) || [];
+  const averageRate = personalRates.length ? Math.round(personalRates.reduce((sum, value) => sum + value, 0) / personalRates.length * 10) / 10 : 0;
+  const bestRate = personalRates.length ? Math.max(...personalRates) : 0;
 
   const handleExportPersonalImage = async () => {
     if (!targetRef.current || isExportingImage) return;
@@ -274,11 +277,12 @@ export function PersonalReportView({
   }
 
   return (
-    <div className="report-container" ref={targetRef}>
+    <div className="report-container report-personal" ref={targetRef}>
       <div className="report-header">
-        <h1 className="report-title">📊 学情深度分析报告</h1>
+        <span className="report-eyebrow">个人成长档案</span>
+        <h1 className="report-title">{getNickname(selectedStudent)}的学情报告</h1>
         <p className="report-subtitle">
-          {currentClassName} · {selectedStudent} ({getNickname(selectedStudent)})
+          {currentClassName} · 已记录 {studentStats?.totalLessons || 0} 课 · 已测评 {personalRates.length} 课
         </p>
       </div>
 
@@ -337,21 +341,25 @@ export function PersonalReportView({
       </Card>
 
       <div className="report-info-grid">
-        <div className="report-info-item">
-          <p className="report-info-label">累计课次</p>
-          <p className="report-info-value">{studentStats?.totalLessons} 课</p>
+        <div className="report-info-item" data-kpi="lessons">
+          <p className="report-info-label">累计记录</p>
+          <p className="report-info-value">{studentStats?.totalLessons}<span className="report-kpi-unit">课</span></p>
+          <p className="report-kpi-note">含请假与未测评记录</p>
         </div>
-        <div className="report-info-item">
-          <p className="report-info-label">平均成绩</p>
-          <p className="report-info-value">{studentStats?.avgScore} 分</p>
+        <div className="report-info-item" data-kpi="assessed">
+          <p className="report-info-label">有效测评</p>
+          <p className="report-info-value">{personalRates.length}<span className="report-kpi-unit">课</span></p>
+          <p className="report-kpi-note">仅统计已登记题型</p>
         </div>
-        <div className="report-info-item">
-          <p className="report-info-label">最高成绩</p>
-          <p className="report-info-value">{studentStats?.maxScore} 分</p>
+        <div className="report-info-item" data-kpi="average">
+          <p className="report-info-label">平均正确率</p>
+          <p className="report-info-value">{averageRate}<span className="report-kpi-unit">%</span></p>
+          <p className="report-kpi-note">跨课次按正确率比较</p>
         </div>
-        <div className="report-info-item">
-          <p className="report-info-label">最低成绩</p>
-          <p className="report-info-value">{studentStats?.minScore} 分</p>
+        <div className="report-info-item" data-kpi="best">
+          <p className="report-info-label">最佳正确率</p>
+          <p className="report-info-value">{bestRate}<span className="report-kpi-unit">%</span></p>
+          <p className="report-kpi-note">已测评课次中的最高值</p>
         </div>
       </div>
 
@@ -394,7 +402,7 @@ export function PersonalReportView({
         </div>
       </div>
 
-      <div className="report-section">
+      <div className="report-section report-panel report-score-distribution">
         <h2 className="report-section-title">
           <BarChart3 className="w-5 h-5 inline mr-2" />
           各课次成绩分布
@@ -429,12 +437,12 @@ export function PersonalReportView({
       </div>
 
       {pieData.length > 0 && (
-        <div className="report-section">
+        <div className="report-section report-panel report-category-distribution">
           <h2 className="report-section-title">
             <PieChartIcon className="w-5 h-5 inline mr-2" />
             题型得分分布
           </h2>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="report-category-grid grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] gap-6">
             <div className="report-chart-container" style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {distType === 'pie' ? (
@@ -516,7 +524,7 @@ export function PersonalReportView({
       )}
 
       {radarData.length > 0 && (
-        <div className="report-section">
+        <div className="report-section report-panel report-ability">
           <h2 className="report-section-title">
             <Activity className="w-5 h-5 inline mr-2" />
             能力维度分析
@@ -537,7 +545,7 @@ export function PersonalReportView({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="report-habit-grid grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -587,7 +595,7 @@ export function PersonalReportView({
                     </div>
                   );
                 })}
-                {(studentStats?.listeningBreakdown || []).filter(x => x.count > 0).map(({ option, count }) => {
+                {(showListening ? (studentStats?.listeningBreakdown || []) : []).filter(x => x.count > 0).map(({ option, count }) => {
                   const lv = optionToneLevel(option);
                   const box = lv === 'good' ? 'bg-green-50 text-green-700' : lv === 'warn' ? 'bg-yellow-50 text-yellow-700'
                     : lv === 'bad' ? 'bg-red-50 text-red-700' : 'bg-black/[0.04] text-[color:var(--ink-2)]';
@@ -599,10 +607,10 @@ export function PersonalReportView({
                   );
                 })}
               </div>
-              {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).length === 0 && (studentStats?.listeningBreakdown || []).filter(x => x.count > 0).length === 0 && (
+              {(studentStats?.homeworkBreakdown || []).filter(x => x.count > 0).length === 0 && (showListening ? (studentStats?.listeningBreakdown || []) : []).filter(x => x.count > 0).length === 0 && (
                 <p className="text-sm text-[color:var(--ink-4)] text-center py-2">暂无课堂练习/课后任务记录</p>
               )}
-              {optionalRows.length > 0 && (
+              {showListening && optionalRows.length > 0 && (
                 <div className="pt-2 mt-1 border-t border-black/5 space-y-2">
                   <p className="text-xs text-[color:var(--ink-4)]">口语类（作业成绩，不计入小测总分）</p>
                   {optionalRows.map(st => (
@@ -633,7 +641,7 @@ export function PersonalReportView({
       </div>
 
       {examTableData.length > 0 && (
-        <div className="report-section">
+        <div className="report-section report-panel report-school-scores">
           <h2 className="report-section-title">
             <School className="w-5 h-5 inline mr-2" />
             校内考试成绩
@@ -673,7 +681,7 @@ export function PersonalReportView({
         </div>
       )}
 
-      <div className="report-section">
+      <div className="report-section report-panel report-records">
         <h2 className="report-section-title">
           <Calendar className="w-5 h-5 inline mr-2" />
           详细学习记录
@@ -692,7 +700,9 @@ export function PersonalReportView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[...studentRecords].reverse().map((record) => (
+              {[...studentRecords].reverse().map((record) => {
+                const assessed = isReportAssessed(record, lessonConfigs[record.lessonNumber]);
+                return (
                 <TableRow key={record.id}>
                   <TableCell className="font-medium">第{record.lessonNumber}课</TableCell>
                   <TableCell>
@@ -710,11 +720,12 @@ export function PersonalReportView({
                     }>{record.homeworkStatus}</Badge>
                   </TableCell>
                   <TableCell>{record.listeningStatus === '具体分数' ? `${record.listeningScore}分` : record.listeningStatus}</TableCell>
-                  <TableCell className="font-bold">{record.totalScore}分</TableCell>
-                  <TableCell>{record.correctRate}%</TableCell>
-                  <TableCell>{typeof record.rank === 'number' && record.rank > 0 ? `第${record.rank}名` : '—'}</TableCell>
+                  <TableCell className="font-bold">{assessed ? `${record.totalScore}分` : '未登记'}</TableCell>
+                  <TableCell>{assessed ? `${record.correctRate}%` : '—'}</TableCell>
+                  <TableCell>{assessed && typeof record.rank === 'number' && record.rank > 0 ? `第${record.rank}名` : '—'}</TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -723,7 +734,6 @@ export function PersonalReportView({
       <StudentFeedback 
         studentRecords={studentRecords}
         studentStats={studentStats}
-        lessonConfigs={lessonConfigs}
         avgQuestionTypeScores={studentStats?.avgQuestionTypeScores || []}
       />
     </div>
@@ -749,7 +759,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
   // 口径：按正确率（各课次满分不同，绝对分不可比）+ 仅统计已评估小测的记录
   const lowScoreStudents = useMemo(() => {
     const latestByStudent = new Map<string, StudentRecord>();
-    classReportRecords.filter(r => r.totalScore > 0 && isQuizAssessed(r)).forEach(r => {
+    classReportRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber])).forEach(r => {
       const existing = latestByStudent.get(r.studentName);
       if (!existing || r.lessonNumber > existing.lessonNumber) {
         latestByStudent.set(r.studentName, r);
@@ -758,13 +768,18 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
     return Array.from(latestByStudent.values())
       .sort((a, b) => a.correctRate - b.correctRate)
       .slice(0, 5);
-  }, [classReportRecords]);
+  }, [classReportRecords, lessonConfigs]);
 
   // 教学建议 3-2-1 的分段/过关/优秀口径：统一用 isQuizAssessed 池 + 各课次 passThreshold
   // （修复：原 filter(r => !r.attendance || true) 恒真把请假/缺勤 0 分灌进分段；
   //   过关阈值原硬编码 60，与学情表 passThreshold ?? 80 永远对不上）
   const adviceMetrics = useMemo(() => {
-    const assessed = classReportRecords.filter(isQuizAssessed);
+    const latest = new Map<string, StudentRecord>();
+    classReportRecords.filter(r => isReportAssessed(r, lessonConfigs[r.lessonNumber])).forEach(r => {
+      const previous = latest.get(r.studentName);
+      if (!previous || r.lessonNumber > previous.lessonNumber) latest.set(r.studentName, r);
+    });
+    const assessed = Array.from(latest.values());
     const seg = splitSegments(assessed.map(r => r.correctRate));
     const denom = Math.max(1, assessed.length);
     const passCount = assessed.filter(r => r.correctRate >= (lessonConfigs[r.lessonNumber]?.passThreshold ?? 80)).length;
@@ -789,20 +804,19 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
     );
   }
 
-  // 出勤率 =（按时+迟到）/ 总记录（迟到也算到场；与考勤关键词归类一致）
-  const attendanceRate = classStats.attendanceSummary.total > 0
-    ? Math.round(((classStats.attendanceSummary.onTime + classStats.attendanceSummary.late) / classStats.attendanceSummary.total) * 100)
-    : 0;
+  // 班级与个人共用考勤口径：迟到算到场，调课与未知项不进分母。
+  const attendanceRate = attendanceRateOf(classReportRecords.map(record => record.attendance));
   // 分母改为「填过课堂练习或课后任务的记录数」，分子为其中语义为"优秀"的条数
   const homeworkExcellentRate = classStats.homeworkSummary.qualityTotal > 0
     ? Math.round((classStats.homeworkSummary.excellent / classStats.homeworkSummary.qualityTotal) * 100)
     : 0;
 
   return (
-    <div className="space-y-8">
+    <div className="class-report space-y-8">
       {/* 报告头部 */}
-      <div className="text-center pb-6 border-b border-black/[0.06]">
-        <h1 className="text-2xl font-bold text-[color:var(--ink)]">📊 班级学情报告</h1>
+      <div className="class-report-header">
+        <span className="report-eyebrow">班级学习画像</span>
+        <h1 className="text-2xl font-bold text-[color:var(--ink)]">班级学情报告</h1>
         <p className="text-[color:var(--ink-4)] mt-1">
           {currentClassName} · {selectedLesson === 'all' ? '全部课次' : `第${selectedLesson}课`}
         </p>
@@ -810,7 +824,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
 
       {/* 核心指标 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="ios-glass-card border-0">
+        <Card className="ios-glass-card border-0 class-kpi-card">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[rgb(var(--brand-rgb)/0.13)] flex items-center justify-center">
@@ -823,7 +837,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             </div>
           </CardContent>
         </Card>
-        <Card className="ios-glass-card border-0">
+        <Card className="ios-glass-card border-0 class-kpi-card">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -836,7 +850,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             </div>
           </CardContent>
         </Card>
-        <Card className="ios-glass-card border-0">
+        <Card className="ios-glass-card border-0 class-kpi-card">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -849,7 +863,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             </div>
           </CardContent>
         </Card>
-        <Card className="ios-glass-card border-0">
+        <Card className="ios-glass-card border-0 class-kpi-card">
           <CardContent className="pt-4 pb-3.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[rgb(var(--brand-rgb)/0.12)] flex items-center justify-center">
@@ -867,7 +881,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
       <ReportCustomFields records={classReportRecords} customFields={customFields} />
 
       {/* 分数段分布 */}
-      <div className="report-section">
+      <div className="report-section report-panel class-distribution">
         <h2 className="report-section-title">
           <BarChart3 className="w-5 h-5 inline mr-2" />
           班级正确率分布
@@ -892,9 +906,9 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
               <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: `${d.color}15` }}>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
-                  <span className="text-sm text-[color:var(--ink-2)]">{d.label}分</span>
+                  <span className="text-sm text-[color:var(--ink-2)]">{d.label}</span>
                 </div>
-                <span className="font-bold" style={{ color: d.color }}>{d.count}人</span>
+                <span className="font-bold" style={{ color: d.color }}>{d.count}{selectedLesson === 'all' ? ' 人次' : ' 人'}</span>
               </div>
             ))}
           </div>
@@ -902,7 +916,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
       </div>
 
       {/* 薄弱板块 Top3（2026-10-16：按大题型板块归类后再取最弱，避免十几个题型各占一坑） */}
-      <div className="report-section">
+      <div className="report-section report-panel class-weak-points">
         <h2 className="report-section-title">
           <AlertTriangle className="w-5 h-5 inline mr-2" />
           薄弱板块 Top3
@@ -911,7 +925,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {(() => {
             const agg = aggregateByCategory(
-              classStats.weakPoints.map(w => ({ name: w.name, rate: Number(w.correctRate) || 0, count: Math.max(1, Number(w.fullScore) || 1) })),
+              classStats.questionTypeAvg.filter(w => w.count > 0).map(w => ({ name: w.name, rate: Number(w.correctRate) || 0, count: Math.max(1, Number(w.count) || 1) })),
               qtCategoryOverrides,
             );
             const top3 = [...agg].sort((a, b) => a.rate - b.rate).slice(0, 3);
@@ -926,7 +940,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                     <Badge className="bg-rose-100 text-rose-700 border-0">{cat.rate}%</Badge>
                   </div>
                   <p className="text-lg font-bold text-[color:var(--ink)]">{cat.name}</p>
-                  <p className="text-sm text-[color:var(--ink-4)] mt-1">含 {cat.members.slice(0, 4).join('、')}{cat.members.length > 4 ? ' 等' : ''} · {cat.count} 次样本</p>
+                  <p className="text-sm text-[color:var(--ink-4)] mt-1">含 {cat.members.slice(0, 4).join('、')}{cat.members.length > 4 ? ' 等' : ''} · {cat.count} 题次样本</p>
                 </CardContent>
               </Card>
             ));
@@ -971,7 +985,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
       )}
 
       {/* 出勤与作业概况 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="report-habit-grid grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -1045,10 +1059,10 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
 
       {/* 需关注学生 */}
       {lowScoreStudents.length > 0 && (
-        <div className="report-section">
+        <div className="report-section report-panel class-watchlist">
           <h2 className="report-section-title">
             <Users className="w-5 h-5 inline mr-2" />
-            需关注学生（入门测分数较低）
+            需关注学生（最近有效测评）
           </h2>
           <div className="overflow-x-auto">
             <Table className="report-table">
@@ -1109,19 +1123,16 @@ interface StudentFeedbackProps {
     attendanceStats: { total: number; onTime: number; late: number; absent: number };
     homeworkStats: { excellent: number; good: number; average: number; poor: number };
   } | null;
-  lessonConfigs: { [lessonNumber: string]: LessonConfig };
   avgQuestionTypeScores: { id: string; name: string; avgScore: number }[];
 }
 
 function StudentFeedback({ 
   studentRecords, 
-  studentStats, 
-  lessonConfigs,
+  studentStats,
   avgQuestionTypeScores 
 }: StudentFeedbackProps) {
   
-  const attendanceRate = studentStats && studentStats.attendanceStats.total > 0 ?
-    ((studentStats.attendanceStats.onTime + studentStats.attendanceStats.late) / studentStats.attendanceStats.total) : 0;
+  const attendanceRate = attendanceRateOf(studentRecords.map(record => record.attendance)) / 100;
 
   const totalHomework = studentStats ?
     ((studentStats.homeworkStats.excellent + studentStats.homeworkStats.good +
@@ -1130,49 +1141,27 @@ function StudentFeedback({
     (studentStats.homeworkStats.excellent / totalHomework) : 0;
   
   const listeningScores = studentRecords
-    .filter(r => r.listeningStatus === '具体分数' && r.listeningScore > 0)
+    .filter(r => r.listeningStatus === '具体分数' && Number.isFinite(r.listeningScore))
     .map(r => r.listeningScore);
   const avgListeningScore = listeningScores.length > 0 ?
     listeningScores.reduce((a, b) => a + b, 0) / listeningScores.length : 0;
   
-  const trajectoryScores = studentStats?.learningTrajectory.map(t => t.score) || [];
+  const trajectoryScores = studentStats?.learningTrajectory.map(t => t.correctRate) || [];
   
-  // 整体反馈的满分基准：优先按各课次配置取真实满分（getLessonFullScore 统一来源），
-  // 多课次取平均；配置缺失时回退"总分/正确率"反推；再缺失回退 100。
-  // 原实现用绕口的反推公式（含 correctRate=0 时的除零/NaN 风险），已废弃。
-  const knownFullScores = studentRecords
-    .map(r => getLessonFullScore(lessonConfigs[r.lessonNumber]))
-    .filter(v => Number.isFinite(v) && v > 0);
-  const derivedFullScores = studentRecords
-    .filter(r => r.correctRate > 0 && r.totalScore > 0)
-    .map(r => r.totalScore / (r.correctRate / 100));
-  const fullScore = knownFullScores.length > 0
-    ? Math.round(knownFullScores.reduce((a, b) => a + b, 0) / knownFullScores.length)
-    : derivedFullScores.length > 0
-      ? Math.round(derivedFullScores.reduce((a, b) => a + b, 0) / derivedFullScores.length)
-      : 100;
-  
+  const overallRate = trajectoryScores.length
+    ? trajectoryScores.reduce((sum, value) => sum + value, 0) / trajectoryScores.length
+    : 0;
+
   const questionTypeFeedbacks = avgQuestionTypeScores.map(qt => {
-    let questionFullScore = 100;
-    for (const record of studentRecords) {
-      const config = lessonConfigs[record.lessonNumber];
-      if (config) {
-        const questionType = config.questionTypes.find(q => q.name === qt.name);
-        if (questionType) {
-          questionFullScore = questionType.fullScore;
-          break;
-        }
-      }
-    }
-    
+    const stat = studentStats?.avgQuestionTypeScores.find(item => item.id === qt.id);
+    const questionFullScore = stat?.fullScore || 0;
     return {
       name: qt.name,
       feedback: getQuestionTypeFeedback(qt.name, qt.avgScore, questionFullScore)
     };
   });
-  
-  const overallFeedback = studentStats ? 
-    getOverallFeedback(studentStats.avgScore, fullScore || 100) : '';
+
+  const overallFeedback = studentStats ? getOverallFeedback(overallRate, 100) : '';
   
   const attendanceFeedback = getAttendanceFeedback(attendanceRate);
   
@@ -1183,7 +1172,7 @@ function StudentFeedback({
   const trajectoryFeedbackText = getTrajectoryFeedback(trajectoryScores);
   
   return (
-    <div className="report-section">
+    <div className="report-section report-panel report-advice">
       <h2 className="report-section-title">
         <Lightbulb className="w-5 h-5 inline mr-2" />
         学习建议
@@ -1192,7 +1181,7 @@ function StudentFeedback({
       {/* 合并板块：整体表现 + 各题型分析。
           原先两块各占一张大卡、题型一列排到底（"简单粗陋"），
           现在：整体表现压成一行结论，题型改成 2 列紧凑卡（得分徽章 + 得分率进度条 + 一句建议）。 */}
-      <Card className="mb-4 bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-[rgb(var(--brand-rgb)/0.04)] border-[rgb(var(--brand-rgb)/0.22)]">
+      <Card className="advice-overview mb-4">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[color:var(--brand)]" />
@@ -1222,7 +1211,7 @@ function StudentFeedback({
                   const rate = full > 0 ? Math.round((avg / full) * 100) : 0;
                   const tone = rate >= 85 ? '#10b981' : rate >= 70 ? '#3b82f6' : rate >= 60 ? '#f59e0b' : '#ef4444';
                   return (
-                    <div key={index} className="rounded-xl bg-white border border-black/[0.06] p-3.5">
+                    <div key={index} className="advice-question-card">
                       <div className="flex items-center justify-between gap-3 mb-1.5">
                         <span className="flex items-center gap-2 min-w-0">
                           <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: tone }} />
@@ -1240,7 +1229,7 @@ function StudentFeedback({
                           <div className="h-full rounded-full" style={{ width: `${Math.min(100, rate)}%`, background: tone }} />
                         </div>
                       )}
-                      <p className="text-[12.5px] text-[color:var(--ink-2)] leading-relaxed" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <p className="text-[12.5px] text-[color:var(--ink-2)] leading-relaxed">
                         {item.feedback}
                       </p>
                     </div>
@@ -1253,7 +1242,7 @@ function StudentFeedback({
       </Card>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+        <Card className="advice-habit-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Clock className="w-4 h-4 text-green-600" />
@@ -1265,7 +1254,7 @@ function StudentFeedback({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.06)] to-[rgb(var(--brand-rgb)/0.1)] border-[rgb(var(--brand-rgb)/0.25)]">
+        <Card className="advice-habit-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-[color:var(--brand)]" />
@@ -1277,7 +1266,7 @@ function StudentFeedback({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+        <Card className="advice-habit-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-orange-600" />
@@ -1290,8 +1279,8 @@ function StudentFeedback({
         </Card>
       </div>
       
-      {avgListeningScore > 0 && (
-        <Card className="mt-4 bg-gradient-to-br from-cyan-50 to-[rgb(var(--brand-rgb)/0.10)] border-cyan-200">
+      {listeningScores.length > 0 && (
+        <Card className="advice-habit-card mt-4">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-600" />

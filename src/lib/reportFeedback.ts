@@ -1,287 +1,215 @@
-// 学情报告话术库
-// 写作口径：面向家长，第二人称「您」；先认可具体表现，再给一条可执行的下一步；
-// 句子长短交替、少用套话，保留原有信息点（错题本 / 默写表 / 亲子问答 / 长难句等）。
+// 学情报告话术库：只写数据能支持的事实与可执行动作。
+// 同一输入固定输出同一变体，避免切图、排序或导出前话术突然变化。
 
-// 题型话术模板
 export interface QuestionTypeFeedback {
-  highScore: string[];  // 高分话术
-  lowScore: string[];   // 低分话术
-  threshold: number;    // 高低分阈值（百分比）
+  highScore: string[];
+  lowScore: string[];
+  threshold: number;
 }
 
-// 各题型话术库
 export const questionTypeFeedbackMap: Record<string, QuestionTypeFeedback> = {
   '语法选择': {
-    threshold: 0.79, // 79%以上为高分 (11.9/15)
+    threshold: 0.79,
     highScore: [
-      '这部分的语法功底是扎实的，七下教材里学过的要点基本都能用对，说明平时是真的听进去了。想再往上走一步，关键在细节——把每次语法选择的错题记进错题本，按考点归类，考前翻一遍，分数会更稳。',
-      '语法规则掌握得比较透，题目怎么变都能接住。学有余力的话，可以挑几道稍难的题练练手，把知识面拓开一些，同时别忘了错题本要继续记。',
-      '语法选择做得很干净，看得出来对常考语法点是理解的，不只是背下来的。把错题整理成自己的"易错清单"，定期回头看一眼，这类题基本可以放心了。',
+      '语法选择这部分比较稳，常考规则基本能用对。接下来把剩余错题按时态、词性等考点归类，每周回头做一次，减少重复失分。',
+      '这部分得分不错，说明课内语法点掌握得比较清楚。建议把做错的题单独留出来，隔几天不看答案再做一次，确认不是记住了选项。',
+      '语法选择完成得较好。后面可以继续练稍有变化的题，同时在错题旁补一句“这道题考什么”，复习时会更有效率。',
     ],
     lowScore: [
-      '目前语法的失分主要集中在七下校本教材的常考知识点上。建议先把近三天的课堂笔记过一遍，再建一个语法错题本——每道错题旁边写上考的是什么。平时您可以用【亲子问答】随口问两句，孩子答得出来，说明是真掌握了，练一段时间会有明显起色。',
-      '语法这一块的地基还需要再夯一夯。与其刷很多题，不如挑一个知识点（比如时态或词性）先弄透，用专项练习验证，再换下一个，一步一个脚印反而更快。',
-      '语法选择失分偏多，多半是知识框架还没搭起来。可以和孩子一起画一张语法思维导图，把零散的点串起来；错题也及时归到对应的分支下，复习时对着图过一遍就行。',
-    ]
+      '语法选择目前失分较多，建议先从不确定的考点入手，每次只补一类。错题旁写清题干里的判断依据，再做两道同类题核对。',
+      '这部分先不用急着加题量。把近期错题按时态、词性、固定搭配分开，找出错得最多的一类，重新看笔记后再练一组。',
+      '语法规则还需要回到题目里核对。建议每天选几道错题，说出为什么选这个答案；说不清的地方标出来，下节课集中解决。',
+    ],
   },
-
   '完形填空': {
-    threshold: 0.69, // 69%以上为高分 (6.9/10)
+    threshold: 0.69,
     highScore: [
-      '词汇量是够的，也能顺着上下文把文章的意思接起来，完形的技巧用得上。接下来可以专门攻一攻长难句——学会切分句子结构，文章的细节和逻辑就能抓得更准，整体阅读水平也会跟着上一个台阶。',
-      '完形做得不错，文章大意抓得住，选择也有依据，看得出语感和推理能力都在线。保持每天的阅读量，这份手感会越来越稳。',
-      '解题思路是对的，善于用上下文找线索。建议在保持的同时换换题材，故事类、科普类都读一读，适应不同文章的路数。',
+      '完形填空整体较稳，能利用上下文判断词义和逻辑。建议保留这手感，同时把犹豫过的选项再做一次对比，说清楚另几个为什么不合适。',
+      '这部分完成情况不错，文章主线和上下文线索抓得比较准。后续可换不同题材练习，避免只在熟悉的文章类型里表现稳定。',
+      '完形得分较好。接下来可以把错题里的句子和上下句一起读，标出真正起作用的提示词，方法会更清楚。',
     ],
     lowScore: [
-      '目前主要卡在词汇上，一遇到生词就容易断掉理解，文章后半段的信息也跟着漏了。建议每天固定积累一点短语辨析和高频词，做错的完形题回头读两遍，试着讲出"这句为什么选它"——联系上下文推理的习惯养成了，这类题会好做很多。',
-      '完形的提升，第一步是词汇，第二步是读懂句与句之间的关系。可以先从高频词和固定搭配入手，配合每天一篇短文，读的时候有意识地问自己"下一句可能说什么"。',
-      '完形失分较多，往往是"词不认识"加上"没读透"两件事叠在一起。建议每天背 20 个高频词，同时把错题里的长句抄下来分析结构，坚持两三周就能看到变化。',
-    ]
+      '完形失分时，建议先别逐题背答案。把错题所在段落重新读一遍，标出上下文提示，再核对是词义、搭配还是逻辑判断出了问题。',
+      '这部分可以先练“通读再作答”：第一遍抓人物和事情发展，第二遍再填词。错题隔天重做，看看能否说出选项依据。',
+      '目前做完形容易丢上下文线索。建议每次选一篇错题较多的文章，先口述大意，再逐题核对词义和前后句关系。',
+    ],
   },
-
   '阅读理解': {
-    threshold: 0.59, // 59%以上为高分 (5.9/10)
+    threshold: 0.59,
     highScore: [
-      '阅读的状态挺好的：答案句找得准，选项也分析得清楚，词汇量和长难句都不构成障碍，定位段落很快。有余力的话，可以领一份弱项提升练习，针对性地再拓一拓词汇，阅读还能再往上走。',
-      '理解能力在线，能快速锁定答案所在的位置，长难句读起来也不吃力。可以试着读一些稍有挑战的材料，把阅读速度和理解深度都带一带。',
-      '定位准、理解深，说明阅读方法已经成型了。建议多接触原版材料，慢慢培养英语思维，读起来会更顺。',
+      '阅读理解完成情况较好，答案定位和信息比对比较准确。接下来可适当缩短做题时间，但每题仍要保留原文依据。',
+      '这部分得分不错，说明文章信息和题目要求能对应起来。建议继续接触不同题材，把不熟悉的表达顺手记下来。',
+      '阅读部分比较稳。后面可以挑一两篇稍难的文章做精读，重点看长句结构和选项之间的细微差别。',
     ],
     lowScore: [
-      '阅读目前的困难主要有三处：词汇量不够、长难句读不通、答案位置定不准。这三件事有先后——先把句子结构分析学会，配合每天一小段翻译练习，再做几篇阅读积累高频词，顺序对了见效会快。有余力可以领弱项提升练习，词汇上来了，阅读会轻松很多。',
-      '阅读理解需要从基础补起：先保证词汇量，再谈技巧。精读和泛读可以结合——精读抠句子，泛读练速度，两边一起推，进步会更扎实。',
-      '阅读失分偏多，主要是词不够、方法也不熟。建议每天读一篇短文，生词当场查、记进本子，一周回头看一次；做题时先看题干再回原文定位。',
-    ]
+      '阅读目前需要先把“找依据”这一步做稳。建议先看题干，再回原文划出对应句，最后逐项核对，不凭印象选答案。',
+      '这部分建议用少量文章做精读：先读通长句，再定位答案句。错题要分清是词汇没看懂，还是选项比对漏了条件。',
+      '阅读失分较多时，先别追求一天做很多篇。每天选一篇，把错题对应的原文和选项逐句对齐，过程比题量更重要。',
+    ],
   },
-
   '语篇填词': {
-    threshold: 0.58, // 58%以上为高分 (2.9/5)
+    threshold: 0.58,
     highScore: [
-      '校本词汇掌握得不错，放到语境里也能用对。这个题型真正的失分点在细节上——人称、时态、单复数，多留个心眼，分数还能再提一提。建议把错题收进错题本，一个一个把知识点啃下来。',
-      '词汇基础扎实，能根据语境判断该用哪个词。接下来把语法细节盯紧一些，满分是够得着的。',
-      '语篇填词表现不错，词汇调用的灵活度也够。课内词汇继续巩固，有余力再向课外拓一拓。',
+      '语篇填词完成得较好，词汇放进语境后基本能用对。接下来重点检查词形、时态和单复数，减少会选词但写错形式的失分。',
+      '这部分掌握较稳。建议把仍有犹豫的词整理出来，连同原句一起复习，既记词义，也记它在句中的用法。',
+      '语篇填词得分不错。后续保持课内词汇复习，同时在提交前留一分钟逐空检查词性变化。',
     ],
     lowScore: [
-      '目前的短板是校本词汇还不够熟，句子里的语境提示看到了，但一时想不起该填哪个词。办法比较朴实：多记多背。您可以打印【单词短语默写表】，让孩子反复默写课内外的高频词和短语；也可以用【亲子问答】抽查几个，孩子答得上来就是真记住了。这两件事坚持一段时间，这个题型会有明显改善。',
-      '语篇填词要补的是词汇的系统性——尤其是词性转换和词形变化。建议按单元梳理课内词汇，默写、造句各来一点，比单纯抄写的记忆更牢。',
-      '词汇调用能力还需要练。建议每天默写 10 个课内重点词，顺带注意词形变化和搭配；您帮忙看看默写结果，比老师单方面布置更有效。',
-    ]
+      '语篇填词建议分两步检查：先根据语境确定词义，再看空格前后决定词性和词形。错题保留原句，别只抄孤立的单词。',
+      '这部分需要把词汇记忆和句子语境连起来。每天可默写少量重点词，再各造一个句子，检查词形是否写对。',
+      '目前可以先练课内高频词和常见词形变化。做完后逐空问自己“为什么用这个形式”，把说不清的留下次课解决。',
+    ],
   },
-
   '完成句子': {
-    threshold: 0.59, // 59%以上为高分 (5.9/10)
+    threshold: 0.59,
     highScore: [
-      '校本的短语和句型积累得比较扎实，能用语法把句子搭完整。接下来要抠的是人称、时态、单复数这些小地方——把它们照顾到，表达会更准确、更顺。多练几轮，语言运用的感觉会越来越稳。',
-      '短语和句型掌握得牢，句子结构也立得住。在保持的基础上多留意语法细节，表达准确度还能再上一层。',
-      '能熟练调用各类短语和句型，语法基础是靠得住的。建议多做句子翻译练习，让表达更灵活。',
+      '完成句子这部分较稳，常用短语和句型能准确调用。接下来继续检查时态、人称和单复数，保持表达完整。',
+      '这部分得分不错，句子结构基本能搭起来。建议多做几句中英互译，比较表达顺序，减少受中文语序影响的小错误。',
+      '完成句子完成情况较好。后续可把错题改成新的语境再写一遍，确认掌握的是句型而不是原题答案。',
     ],
     lowScore: [
-      '目前短语和句型的积累还不够，遇到要补全的句子时，理解语境和搭结构都会有点吃力。建议先把课内短语和句型扎扎实实过一遍；您这边可以打印【单词短语默写表】帮助孩子反复默写，再用【亲子问答】考察一下掌握情况。积累补上来，这个题型的进步会比较直观。',
-      '完成句子要加强的是"输入量"，也就是先记住足够多的短语和重点句型。背诵、默写、造句轮着来，比单一种方式效果好。',
-      '短语和句型储备不足，写句子时就容易卡壳。建议每天记 5 个重点短语和 2 个句型，并各造一个句子，慢慢就顺手了。',
-    ]
+      '完成句子建议先找主干，再补短语和时态。每天写几句就够，但写完要逐词核对，避免知道句型却在细节上丢分。',
+      '这部分先回到课内短语和重点句型。每个句型配一个自己的例句，再隔几天默写一次，比只看书更容易发现问题。',
+      '目前写句子时可以先划“谁、做什么”，再补其余成分。错题旁边注明错在词汇、结构还是词形，下一轮只练对应问题。',
+    ],
   },
-
-  // 通用题型（当没有匹配到具体题型时使用）
-  'default': {
+  default: {
     threshold: 0.7,
     highScore: [
-      '这个题型掌握得不错，题意能读懂，思路也清楚。保持现在的状态，同时可以挑几道有挑战性的题试试。',
-      '解题技巧比较熟练，表现是稳的。建议把方法总结下来，形成自己的一套思路。',
-      '这部分得分较高，基础比较扎实。把错题收进错题本，同类错误就不会反复出现。',
+      '这个题型完成得较好。建议把剩余错题隔几天再做一次，确认方法稳定，而不是刚好记住了答案。',
+      '这部分得分不错。后面保留少量同类练习即可，把时间分给目前更容易失分的板块。',
+      '这一题型目前比较稳。可以继续按现有方法练，同时把犹豫过的题标出来复查。',
     ],
     lowScore: [
-      '这个题型还需要再练一练。建议先把相关知识点系统过一遍，再做专项练习；有卡住的地方当场问老师，别攒着。',
-      '失分偏多，先别急着多做题——把错题的原因分析清楚，找出到底是概念没懂还是方法不熟，再定点突破。',
-      '这块掌握得还不算牢。建议回到知识点本身重新过一遍，配合一定量的练习巩固；您在旁边帮着盯一盯进度会更稳妥。',
-    ]
-  }
+      '这个题型建议先回到错题，分清是知识点没理解，还是做题步骤漏了。每次集中改一类问题，再做几道同类题检验。',
+      '这部分先不用大量加练。把最近几道错题重做一遍，写清卡在哪一步，下次课带着问题来核对。',
+      '目前可以先减少题量，把做过的题弄懂。错题隔天再做，看看是否还会在同一个地方停下来。',
+    ],
+  },
 };
 
-// 整体表现话术
 export const overallFeedback = {
   excellent: {
     minScore: 85,
     messages: [
-      '整体表现很稳：知识点掌握得扎实，学习态度也认真。保持这个节奏就好，学有余力时可以适当挑些更有挑战的内容，把知识面再拓开一点。',
-      '学习情况是让人放心的，成绩稳定、基础牢固。眼下这套习惯就很好，再留意从"会做"往"会讲、会用"上走一步。',
-      '这一阶段表现突出，方法也对路，掌握得比较全面。建议课堂上多参与互动，把想法说出来，思考会更深入。',
-    ]
+      '这一阶段的整体正确率较高，课内内容掌握得比较稳。后续保持订正和复习节奏，再逐步增加稍有变化的练习。',
+      '几次记录放在一起看，基础部分比较扎实。接下来重点关注偶尔失分的地方，减少会做的题丢分。',
+      '目前整体表现稳定。可以把更多时间用在薄弱题型的细节上，优势板块保持少量复习即可。',
+    ],
   },
   good: {
     minScore: 70,
     messages: [
-      '整体是好的，大部分知识点都拿下来了，还有空间可挖。把薄弱的地方挑出来集中练，进步会来得比想象中快。',
-      '学习情况不错，基础也比较扎实。热情保持住，同时别忘了定期回头查漏补缺。',
-      '状态在往上走，成绩也稳中有升。可以给孩子拟一份简单的学习计划，把各科时间安排好，效率会更高。',
-    ]
+      '整体已有一定基础，大部分内容能够跟上。下一步更适合集中补一两个失分较多的板块，不必所有内容平均用力。',
+      '这一阶段的表现比较平稳，但各板块还不够齐。建议先抓最容易改的一类错题，再观察后两次课的得分率。',
+      '课内内容基本能接住，仍有部分题型需要巩固。把每周练习集中在这些具体位置，会比笼统加量更有效。',
+    ],
   },
   average: {
     minScore: 60,
     messages: [
-      '整体处在中等水平，一部分知识点还不够牢。建议回到基础上来，边学边练，把学过的东西真正过一遍手，比往前赶更有效。',
-      '现在需要再多花一点力气。可以看看学习方法是不是有调整的空间，比如先理解再记、错题及时整理，必要时找老师聊一聊。',
-      '还有不小的提升空间。建议先把薄弱环节找出来，定一两个具体的小目标；您在家多关注一下学习状态，会比单方面要求更管用。',
-    ]
+      '目前能完成一部分基础题，但稳定性还不够。建议先回到课内知识和近期错题，每次解决一个小问题。',
+      '这一阶段的掌握情况有起伏，先不用追求难题和题量。把基础题做明白、把错题讲清楚，是眼下更重要的两步。',
+      '现阶段需要把基础重新过一遍，但不必全面重来。先选失分最多的一类内容，练习后再用同类题检查。',
+    ],
   },
   poor: {
     minScore: 0,
     messages: [
-      '这一阶段掌握得不太牢，需要重点关注。建议从教材最基础的部分重新过一遍，把地基打稳，先不急着追进度。',
-      '目前的状况需要一起想办法。可以约个时间和老师沟通一下，看看孩子具体卡在哪里——找到原因，问题就解决了一半。',
-      '成绩暂时不理想，但先别灰心。把知识体系重新梳理一遍，一小步一小步来，只要方向对，进步是迟早的事。',
-    ]
-  }
+      '目前基础内容还比较吃力，建议先缩小练习范围，从课本和最近一张卷子的基础题开始，逐项确认哪里没理解。',
+      '这几次记录显示，现阶段更需要补基础而不是赶进度。先固定每天一小段复习时间，完成后再检查掌握情况。',
+      '当前先不用看一次性提高多少分。把最基础的一类题做稳，并让孩子能说出解题过程，变化会更可持续。',
+    ],
+  },
 };
 
-// 考勤反馈
 export const attendanceFeedback = {
-  excellent: {
-    rate: 0.95,
-    message: '出勤很稳定，每节课都按时到，这份坚持本身就是好成绩的基础。节奏别丢，接着稳稳往前走。'
-  },
-  good: {
-    rate: 0.85,
-    message: '出勤情况总体不错，大部分课都按时到。尽量把偶尔的缺课也补上，别让落下的内容影响后面的进度。'
-  },
-  needsImprovement: {
-    rate: 0,
-    message: '这阵子缺课稍多了一些，落下内容对学习节奏的影响不小。建议把时间安排调整一下，尽量保证出勤；缺的课我这边也会帮孩子补上。'
-  }
+  excellent: { rate: 0.95, message: '出勤记录很稳定，学习内容衔接得比较完整。继续保持现有时间安排即可。' },
+  good: { rate: 0.85, message: '大部分课次都能按时参加。偶尔落下的内容要及时补齐，避免和后面的新知识叠在一起。' },
+  needsImprovement: { rate: 0, message: '近期缺课对学习衔接已有影响。建议先调整时间安排，缺席课次的笔记和练习我会协助补齐。' },
 };
 
-// 作业反馈
 export const homeworkFeedback = {
-  excellent: {
-    rate: 0.8,
-    message: '作业完成得很到位，看得出是用心做的。作业是把课堂内容真正变成自己的过程，这份认真很宝贵，继续保持。'
-  },
-  good: {
-    rate: 0.6,
-    message: '作业基本都能按时完成，完成质量也在线。如果能在订正上再细一点——错题弄懂再改，效果还能更好。'
-  },
-  needsImprovement: {
-    rate: 0,
-    message: '作业完成情况需要抓一抓。作业是巩固知识最直接的一环，落下几次，课堂上学的东西就容易淡掉。建议每天固定时间做作业，您帮忙看一眼是否完成。'
-  }
+  excellent: { rate: 0.8, message: '课堂练习和课后任务完成得比较稳定。订正时再把错题原因写清楚，复习会更有针对性。' },
+  good: { rate: 0.6, message: '练习基本能够完成。下一步把“做完”再往前走一步：错题当天订正，隔几天重新做一次。' },
+  needsImprovement: { rate: 0, message: '近期练习完成度不够稳定。建议固定一个完成作业的时间，先保证按量完成，再逐步检查订正质量。' },
 };
 
-// 课后任务反馈
 export const listeningFeedback = {
-  excellent: {
-    minScore: 85,
-    message: '课后任务完成得很出色，听说这块的优势已经出来了。每天保持一点听说练习，语感会越来越顺。'
-  },
-  good: {
-    minScore: 70,
-    message: '课后任务完成得不错，听说能力是在线的。建议每天固定 15-20 分钟练习，坚持下来提升会很明显。'
-  },
-  needsImprovement: {
-    minScore: 0,
-    message: '课后任务还需要再上心一些。可以从短一点、简单一点的材料开始，每天听读 10 分钟，先把手感找回来，再慢慢加量。'
-  }
+  excellent: { minScore: 85, message: '课后听说任务完成得较好。保持目前的练习频率即可，不必额外加太多材料。' },
+  good: { minScore: 70, message: '课后任务已有一定基础。每天保留一小段听读练习，注意模仿语音和停顿。' },
+  needsImprovement: { minScore: 0, message: '课后听说练习还需要补上。可先用短材料，每天听读十分钟，完成后再录一小段检查。' },
 };
 
-// 学习轨迹反馈
 export const trajectoryFeedback = {
-  improving: {
-    message: '这段时间的轨迹是往上走的，进步看得出来。把现在的学习节奏保持住，后面还会有更大的空间。'
-  },
-  stable: {
-    message: '成绩比较平稳，说明基础是稳的。接下来可以找一个突破口——挑一个最想提升的板块，集中发力试试。'
-  },
-  declining: {
-    message: '最近两次的成绩有些回落，值得留意一下。先别急着加压，和孩子聊聊最近的听课状态和作业情况，找到原因再调整，比硬练更有效。'
-  }
+  improving: { message: '后几课的正确率比前段高，说明近期做法有效。先保持当前节奏，再观察能否连续稳定。' },
+  stable: { message: '几课的正确率比较接近，整体较平稳。接下来可挑一个失分较多的板块集中练，寻找新的提升点。' },
+  declining: { message: '后几课的正确率有所回落。建议先对照最近的错题、出勤和练习完成情况，找到变化发生在哪个环节。' },
 };
 
-// 获取随机话术
-export function getRandomFeedback(feedbackArray: string[]): string {
-  return feedbackArray[Math.floor(Math.random() * feedbackArray.length)];
-}
-
-// 根据分数和题型获取话术
-export function getQuestionTypeFeedback(
-  questionTypeName: string, 
-  score: number, 
-  fullScore: number
-): string {
-  const feedback = questionTypeFeedbackMap[questionTypeName] || questionTypeFeedbackMap['default'];
-  const scoreRate = score / fullScore;
-  
-  if (scoreRate >= feedback.threshold) {
-    return getRandomFeedback(feedback.highScore);
-  } else {
-    return getRandomFeedback(feedback.lowScore);
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
+  return hash >>> 0;
 }
 
-// 根据整体得分获取反馈
+/** 稳定选句：不再使用 Math.random，报告重渲染与重复导出保持一致。 */
+export function getRandomFeedback(feedbackArray: string[], seed = ''): string {
+  if (feedbackArray.length === 0) return '';
+  const key = seed || feedbackArray.join('|');
+  return feedbackArray[stableHash(key) % feedbackArray.length];
+}
+
+export function getQuestionTypeFeedback(questionTypeName: string, score: number, fullScore: number): string {
+  const feedback = questionTypeFeedbackMap[questionTypeName] || questionTypeFeedbackMap.default;
+  const scoreRate = fullScore > 0 ? score / fullScore : 0;
+  const pool = scoreRate >= feedback.threshold ? feedback.highScore : feedback.lowScore;
+  return getRandomFeedback(pool, `${questionTypeName}|${score}|${fullScore}`);
+}
+
 export function getOverallFeedback(totalScore: number, fullScore: number): string {
-  const scoreRate = (totalScore / fullScore) * 100;
-  
-  if (scoreRate >= overallFeedback.excellent.minScore) {
-    return getRandomFeedback(overallFeedback.excellent.messages);
-  } else if (scoreRate >= overallFeedback.good.minScore) {
-    return getRandomFeedback(overallFeedback.good.messages);
-  } else if (scoreRate >= overallFeedback.average.minScore) {
-    return getRandomFeedback(overallFeedback.average.messages);
-  } else {
-    return getRandomFeedback(overallFeedback.poor.messages);
-  }
+  const scoreRate = fullScore > 0 ? (totalScore / fullScore) * 100 : 0;
+  const band = scoreRate >= overallFeedback.excellent.minScore
+    ? overallFeedback.excellent
+    : scoreRate >= overallFeedback.good.minScore
+      ? overallFeedback.good
+      : scoreRate >= overallFeedback.average.minScore
+        ? overallFeedback.average
+        : overallFeedback.poor;
+  return getRandomFeedback(band.messages, `overall|${totalScore}|${fullScore}`);
 }
 
-// 根据考勤率获取反馈
 export function getAttendanceFeedback(attendanceRate: number): string {
-  if (attendanceRate >= attendanceFeedback.excellent.rate) {
-    return attendanceFeedback.excellent.message;
-  } else if (attendanceRate >= attendanceFeedback.good.rate) {
-    return attendanceFeedback.good.message;
-  } else {
-    return attendanceFeedback.needsImprovement.message;
-  }
+  if (attendanceRate >= attendanceFeedback.excellent.rate) return attendanceFeedback.excellent.message;
+  if (attendanceRate >= attendanceFeedback.good.rate) return attendanceFeedback.good.message;
+  return attendanceFeedback.needsImprovement.message;
 }
 
-// 根据作业优秀率获取反馈
 export function getHomeworkFeedback(excellentRate: number): string {
-  if (excellentRate >= homeworkFeedback.excellent.rate) {
-    return homeworkFeedback.excellent.message;
-  } else if (excellentRate >= homeworkFeedback.good.rate) {
-    return homeworkFeedback.good.message;
-  } else {
-    return homeworkFeedback.needsImprovement.message;
-  }
+  if (excellentRate >= homeworkFeedback.excellent.rate) return homeworkFeedback.excellent.message;
+  if (excellentRate >= homeworkFeedback.good.rate) return homeworkFeedback.good.message;
+  return homeworkFeedback.needsImprovement.message;
 }
 
-// 根据课后任务平均分获取反馈
 export function getListeningFeedback(avgScore: number): string {
-  if (avgScore >= listeningFeedback.excellent.minScore) {
-    return listeningFeedback.excellent.message;
-  } else if (avgScore >= listeningFeedback.good.minScore) {
-    return listeningFeedback.good.message;
-  } else {
-    return listeningFeedback.needsImprovement.message;
-  }
+  if (avgScore >= listeningFeedback.excellent.minScore) return listeningFeedback.excellent.message;
+  if (avgScore >= listeningFeedback.good.minScore) return listeningFeedback.good.message;
+  return listeningFeedback.needsImprovement.message;
 }
 
-// 根据学习轨迹趋势获取反馈
-export function getTrajectoryFeedback(scores: number[]): string {
-  if (scores.length < 3) {
-    return '目前记录的次数还不多，等数据再攒几节课，趋势会看得更清楚。';
-  }
-  
-  // 计算趋势
-  const firstHalf = scores.slice(0, Math.floor(scores.length / 2));
-  const secondHalf = scores.slice(Math.floor(scores.length / 2));
+/** 输入应为正确率（0-100），避免不同满分课次直接比较原始分。 */
+export function getTrajectoryFeedback(rates: number[]): string {
+  const valid = rates.filter(Number.isFinite);
+  if (valid.length < 3) return '目前可比较的课次还不多，再积累几次记录后，趋势会更清楚。';
+  const firstHalf = valid.slice(0, Math.floor(valid.length / 2));
+  const secondHalf = valid.slice(Math.floor(valid.length / 2));
   const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
   const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
-  
   const diff = secondAvg - firstAvg;
-  
-  if (diff > 3) {
-    return trajectoryFeedback.improving.message;
-  } else if (diff < -3) {
-    return trajectoryFeedback.declining.message;
-  } else {
-    return trajectoryFeedback.stable.message;
-  }
+  if (diff > 3) return trajectoryFeedback.improving.message;
+  if (diff < -3) return trajectoryFeedback.declining.message;
+  return trajectoryFeedback.stable.message;
 }

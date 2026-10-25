@@ -370,14 +370,14 @@ function App() {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
     const attach = () => {
-      document.querySelectorAll('[data-slot="card"]:not(.reveal), .report-section:not(.reveal)').forEach(el => {
+      document.querySelectorAll('[data-slot="card"]:not(.reveal)').forEach(el => {
         el.classList.add('reveal'); io.observe(el);
       });
     };
     const t = window.setTimeout(attach, 120);
     // 只处理新插入的节点：原实现每次 DOM 变化都全文档 querySelectorAll，
     // 录入分数时每击键都会触发一轮扫描（2026-10-17 优化）
-    const REVEAL_SEL = '[data-slot="card"]:not(.reveal), .report-section:not(.reveal)';
+    const REVEAL_SEL = '[data-slot="card"]:not(.reveal)';
     const mo = new MutationObserver((muts) => {
       for (const m of muts) {
         m.addedNodes.forEach(node => {
@@ -1032,9 +1032,9 @@ function App() {
           {/* 学情记录 Tab */}
           <TabsContent value="records" className="main-tab-panel space-y-6">
             <ErrorBoundary label="学情记录">
-            <div className="flex gap-6">
+            <div className="flex flex-col xl:flex-row gap-6">
               {/* 左侧边栏 */}
-              <div className="w-72 flex-shrink-0 space-y-4">
+              <div className="w-full xl:w-72 flex-shrink-0 space-y-4">
                 <ClassInfoCard
                   classData={currentClass}
                   onManageStudents={() => setIsImportModalOpen(true)}
@@ -1149,7 +1149,7 @@ function App() {
             ) : (
             <Suspense fallback={<ModuleLoading label="反馈生成" />}>
             <ErrorBoundary label="反馈生成">
-            <div className="max-w-6xl mx-auto space-y-5">
+            <div className="main-module-shell space-y-5">
             <FeedbackGenerator
                 key={currentClassId || 'none'}
               className={currentClass?.name || ''}
@@ -1246,7 +1246,7 @@ function App() {
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="main-tab-panel">
             <ErrorBoundary label="同步中心">
-            <div className="max-w-6xl mx-auto space-y-5">
+            <div className="main-module-shell space-y-5">
               <SyncStatusBanner
                 status={cloudSync.status}
                 message={cloudSync.message}

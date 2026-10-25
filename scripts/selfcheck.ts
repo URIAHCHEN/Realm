@@ -801,12 +801,14 @@ group('风云榜全勤口径');
   check(ranked[0].awardRank === 1 && ranked[1].awardRank === 1 && ranked[2].awardRank === 2 && ranked[3].awardRank === 2 && ranked[4].awardRank === 3, '金银铜按成绩档位：并列金后下一档为银，不出现有铜无银');
   check(ranked[4].rank === 5 && ranked[7].rank === 8, '并列后的后续名次连续符合竞争排名');
   const groups = groupFengyunAwards(ranked);
-  check(groups.map(group => group.awardRank).join(',') === '1,2,3', '风云榜只保留金、银、铜三档，不再显示第 4 名后的数字');
-  check(groups[0].entries.length === 2 && groups[1].entries.length === 2 && groups[2].entries.length === 4, '同分并列姓名进入同一档位，第 4 名起归入铜牌档');
+  check(groups.map(group => group.awardRank).join(',') === '1,2,3,4,5,6', '排名分组保留真实成绩档位，不再把第 4 名并入铜牌');
+  const podiumRows = buildFengyunRows(ranked);
+  check(podiumRows.every(row => row.awardRank <= 3), '风云榜只展示金、银、铜前三档');
+  check(podiumRows.reduce((sum, row) => sum + row.entries.length, 0) === 5, '前三档名额按并列人数自然变化，不固定为 8 人');
   const groupedRows = buildFengyunRows([
     { studentName: 'A', totalScore: 10, correctRate: 100, rank: 1, awardRank: 1 },
     { studentName: 'B', totalScore: 9, correctRate: 90, rank: 2, awardRank: 2 },
-    ...Array.from({ length: 6 }, (_, i) => ({ studentName: `C${i}`, totalScore: 8, correctRate: 80, rank: 3 + i, awardRank: 3 + i })),
+    ...Array.from({ length: 6 }, (_, i) => ({ studentName: `C${i}`, totalScore: 8, correctRate: 80, rank: 3, awardRank: 3 })),
   ]);
   check(groupedRows.length === 4 && groupedRows[3].continuation, '同档超过 4 个姓名向下续行，不标数字名次');
   check(groupedRows.every(row => row.awardRank >= 1 && row.awardRank <= 3), '所有续行仍只属于金、银、铜三档');

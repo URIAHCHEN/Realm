@@ -33,13 +33,13 @@ export function rankForLeaderboard<T extends RankableScore>(records: T[], limit 
 
 export const FENGYUN_LIMIT = 8;
 
-/** 风云榜只展示金银铜三档；第 4 名起不再标数字，统一归入铜牌档。 */
+/** 风云榜按成绩档位分组；调用方只取金、银、铜前三档。 */
 export function groupFengyunAwards<T extends { rank: number; awardRank?: number }>(
   records: T[],
 ): { awardRank: number; entries: T[] }[] {
   const groups = new Map<number, T[]>();
   records.forEach(record => {
-    const awardRank = Math.min(3, record.awardRank ?? record.rank);
+    const awardRank = record.awardRank ?? record.rank;
     const entries = groups.get(awardRank) || [];
     entries.push(record);
     groups.set(awardRank, entries);
@@ -51,11 +51,11 @@ export function groupFengyunAwards<T extends { rank: number; awardRank?: number 
 
 export const FENGYUN_NAMES_PER_ROW = 4;
 
-/** 同档超过 4 个姓名时向下续行；续行不重复奖牌、不显示数字名次。 */
+/** 仅取前三档；同档超过 4 个姓名时向下续行，续行不重复奖牌、不显示数字名次。 */
 export function buildFengyunRows<T extends { rank: number; awardRank?: number }>(
   records: T[],
 ): { awardRank: number; entries: T[]; continuation: boolean }[] {
-  return groupFengyunAwards(records).flatMap(group => {
+  return groupFengyunAwards(records).filter(group => group.awardRank <= 3).flatMap(group => {
     const rows: { awardRank: number; entries: T[]; continuation: boolean }[] = [];
     for (let index = 0; index < group.entries.length; index += FENGYUN_NAMES_PER_ROW) {
       rows.push({

@@ -181,6 +181,14 @@ export function Leaderboard({
     });
   }, [rangeRecords, getNickname]);
 
+  // 风云榜：只取前三档，最多 8 人；不固定人数。
+  const fengyunEntries = useMemo(
+    () => entranceRankings
+      .slice(0, FENGYUN_LIMIT)
+      .filter(entry => (entry.awardRank ?? entry.rank) <= 3),
+    [entranceRankings],
+  );
+
   // 状元（第一名）
   const champion = useMemo(() =>
     entranceRankings[0] || null,
@@ -330,7 +338,7 @@ export function Leaderboard({
     } else if (mode === 'fengyun') {
       text += ' 风云榜\n\n';
       if (entranceRankings.length > 0) {
-        const awardRows = buildFengyunRows(entranceRankings.slice(0, FENGYUN_LIMIT));
+        const awardRows = buildFengyunRows(fengyunEntries);
         awardRows.forEach((row) => {
           const medal = row.awardRank === 1 ? '🥇' : row.awardRank === 2 ? '🥈' : '🥉';
           text += `${row.continuation ? '　' : medal} ${row.entries.map(r => `${r.nickname}：${r.totalScore}分（正确率${r.correctRate}%）`).join('　')}\n`;
@@ -411,7 +419,7 @@ export function Leaderboard({
     } else if (format === 'csv') {
       if (mode === 'fengyun') {
         content = '排名,姓名,昵称,总分,正确率\n';
-        entranceRankings.slice(0, FENGYUN_LIMIT).forEach(r => {
+        fengyunEntries.forEach(r => {
           content += [r.rank, r.studentName, r.nickname, r.totalScore, `${r.correctRate}%`].map(csvCell).join(',') + '\n';
         });
       } else if (mode === 'top10' || mode === 'champion') {
@@ -444,7 +452,7 @@ export function Leaderboard({
     } else if (format === 'json') {
       let data: unknown;
       if (mode === 'top10') data = { type: 'top10', range: rangeText, rankings: entranceRankings };
-      else if (mode === 'fengyun') data = { type: 'fengyun', range: rangeText, rankings: entranceRankings.slice(0, FENGYUN_LIMIT) };
+      else if (mode === 'fengyun') data = { type: 'fengyun', range: rangeText, rankings: fengyunEntries };
       else if (mode === 'champion') data = { type: 'champion', range: rangeText, champion };
       else if (mode === 'progress') data = { type: 'progress', range: rangeText, stars: progressStars };
       else if (mode === 'listening') data = { type: 'listening', range: rangeText, rankings: listeningRankings };
@@ -531,7 +539,8 @@ export function Leaderboard({
   const renderContent = () => {
     // 风云榜：最多 8 人；奖牌档位纵向排列，同一档的并列姓名横向排列。
     if (mode === 'fengyun') {
-      const shown = entranceRankings.slice(0, FENGYUN_LIMIT);
+      // 只表彰前三档；最多取 8 人，不固定人数，排名靠后的第 4 档起不进入海报。
+      const shown = fengyunEntries;
       const awardRows = buildFengyunRows(shown);
       const longestRow = Math.max(1, ...awardRows.map(row => {
         const characters = row.entries.reduce((sum, entry) => sum + getNickname(entry.studentName).length, 0);
@@ -561,7 +570,7 @@ export function Leaderboard({
           <p className="fengyun-hint">
             {shown.length === 0
               ? '当日小测暂无到课学员数据'
-              : `本次展示 ${shown.length} 人 · 按正确率排名 · 同分并列横向排列${entranceRankings.length > FENGYUN_LIMIT ? ' · 已截取前 8 人' : ''}`}
+              : `本次表彰前三名 · 共 ${shown.length} 人 · 同分并列横向排列 · 最多 8 人`}
           </p>
         </div>
       );

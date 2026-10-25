@@ -2752,9 +2752,6 @@ html[data-exporting] * { animation: none !important; }
   display: block;
   width: 100%;
 }
-/* emoji 字形自带的左右留白不同：只校正可见图形中心，不改姓名列起点。 */
-.praise-root .slots-grouped .tier-2 .fengyun-medal { transform: translateX(0.4cqw); }
-.praise-root .slots-grouped .tier-3 .fengyun-medal { transform: translateX(2.6cqw); }
 .praise-root .fengyun-tier-names {
   display: inline-flex;
   align-items: baseline;
@@ -2766,10 +2763,11 @@ html[data-exporting] * { animation: none !important; }
 .praise-root .fengyun-tier-names .fengyun-name {
   display: inline-block;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
   font-size: inherit;
+  line-height: 1.2;
+  padding-block: 0.04em;
 }
 .praise-root .fengyun-rank {
   flex: 0 0 auto;

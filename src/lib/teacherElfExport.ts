@@ -21,9 +21,56 @@ export interface TeacherElfRow {
   text1: string;
   /** D 列（文本2）内容，仅 includeText2 时写入（可空） */
   text2?: string;
+  /** E 列（文本3）内容，仅 includeText3 时写入（可空） */
+  text3?: string;
+}
+
+export type TeacherElfKind = 'private' | 'fourInOne' | 'advice';
+export type TeacherElfTextSlot = TeacherElfKind | 'fourInOnePart2';
+
+/**
+ * 把界面所选内容展开为教师精灵的连续文本列。
+ * 详细版四个一本身分两段：选中四个一时展开为「文本1 + 文本2」；
+ * 若前面还有私发反馈，则最终自然落到 C/D/E 三段，不会互相覆盖。
+ */
+export function planTeacherElfColumns(
+  selected: TeacherElfKind[],
+  detailedFourInOne: boolean,
+): TeacherElfTextSlot[] {
+  return selected.flatMap(kind =>
+    kind === 'fourInOne' && detailedFourInOne
+      ? ['fourInOne' as const, 'fourInOnePart2' as const]
+      : [kind]);
 }
 
 export const TEACHER_ELF_TEXT_LIMIT = 1000;
+
+/** 生成可直接写入工作表的表头与数据，独立于文件下载，便于确定性自测。 */
+export function buildTeacherElfTable(
+  rows: TeacherElfRow[],
+  includeText2: boolean,
+  includeText3: boolean,
+): { header: string[]; data: string[][]; truncated: number } {
+  const withText2 = includeText2 === true;
+  const withText3 = withText2 && includeText3 === true;
+  const clip = (t: string) => {
+    const s = String(t || '');
+    return s.length > TEACHER_ELF_TEXT_LIMIT ? s.slice(0, TEACHER_ELF_TEXT_LIMIT) : s;
+  };
+  let truncated = 0;
+  const data = rows.map(r => {
+    const raw = [r.text1 || ''];
+    if (withText2) raw.push(r.text2 || '');
+    if (withText3) raw.push(r.text3 || '');
+    const texts = raw.map(clip);
+    if (texts.some((text, index) => text !== raw[index])) truncated++;
+    return ['', r.name, ...texts];
+  });
+  const header = ['学员号', '学生姓名', '*文本1'];
+  if (withText2) header.push('文本2');
+  if (withText3) header.push('文本3');
+  return { header, data, truncated };
+}
 
 /** 按教师精灵模板生成 xlsx 并下载；返回截断条数供调用方提示 */
 export async function exportTeacherElfXlsx(opts: {
@@ -32,35 +79,22 @@ export async function exportTeacherElfXlsx(opts: {
   rows: TeacherElfRow[];
   /** 是否导出 D 列（文本2）。默认 false —— 只出「姓名 + 文本1」两列 */
   includeText2?: boolean;
+  /** 是否继续导出 E 列（文本3）；必须同时 includeText2=true */
+  includeText3?: boolean;
 }): Promise<{ filename: string; truncated: number }> {
   const XLSX = await import('xlsx');
   const includeText2 = opts.includeText2 === true;
-  const clip = (t: string) => {
-    const s = String(t || '');
-    return s.length > TEACHER_ELF_TEXT_LIMIT ? s.slice(0, TEACHER_ELF_TEXT_LIMIT) : s;
-  };
-  let truncated = 0;
-  const data = opts.rows.map(r => {
-    const raw1 = r.text1 || '';
-    const raw2 = r.text2 || '';
-    const t1 = clip(raw1);
-    // 只有真正导出的列才参与截断统计（D 列没导出时不该报它的截断）
-    const t2 = includeText2 ? clip(raw2) : '';
-    if (t1 !== raw1 || (includeText2 && t2 !== raw2)) truncated++;
-    return includeText2 ? ['', r.name, t1, t2] : ['', r.name, t1];
-  });
-
-  const aoa: (string)[][] = [
-    [TEMPLATE_NOTE],
-    includeText2
-      ? ['学员号', '学生姓名', '*文本1', '文本2']
-      : ['学员号', '学生姓名', '*文本1'],
-    ...data,
-  ];
+  const includeText3 = includeText2 && opts.includeText3 === true;
+  const { header, data, truncated } = buildTeacherElfTable(opts.rows, includeText2, includeText3);
+  const aoa: string[][] = [[TEMPLATE_NOTE], header, ...data];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = includeText2
-    ? [{ wch: 10 }, { wch: 12 }, { wch: 90 }, { wch: 90 }]
-    : [{ wch: 10 }, { wch: 12 }, { wch: 90 }];
+  ws['!cols'] = [
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 90 },
+    ...(includeText2 ? [{ wch: 90 }] : []),
+    ...(includeText3 ? [{ wch: 90 }] : []),
+  ];
   // 说明行与表头行加高，便于打开时阅读（不影响上传解析）
   ws['!rows'] = [{ hpt: 78 }, { hpt: 22 }];
   const wb = XLSX.utils.book_new();

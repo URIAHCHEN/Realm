@@ -10,6 +10,7 @@ import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, gen
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
+import { planTeacherElfColumns, buildTeacherElfTable } from '@/lib/teacherElfExport';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
@@ -818,6 +819,26 @@ group('风云榜全勤口径');
   })));
   check(allTiersWrap.filter(row => row.awardRank === 1).length === 2, '金牌并列超过 4 人也向下续行');
   check(allTiersWrap.filter(row => row.awardRank === 2).length === 1 && allTiersWrap.at(-1)?.continuation === false, '银、铜档遵循同一续行规则');
+}
+
+group('教师精灵导出列映射');
+{
+  const privatePlusDetailed = planTeacherElfColumns(['private', 'fourInOne'], true);
+  check(privatePlusDetailed.join(',') === 'private,fourInOne,fourInOnePart2', '私发 + 详细版四个一：展开为三段，不再只产出四个一');
+  const privatePlusBrief = planTeacherElfColumns(['private', 'fourInOne'], false);
+  check(privatePlusBrief.join(',') === 'private,fourInOne', '私发 + 精简版四个一：保持两段');
+  const fourThenAdvice = planTeacherElfColumns(['fourInOne', 'advice'], true);
+  check(fourThenAdvice.join(',') === 'fourInOne,fourInOnePart2,advice', '四个一在前时两段顺延，后续内容进入文本3');
+
+  const table = buildTeacherElfTable([
+    { name: '张三', text1: '私发正文', text2: '四个一段1', text3: '四个一段2' },
+  ], true, true);
+  check(table.header.join('|') === '学员号|学生姓名|*文本1|文本2|文本3', '三段导出时表头包含文本3');
+  check(table.data[0].length === 5 && table.data[0][2] === '私发正文' && table.data[0][3] === '四个一段1' && table.data[0][4] === '四个一段2', 'C 私发、D/E 四个一两段分别写入，互不覆盖');
+  const noThird = buildTeacherElfTable([
+    { name: '李四', text1: '私发正文', text2: '四个一正文', text3: '不应导出' },
+  ], true, false);
+  check(noThird.header.length === 4 && noThird.data[0].length === 4, '未选择第三段时不额外输出 E 列');
 }
 
 group('报告话术：稳定、可比、去模板腔');

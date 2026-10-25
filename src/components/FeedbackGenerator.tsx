@@ -11,7 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
-import { exportTeacherElfXlsx } from '@/lib/teacherElfExport';
+import { exportTeacherElfXlsx, planTeacherElfColumns, type TeacherElfTextSlot } from '@/lib/teacherElfExport';
 import { longTermWeakCategories } from '@/lib/longTermWeak';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { computeStudentReportStats } from '@/lib/reportStats';
@@ -371,8 +371,12 @@ export function FeedbackGenerator({
   // 导出教师精灵（企鹅教师助手）个性化文本模板（2026-10-17）
   // 范围与「复制对照表」完全一致：只含在课学员（请假/缺勤/调课调出排除）。
   // 默认 B 列姓名 + C 列私发反馈两列；C/D 列内容可换，内容按当前模板草稿实时生成。
-  const ELF_KIND_LABEL: Record<'private' | 'fourInOne' | 'advice', string> = {
-    private: '私发反馈', fourInOne: '四个一反馈', advice: '学习建议',
+  const detailedFourInOne = feedbackMode === 'fourInOne' && detailLevel === 'detailed';
+  const ELF_SLOT_LABEL: Record<TeacherElfTextSlot, string> = {
+    private: '私发反馈',
+    fourInOne: detailedFourInOne ? '四个一·文本1' : '四个一反馈',
+    fourInOnePart2: '四个一·文本2',
+    advice: '学习建议',
   };
   const assessedCount = lessonRecords.filter(r => isQuizAssessed(r, lessonConfig)).length;
   const buildElfText = (name: string, kind: 'private' | 'fourInOne' | 'advice'): string => {
@@ -394,32 +398,41 @@ export function FeedbackGenerator({
       return;
     }
     try {
-      // 详细版：按教师精灵原生结构导出「姓名 | 文本1 | 文本2」（2026-10-24）
-      if (feedbackMode === 'fourInOne' && detailLevel === 'detailed') {
-        const dRows = batchRows.map(r => {
-          const rec = recordOf(r.name);
-          if (!rec) return null;
-          const d = buildDetailedFeedback(rec, lessonConfig, stats, getNickname(r.name), variant, assessedCount);
-          return { name: getNickname(r.name), text1: d.text1, text2: d.text2 };
-        }).filter((x): x is { name: string; text1: string; text2: string } => !!x);
-        const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows: dRows, includeText2: true });
-        const notes = [
-          `B-D 列 = 学生姓名 / 详细版·文本1 / 文本2，共 ${dRows.length} 人`,
-          excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',
-          truncated ? `${truncated} 条文本超过模板 1000 字上限，已截断` : '',
-        ].filter(Boolean).join('；');
-        toast.success(`已导出 ${filename}`, { description: notes, duration: 9000 });
-        return;
-      }
-      const rows = batchRows.map(r => ({
-        name: getNickname(r.name),
-        text1: buildElfText(r.name, elfColC),
-        text2: elfWithD ? buildElfText(r.name, elfColD) : undefined,
-      })).filter(r => r.text1 || r.text2);
-      const { filename, truncated } = await exportTeacherElfXlsx({ className, lessonNumber, rows, includeText2: elfWithD });
-      const colDesc = elfWithD
-        ? `B-D 列 = 学生姓名 / ${ELF_KIND_LABEL[elfColC]} / ${ELF_KIND_LABEL[elfColD]}`
-        : `B-C 列 = 学生姓名 / ${ELF_KIND_LABEL[elfColC]}`;
+      // 所选内容决定列位置；详细版四个一会展开为两段，后续内容顺延到下一列。
+      const slots = planTeacherElfColumns(
+        [elfColC, ...(elfWithD ? [elfColD] : [])],
+        detailedFourInOne,
+      );
+      const rows = batchRows.map(r => {
+        const rec = recordOf(r.name);
+        let detail: { text1: string; text2: string } | null = null;
+        const detailOf = () => {
+          if (!detail && rec) {
+            detail = buildDetailedFeedback(rec, lessonConfig, stats, getNickname(r.name), variant, assessedCount);
+          }
+          return detail;
+        };
+        const texts = slots.map(slot => {
+          if (slot === 'fourInOnePart2') return detailOf()?.text2 || '';
+          if (slot === 'fourInOne' && detailedFourInOne) return detailOf()?.text1 || '';
+          return buildElfText(r.name, slot);
+        });
+        return {
+          name: getNickname(r.name),
+          text1: texts[0] || '',
+          text2: texts[1],
+          text3: texts[2],
+        };
+      }).filter(r => r.text1 || r.text2 || r.text3);
+      const { filename, truncated } = await exportTeacherElfXlsx({
+        className,
+        lessonNumber,
+        rows,
+        includeText2: slots.length >= 2,
+        includeText3: slots.length >= 3,
+      });
+      const endColumn = String.fromCharCode(67 + slots.length - 1);
+      const colDesc = `B-${endColumn} 列 = 学生姓名 / ${slots.map(slot => ELF_SLOT_LABEL[slot]).join(' / ')}`;
       const notes = [
         `${colDesc}，共 ${rows.length} 人`,
         excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',

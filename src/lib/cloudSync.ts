@@ -17,6 +17,11 @@ export interface SyncSnapshot {
   templates?: TemplateStore;
   /** 待审核版本（协作审核流）：非管理员提交的整版修订，批准前不写入线上数据 */
   pendingVersions?: import('@/lib/pendingReview').PendingVersion[];
+  /**
+   * 伴学萌宠快照（增量模块）：独立于学情主数据的可选字段。
+   * 旧版本客户端不认识该字段，推送时会丢失——读取侧因此只在“云端确实带该字段”时才覆盖本地。
+   */
+  pet?: import('@/types/pet').PetSnapshot;
 }
 
 export interface CloudSyncConfig {
@@ -246,6 +251,8 @@ function sanitizeSnapshot(raw: unknown): SyncSnapshot | null {
     nicknames: asObj(r.nicknames) as SyncSnapshot['nicknames'],
     schoolScores: asObj(r.schoolScores) as SyncSnapshot['schoolScores'],
     templates: asObj(r.templates) as SyncSnapshot['templates'],
+    // 伴学萌宠：可选增量字段；旧快照没有该字段时保持 undefined
+    pet: r.pet && typeof r.pet === 'object' ? (r.pet as SyncSnapshot['pet']) : undefined,
   };
 }
 

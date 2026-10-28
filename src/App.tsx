@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { AlertTriangle, BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, PawPrint, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
@@ -67,6 +67,15 @@ import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import type { ParsedRow } from '@/lib/docSync';
 import type { SyncSnapshot } from '@/lib/cloudSync';
 import type { AppConfig, LessonConfig, StudentRecord } from '@/types';
+// 伴学萌宠：增量模块（不改动既有数据类型与逻辑）
+import { PetGarden } from '@/components/pet/PetGarden';
+import {
+  addManualScore, adoptForStudent, awardBadge, graduatePet, isEnabledForClass,
+  loadPetSnapshot, savePetSnapshot, undoEvent, updateSettings,
+} from '@/lib/gamification/store';
+import { settleClassPets } from '@/lib/gamification/rules';
+import { normalizePetSnapshot } from '@/lib/gamification/store';
+import type { PetBadgeDef, PetSettings, PetSnapshot } from '@/types/pet';
 import './App.css';
 
 function App() {
@@ -129,6 +138,8 @@ function App() {
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('records');
+  // 伴学萌宠：独立快照（localStorage `petData`），与学情主数据互不覆盖
+  const [petSnapshot, setPetSnapshot] = useState<PetSnapshot>(() => loadPetSnapshot());
   // 2026-10-24：校内成绩并入「学情报告」、反馈素材并入「反馈生成」，用二级切换保持独立视图
   const [reportView, setReportView] = useState<'report' | 'school' | 'quarter'>('report');
   const [feedbackView, setFeedbackView] = useState<'generate' | 'library'>('generate');
@@ -152,7 +163,8 @@ function App() {
     nicknames,
     schoolScores,
     templates: readTemplateStore(),
-  }), [appConfig, classes, nicknames, schoolScores]);
+    pet: petSnapshot,
+  }), [appConfig, classes, nicknames, schoolScores, petSnapshot]);
 
   // 自动版本快照（2026-10-11）：普通录入/导入/名单变更此前完全不记版本
   //（用户反馈"新增了一个课次的记录但版本历史没有丝毫变化"）→ 补一条 debounce 自动记账
@@ -165,6 +177,9 @@ function App() {
       suppressAutoVersionRef.current = true;
       if (autoVersionTimer.current) { window.clearTimeout(autoVersionTimer.current); autoVersionTimer.current = null; }
       importData(snap);
+      // 宠物快照：仅当云端确实带有该字段时才覆盖本地——
+      // 旧版客户端推送的快照没有 pet 字段，若据此覆盖会把本地养成清空。
+      if (snap.pet) setPetSnapshot(normalizePetSnapshot(snap.pet));
     },
     enabled: isAuthenticated,
     sessionKey,
@@ -488,6 +503,23 @@ function App() {
   const currentRecords = useMemo(() => getCurrentLessonRecords(), [getCurrentLessonRecords]);
   const allLessons = useMemo(() => getAllLessons(), [getAllLessons]);
 
+  // 伴学萌宠：本地持久化（独立键，随时可重建，不影响学情数据）
+  useEffect(() => { savePetSnapshot(petSnapshot); }, [petSnapshot]);
+
+  // 伴学萌宠：自动结算——把已登记的作业/课后任务/满分折算成积分事件。
+  // 事件 id 由记录 id 派生，重复执行不会重复加分；仅在开关覆盖的班级生效。
+  useEffect(() => {
+    if (!currentClass) return;
+    if (!isEnabledForClass(petSnapshot, currentClass.id)) return;
+    const prev = petSnapshot.classes[currentClass.id];
+    const next = settleClassPets(currentClass, prev, petSnapshot.settings, new Date().toISOString());
+    const before = prev?.events?.length ?? 0;
+    const changed = next.events.length !== before
+      || Object.keys(next.pets).some(name => next.pets[name].exp !== prev?.pets?.[name]?.exp);
+    if (!changed) return;
+    setPetSnapshot(snapshot => ({ ...snapshot, classes: { ...snapshot.classes, [currentClass.id]: next } }));
+  }, [currentClass, petSnapshot]);
+
   // 未登录显示登录页面
   if (!isAuthenticated) {
     return (
@@ -498,9 +530,23 @@ function App() {
     );
   }
 
+  // 伴学萌宠：所有写操作都在这里落到独立快照，组件本身保持无副作用
+  const petClassId = currentClass?.id ?? '';
+  const handlePetAdopt = (studentName: string, petId: string) =>
+    setPetSnapshot(s => adoptForStudent(s, petClassId, studentName, petId));
+  const handlePetScore = (studentName: string, delta: number, reason: string) =>
+    setPetSnapshot(s => addManualScore(s, petClassId, studentName, delta, reason));
+  const handlePetGraduate = (studentName: string, route: 'pet' | 'building') =>
+    setPetSnapshot(s => graduatePet(s, petClassId, studentName, route));
+  const handlePetAward = (studentName: string, badge: PetBadgeDef) =>
+    setPetSnapshot(s => awardBadge(s, petClassId, studentName, badge));
+  const handlePetUndo = (eventId: string) =>
+    setPetSnapshot(s => undoEvent(s, petClassId, eventId));
+  const handlePetSettings = (patch: Partial<PetSettings>) =>
+    setPetSnapshot(s => updateSettings(s, patch));
+
   // 处理保存当前课次
-  const handleSaveCurrentLesson = () => {
-    if (!currentClass) {
+  const handleSaveCurrentLesson = () => {    if (!currentClass) {
       toast.error('请先选择班级');
       return;
     }
@@ -1007,6 +1053,10 @@ function App() {
             <Trophy className="w-5 h-5" />
             表扬榜
           </TabsTrigger>
+          <TabsTrigger value="pet" className="ios-tab-trigger">
+            <PawPrint className="w-5 h-5" />
+            伴学萌宠
+          </TabsTrigger>
           <TabsTrigger value="report" className="ios-tab-trigger">
             <BarChart3 className="w-5 h-5" />
             学情报告
@@ -1263,6 +1313,28 @@ function App() {
           </TabsContent>
 
           {/* 系统配置已并入「反馈生成 → 生成设置」 */}
+
+          {/* 伴学萌宠 Tab：灰度开关只控制本页，不影响其他标签页 */}
+          <TabsContent value="pet" className="main-tab-panel">
+            <ErrorBoundary label="伴学萌宠">
+              <div className="main-module-shell">
+                {currentClass ? (
+                  <PetGarden
+                    cls={currentClass}
+                    snapshot={petSnapshot}
+                    onAdopt={handlePetAdopt}
+                    onScore={handlePetScore}
+                    onGraduate={handlePetGraduate}
+                    onAward={handlePetAward}
+                    onUndo={handlePetUndo}
+                    onSettings={handlePetSettings}
+                  />
+                ) : (
+                  <p className="py-10 text-center text-sm text-muted-foreground">请先选择一个班级</p>
+                )}
+              </div>
+            </ErrorBoundary>
+          </TabsContent>
 
           {/* 同步中心 Tab */}
           <TabsContent value="cloud" className="main-tab-panel">

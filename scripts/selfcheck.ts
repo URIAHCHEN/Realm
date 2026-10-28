@@ -32,6 +32,16 @@ import { isFullAttendance, isCumulativeFullAttendance, isListeningEligible, rank
 import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
 import { getOverallFeedback, getTrajectoryFeedback } from '@/lib/reportFeedback';
 
+import {
+  levelOf, expProgress, stageOf, autoEventsForRecord, settleClassPets,
+  isMaxLevel,
+} from '@/lib/gamification/rules';
+import {
+  adoptForStudent, addManualScore, undoEvent, graduatePet, isEnabledForClass,
+  normalizePetSnapshot, defaultPetSnapshot,
+} from '@/lib/gamification/store';
+import { PET_BADGES, type PetSettings } from '@/types/pet';
+
 let passed = 0;
 const failures: string[] = [];
 function check(cond: boolean, label: string) {
@@ -1033,6 +1043,55 @@ group('报告话术：稳定、可比、去模板腔');
   check(getTrajectoryFeedback([80, 70, 60]).includes('正确率有所回落'), '按正确率判断回落趋势');
   const sample = `${a}${getTrajectoryFeedback([80, 70, 60])}`;
   check(!/爆发点|性价比|不是运气|大概能多拿/.test(sample), '报告话术不使用营销化或机械套话');
+}
+
+
+group('伴学萌宠：积分推导与养成');
+{
+  const table = [0, 20, 50, 100, 170, 260, 380, 530, 720, 950];
+  check(levelOf(0, table) === 1 && levelOf(19, table) === 1, '0-19 经验保持 1 级');
+  check(levelOf(20, table) === 2 && levelOf(100, table) === 4, '经验达门槛即升级');
+  check(levelOf(99999, table) === 10, '经验溢出时封顶 10 级');
+  const p = expProgress(30, table);
+  check(p.level === 2 && p.current === 10 && p.need === 30 && !p.isMax, '等级内进度按当前档位换算');
+  check(expProgress(1000, table).isMax && expProgress(1000, table).percent === 100, '满级进度显示为 MAX');
+  check(stageOf(1) === 0 && stageOf(3) === 1 && stageOf(6) === 2 && stageOf(9) === 3, '等级映射到四个外形阶段');
+
+  const settings: PetSettings = { enabled: true, classScope: [], rules: { homeworkDone: 5, listeningDone: 5, fullScoreBonus: 10 }, levelTable: table };
+  const cls = {
+    id: 'c1', name: '测试班', students: ['小明'],
+    lessonConfigs: { '1': { questionTypes: [{ id: 'q1', name: '基础', fullScore: 100, order: 0 }], attendanceOptions: [], homeworkOptions: [], listeningOptions: [], feedbackTemplate: '', praiseTemplate: '', homeworkText: '' } },
+    records: [rec({ id: 'r1', studentName: '小明', lessonNumber: 1, homeworkStatus: '已完成', listeningStatus: '已完成', listeningScore: 0, totalScore: 100 })],
+  } as unknown as Parameters<typeof settleClassPets>[0];
+
+  const events = autoEventsForRecord(cls.records[0], cls, settings, '2026-10-28T00:00:00Z');
+  check(events.some(e => e.delta === 5 && e.id.endsWith(':homework')), '作业完成自动 +5');
+  check(events.some(e => e.delta === 5 && e.id.endsWith(':listening')), '课后任务完成自动 +5');
+  check(events.some(e => e.delta === 10 && e.id.endsWith(':full')), '满分额外 +10');
+  check(autoEventsForRecord(rec({ id: 'r2', attendance: '请假', homeworkStatus: '已完成' }), cls, settings, 'x').length === 0, '请假记录不产生积分');
+
+  const settled1 = settleClassPets(cls, undefined, settings, '2026-10-28T00:00:00Z');
+  const settled2 = settleClassPets(cls, settled1, settings, '2026-10-28T00:01:00Z');
+  check(settled2.events.length === settled1.events.length, '重复结算不会重复加分（事件 id 幂等）');
+
+  const adopted = adoptForStudent(defaultPetSnapshot(), 'c1', '小明', 'moss');
+  check(!!adopted.classes.c1.pets['小明'], '领养后生成宠物状态');
+  const withExp = { ...adopted, classes: { c1: { ...adopted.classes.c1, events: [{ id: 'e1', studentName: '小明', delta: 20, reason: '测试', source: 'manual' as const, createdAt: 'x' }] } } };
+  const scored = addManualScore(withExp, 'c1', '小明', 5, '课堂表现');
+  check(scored.classes.c1.events.length === 2 && scored.classes.c1.pets['小明'].exp === 25, '人工加分写入流水并累加经验');
+  const undone = undoEvent(scored, 'c1', scored.classes.c1.events[1].id);
+  check(undone.classes.c1.pets['小明'].exp === 20, '撤回生成反向流水，经验回到原值');
+
+  const maxed = { ...scored, classes: { c1: { ...scored.classes.c1, pets: { 小明: { ...scored.classes.c1.pets['小明'], level: 10, exp: 1000 } } } } };
+  check(isMaxLevel(maxed.classes.c1.pets['小明'], settings), '满级判定与经验表一致');
+  const graduated = graduatePet(maxed, 'c1', '小明', 'pet');
+  check(graduated.classes.c1.pets['小明'].exp === 0 && graduated.classes.c1.pets['小明'].graduated.length === 1, '满级毕业可重领，经验归零并留档');
+
+  check(isEnabledForClass({ ...defaultPetSnapshot(), settings: { ...settings, enabled: false } }, 'c1') === false, '灰度关闭时班级不可用');
+  check(isEnabledForClass({ ...defaultPetSnapshot(), settings: { ...settings, enabled: true, classScope: [] } }, 'c1') === true, '灰度为全量时所有班级可用');
+  check(isEnabledForClass({ ...defaultPetSnapshot(), settings: { ...settings, enabled: true, classScope: ['c9'] } }, 'c1') === false, '灰度限定班级外不可用');
+  check(normalizePetSnapshot('broken').version === 1 && normalizePetSnapshot(null).settings.rules.homeworkDone === 5, '损坏快照回退默认值');
+  check(PET_BADGES.every(b => b.rule.length > 4), '每枚徽章都有可读的判定口径');
 }
 
 console.log('');

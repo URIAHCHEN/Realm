@@ -61,6 +61,13 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const pendingImportHash = useRef(false);
   /** reconcile 互斥：focus 与 visibilitychange 会几乎同时触发，避免并发对账 */
   const reconciling = useRef(false);
+  /**
+   * 互斥期间被丢弃的那次对账必须补跑一次。
+   * 典型场景：登录瞬间 canWrite 仍是初始 false，此次对账被跳过；随后权限变 true，
+   * effect 再触发时上一次还没跑完 → 又被丢弃 → 界面永远停在"只读 / 未列入可写名单"。
+   */
+  const reconcilePending = useRef(false);
+  const reconcileRef = useRef<((cfg: CloudSyncConfig) => Promise<void>) | null>(null);
   /** doPush 单飞：定时推送 + 对账推送 + 手动推送可并发，慢的那次带旧快照后落盘会覆盖新数据 */
   const pushInFlight = useRef(false);
   /**
@@ -179,7 +186,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const reconcile = useCallback(async (cfg: CloudSyncConfig) => {
     // 同一时刻只允许一次对账：focus 与 visibilitychange 几乎同刻触发，
     // 60s 定时也可能撞上；并发对账会基于过期 meta 做决策（重复上传 / 假冲突 / 重复导入）
-    if (reconciling.current) return;
+    if (reconciling.current) { reconcilePending.current = true; return; }
     reconciling.current = true;
     setStatus('connecting');
     try {
@@ -241,8 +248,15 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       setMessage(toSyncMessage(e));
     } finally {
       reconciling.current = false;
+      if (reconcilePending.current) {
+        reconcilePending.current = false;
+        const run = reconcileRef.current;
+        // 让出一拍：等 canWrite / config 的新值落到本次渲染再补跑
+        if (run) setTimeout(() => { void run(cfg); }, 80);
+      }
     }
   }, [doPush, doPull, canWrite]);
+  reconcileRef.current = reconcile;
 
   // 登录后对账：enabled 变 true、切换账号或权限变化时重新对账（此时已携带用户 JWT，可过 RLS）
   useEffect(() => {

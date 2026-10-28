@@ -13,6 +13,8 @@ import type { StudentRecord } from '@/types';
 import {
   DEFAULT_QUARTERLY_TEMPLATE,
   computeQuarterlyStats,
+  humanizeEmptyOral,
+  isOralQuestionTypeName,
   listQuarters,
   quarterlyVariables,
   renderQuarterlyTemplate,
@@ -57,11 +59,14 @@ export function QuarterlyReportPanel({
   records,
   currentClassName,
   getNickname = (name: string) => name,
+  getQuestionTypes,
 }: {
   students: string[];
   records: StudentRecord[];
   currentClassName: string;
   getNickname?: (name: string) => string;
+  /** 按课次取题型定义：用于把「口语得分」这类题型识别为口语来源 */
+  getQuestionTypes?: (lesson: number) => { id: string; name: string }[];
 }) {
   const stored = useMemo(loadStored, []);
   const quarters = useMemo(() => listQuarters(records), [records]);
@@ -75,14 +80,39 @@ export function QuarterlyReportPanel({
   const cardRef = useRef<HTMLDivElement>(null);
 
   const quarter = quarters.find(q => q.key === quarterKey) ?? quarters[0];
+
+  // 口语题型 id 集合：题型配置按课次各存一份，同名题型 id 不同，必须逐课收集。
+  // 真实数据里口语是一道独立题型（名称「口语得分」），不是「课后任务」那个分数栏。
+  const oralTypeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!getQuestionTypes) return ids;
+    const lessons = new Set(records.map(r => r.lessonNumber));
+    lessons.forEach(lesson => {
+      (getQuestionTypes(lesson) || []).forEach(qt => {
+        if (isOralQuestionTypeName(qt.name)) ids.add(qt.id);
+      });
+    });
+    return ids;
+  }, [records, getQuestionTypes]);
+
   const stats = useMemo(() => {
     if (!quarter || !student) return null;
-    return computeQuarterlyStats(records, students, student, quarter, currentClassName, teacher);
-  }, [records, students, student, quarter, currentClassName, teacher]);
+    return computeQuarterlyStats(records, students, student, quarter, currentClassName, teacher, oralTypeIds);
+  }, [records, students, student, quarter, currentClassName, teacher, oralTypeIds]);
+
+  // 本季度没口语分、但别的季度有时，给一条提示，避免被读成"漏统计"。
+  // （真实数据里口语是独立题型，某些季度整班都没登记，属数据事实而非缺陷）
+  const oralHints = useMemo(() => {
+    if (!stats || stats.oralCount > 0 || !quarter) return [] as string[];
+    return quarters
+      .filter(q => q.key !== quarter.key)
+      .filter(q => computeQuarterlyStats(records, students, student, q, currentClassName, teacher, oralTypeIds).oralCount > 0)
+      .map(q => `第 ${q.quarter} 季度`);
+  }, [stats, quarter, quarters, records, students, student, currentClassName, teacher, oralTypeIds]);
 
   const extraMap = useMemo(() => Object.fromEntries(extra.filter(p => p.key.trim()).map(p => [p.key.trim(), p.value])), [extra]);
   const vars = stats ? quarterlyVariables(stats, extraMap) : {};
-  const text = renderQuarterlyTemplate(template, vars);
+  const text = humanizeEmptyOral(renderQuarterlyTemplate(template, vars));
   const lines = text.split('\n').filter(line => line.trim().length > 0);
 
   const persist = useCallback((next: Partial<StoredTemplate>) => {
@@ -231,20 +261,85 @@ export function QuarterlyReportPanel({
       {stats && (
         <div className="qr-stage">
           <div className="qr-card" ref={cardRef}>
-            <div className="qr-top">{teacher} 的季度成绩单</div>
-            <div className="qr-stamp" aria-hidden="true">
-              <span>I</span><i>❤</i><span>ENGLISH</span>
+            <span className="qr-frame" aria-hidden="true" />
+            <span className="qr-corner qr-corner-tl" aria-hidden="true" />
+            <span className="qr-corner qr-corner-tr" aria-hidden="true" />
+            <span className="qr-corner qr-corner-bl" aria-hidden="true" />
+            <span className="qr-corner qr-corner-br" aria-hidden="true" />
+
+            <div className="qr-head">
+              <span className="qr-head-line" />
+              <span className="qr-head-text">Lynn&apos;s Realm · 学情成长记录</span>
+              <span className="qr-head-line" />
             </div>
+
             <div className="qr-title">
-              <span className="qr-rule" />
-              <h2>《季度成绩单》</h2>
-              <span className="qr-rule" />
+              <span className="qr-diamond" aria-hidden="true" />
+              <h2>季度成绩单</h2>
+              <span className="qr-diamond" aria-hidden="true" />
             </div>
-            <div className="qr-body">
-              {lines.map((line, index) => <p key={index}><Line text={line} /></p>)}
+            <p className="qr-title-en">QUARTERLY REPORT</p>
+
+            <div className="qr-hero">
+              <p className="qr-hero-name">{getNickname(student)}</p>
+              <p className="qr-hero-sub">
+                {stats.year} 年 · 第 {quarter?.quarter ?? ''} 季度 · {stats.className}
+              </p>
             </div>
-            <div className="qr-sign">—— by {teacher}</div>
+
+            <div className="qr-metrics">
+              <div className="qr-metric">
+                <span className="qr-metric-label">入门测均分</span>
+                <strong className="qr-metric-value">{stats.entryAvg}</strong>
+                <span className="qr-metric-note">得分率 {stats.entryRate}%</span>
+              </div>
+              <div className="qr-metric">
+                <span className="qr-metric-label">班级排名</span>
+                <strong className="qr-metric-value">
+                  {stats.rank > 0 ? <>第 {stats.rank}<em>名</em></> : '—'}
+                </strong>
+                <span className="qr-metric-note">击败 {stats.beatPct}% 同学</span>
+              </div>
+              <div className="qr-metric">
+                <span className="qr-metric-label">作业完成</span>
+                <strong className="qr-metric-value">{stats.hwDone}<em>个</em></strong>
+                <span className="qr-metric-note">完成率 {stats.hwRate}%</span>
+              </div>
+              <div className="qr-metric">
+                <span className="qr-metric-label">口语均分</span>
+                <strong className="qr-metric-value">
+                  {stats.oralCount > 0 ? stats.oralAvg : '—'}
+                </strong>
+                <span className="qr-metric-note">
+                  {stats.oralCount > 0 ? `击败 ${stats.oralBeat}% 同学` : '本季度未登记'}
+                </span>
+              </div>
+            </div>
+
+            <div className="qr-quote">
+              <span className="qr-quote-label">老师寄语</span>
+              <div className="qr-body">
+                {lines.map((line, index) => <p key={index}><Line text={line} /></p>)}
+              </div>
+            </div>
+
+            <div className="qr-foot">
+              <div className="qr-seal" aria-hidden="true">
+                <span className="qr-seal-top">LYNN</span>
+                <em className="qr-seal-mid">★</em>
+                <span className="qr-seal-bottom">认证</span>
+              </div>
+              <div className="qr-sign-wrap">
+                <p className="qr-sign">—— {teacher}</p>
+                <p className="qr-date">{stats.year} 年 · 第 {quarter?.quarter ?? ''} 季度</p>
+              </div>
+            </div>
           </div>
+          {oralHints.length > 0 && (
+            <p className="qr-hint" data-html2canvas-ignore="true">
+              本季度没有口语记录；该生的口语得分在{oralHints.join('、')}，切换季度即可看到。
+            </p>
+          )}
         </div>
       )}
     </div>

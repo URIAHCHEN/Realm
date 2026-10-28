@@ -39,6 +39,34 @@ export function inQuarter(record: StudentRecord, quarter: QuarterOption): boolea
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/** 口语类题型判定：题型名里带「口语 / 朗读 / 口头 / oral / speaking」即视为口语 */
+export function isOralQuestionTypeName(name: string): boolean {
+  return /口语|朗读|口头|oral|speaking/i.test(String(name || ''));
+}
+
+/**
+ * 一条记录的口语分。
+ *
+ * 实际数据里口语是**独立题型**（名称多为「口语得分」），分数是百分制原始分，
+ * 题型满分段不可靠（实测有把 29 / 93 / 97 填进满分的），因此只取得分、不做折算。
+ * 兼容旧数据：若该记录没有口语题型，但「课后任务」栏直接录了分（listeningScore > 0），
+ * 也认作口语（Lynn 2026-10-28：有分的课后任务就属于口语）。
+ */
+export function oralScoreOf(record: StudentRecord, oralTypeIds?: Set<string>): number | null {
+  const scores = record.scores || {};
+  const hits = Object.entries(scores)
+    .filter(([id]) => (oralTypeIds ? oralTypeIds.has(id) : false))
+    .map(([, value]) => Number(value))
+    .filter(value => Number.isFinite(value) && value > 0);
+  if (hits.length > 0) {
+    // 同一课次若有多道口语题，取该课的平均分，避免题目多的课次被放大权重
+    const avg = hits.reduce((sum, value) => sum + value, 0) / hits.length;
+    return Math.min(100, round1(avg));
+  }
+  const legacy = Number(record.listeningScore);
+  return Number.isFinite(legacy) && legacy > 0 ? Math.min(100, round1(legacy)) : null;
+}
+
 /** 作业/课后任务是否算“完成”：优先按语义色档判断，再兜底关键词 */
 function isDone(text: string): boolean {
   if (!text) return false;
@@ -61,7 +89,12 @@ export interface StudentQuarterAgg {
 }
 
 /** 单生在指定季度的聚合指标 */
-export function aggregateStudent(records: StudentRecord[], studentName: string, quarter: QuarterOption): StudentQuarterAgg {
+export function aggregateStudent(
+  records: StudentRecord[],
+  studentName: string,
+  quarter: QuarterOption,
+  oralTypeIds?: Set<string>,
+): StudentQuarterAgg {
   const own = records.filter(r => r.studentName === studentName && inQuarter(r, quarter));
   const assessed = own.filter(r => isReportAssessed(r));
   const entryAvg = assessed.length ? round1(assessed.reduce((s, r) => s + (Number(r.totalScore) || 0), 0) / assessed.length) : 0;
@@ -70,8 +103,11 @@ export function aggregateStudent(records: StudentRecord[], studentName: string, 
   const hwRows = own.filter(r => String(r.homeworkStatus || '').trim());
   const hwDone = hwRows.filter(r => isDone(String(r.homeworkStatus))).length;
 
-  const oralRows = own.filter(r => Number(r.listeningScore) > 0);
-  const oralAvg = oralRows.length ? round1(oralRows.reduce((s, r) => s + Number(r.listeningScore), 0) / oralRows.length) : 0;
+  // 口语：优先取「口语得分」题型（真实数据都在这里），再兼容课后任务栏直接录的分
+  const oralScores = own
+    .map(r => oralScoreOf(r, oralTypeIds))
+    .filter((value): value is number => value !== null);
+  const oralAvg = oralScores.length ? round1(oralScores.reduce((s, v) => s + v, 0) / oralScores.length) : 0;
 
   return {
     studentName,
@@ -82,7 +118,7 @@ export function aggregateStudent(records: StudentRecord[], studentName: string, 
     hwTotal: hwRows.length,
     hwRate: hwRows.length ? round1((hwDone / hwRows.length) * 100) : 0,
     oralAvg,
-    oralCount: oralRows.length,
+    oralCount: oralScores.length,
   };
 }
 
@@ -108,9 +144,10 @@ export function computeQuarterlyStats(
   quarter: QuarterOption,
   className: string,
   teacher = 'Lynn',
+  oralTypeIds?: Set<string>,
 ): QuarterlyStats {
-  const base = aggregateStudent(records, studentName, quarter);
-  const peers = students.map(name => aggregateStudent(records, name, quarter)).filter(p => p.assessed > 0);
+  const base = aggregateStudent(records, studentName, quarter, oralTypeIds);
+  const peers = students.map(name => aggregateStudent(records, name, quarter, oralTypeIds)).filter(p => p.assessed > 0);
   const higher = peers.filter(p => p.entryRate > base.entryRate).length;
   const lower = peers.filter(p => p.entryRate < base.entryRate).length;
   const oralPeers = peers.filter(p => p.oralCount > 0);
@@ -153,12 +190,28 @@ export function quarterlyVariables(stats: QuarterlyStats, extra: Record<string, 
     beatPct: String(stats.beatPct),
     hwDone: String(stats.hwDone),
     hwRate: String(stats.hwRate),
-    oralAvg: String(stats.oralAvg),
-    oralBeat: String(stats.oralBeat),
+    // 本季度没有口语记录时不要输出 "0 分"——那会被读成"口语考了 0 分"，
+    // 实际含义是"这季度没登记口语"。用破折号，配合页面上的说明一起看。
+    oralAvg: stats.oralCount > 0 ? String(stats.oralAvg) : '—',
+    oralBeat: stats.oralCount > 0 ? String(stats.oralBeat) : '—',
     lessons: String(stats.lessons),
     className: stats.className,
     ...extra,
   };
+}
+
+/**
+ * 本季度没有口语成绩时，模板句会渲染成「口语平均得分为—分，打败了班级—%的同学」，
+ * 读起来像个残缺的句子。这里把含口语且含破折号的那一行换成一句人话，
+ * 其余行原样保留（模板可能把口语与其他内容写在同一行，那种情况不动它）。
+ */
+export function humanizeEmptyOral(text: string): string {
+  if (!text.includes('—')) return text;
+  return text.split('\n').map(line => (
+    line.includes('口语') && line.includes('—')
+      ? '口语这一块，本季度还没有登记成绩，等下季度录入了我再补上。'
+      : line
+  )).join('\n');
 }
 
 /** 极简占位符替换：未知占位符原样保留，避免模板里写错就整段消失 */

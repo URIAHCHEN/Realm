@@ -4330,78 +4330,293 @@ html[data-exporting] .praise-root .fengyun-poster {
 html[data-exporting] .report-panel,
 html[data-exporting] .report-container.report-personal,
 html[data-exporting] .class-report-shell { box-shadow: none; }
-/* ==================== 季度成绩单（2026-10-28） ====================
-   参考家长熟悉的纸质成绩单：细线、居中、一个红色印章式点缀；
-   颜色跟随站点 brand，不引入新的主色。 */
+/* ==================== 季度成绩单（2026-10-28 重制） ====================
+   气质：结业证书 / 纸质成绩单 —— 米白纸底、双层描边、烫金细饰、朱红圆印。
+   全部用 background / border / box-shadow / transform 实现，
+   不使用 filter / mix-blend-mode / 文字渐变，保证 html2canvas 导出与屏幕一致。 */
 .qr-stage {
-  padding: 26px 16px 40px;
-  border-radius: 18px;
+  padding: 30px 16px 44px;
+  border-radius: 20px;
   background:
-    radial-gradient(1200px 200px at 50% 0%, rgba(29, 78, 209, 0.05), transparent 70%),
-    linear-gradient(180deg, #f7f8fa 0%, #eef1f5 100%);
+    radial-gradient(900px 260px at 50% -10%, rgba(176, 141, 79, 0.12), transparent 70%),
+    linear-gradient(180deg, #f6f7f9 0%, #ebeff4 100%);
 }
 .qr-card {
   position: relative;
   width: min(880px, 100%);
   margin: 0 auto;
-  padding: 46px 56px 38px;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 24px 60px -30px rgba(15, 23, 42, 0.38);
+  padding: 50px 58px 40px;
+  border-radius: 4px;
+  background: radial-gradient(120% 90% at 50% 0%, #fffefb 0%, #fffdf8 55%, #fdf9f1 100%);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 30px 70px -34px rgba(15, 23, 42, 0.42);
+  overflow: hidden;
 }
+/* 顶部烫金细带 */
 .qr-card::before {
   content: '';
   position: absolute;
-  inset: 13px;
-  border: 1px solid rgba(15, 23, 42, 0.055);
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #c9a961, #ecd9a8 46%, #c9a961);
+}
+/* 双层描边：外层金线 + 内层墨线 */
+.qr-frame {
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgba(176, 141, 79, 0.4);
+  border-radius: 2px;
   pointer-events: none;
 }
-.qr-top {
-  margin-bottom: 26px;
-  color: #9aa5b4;
-  font-size: 11px;
-  font-style: italic;
-  letter-spacing: 0.28em;
-  text-align: center;
-}
-.qr-stamp {
+.qr-frame::before {
+  content: '';
   position: absolute;
-  top: 36px;
-  right: 44px;
-  color: #1f2937;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 700;
-  line-height: 1;
-  text-align: center;
-  transform: rotate(-4deg);
+  inset: 5px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
 }
-.qr-stamp span:first-child { font-size: 26px; }
-.qr-stamp i { margin: 0 4px; color: #d9534f; font-size: 20px; font-style: normal; }
-.qr-stamp span:last-child { font-size: 16px; letter-spacing: 0.06em; }
-.qr-title { display: flex; align-items: center; justify-content: center; gap: 18px; }
-.qr-title h2 {
-  color: #111827;
-  font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
-  font-size: 34px;
-  letter-spacing: 0.06em;
+
+/* 四角金线角标：证书感的来源之一。
+   每条边单独给宽度（上 右 下 左），不要用 border 简写后再把某几边置 0 ——
+   那样一旦别处写了 border-width 简写，就会把「只画两边」覆盖成整圈方框。 */
+.qr-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-style: solid;
+  border-color: #c9a961;
+  pointer-events: none;
+  opacity: 0.85;
+  z-index: 2;
+}
+.qr-corner-tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+.qr-corner-tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+.qr-corner-bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+.qr-corner-br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+.qr-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 2px 0 26px;
+}
+.qr-head-line {
+  height: 1px;
+  width: 86px;
+  background: linear-gradient(90deg, transparent, rgba(176, 141, 79, 0.6));
+}
+.qr-head-line:last-child {
+  background: linear-gradient(90deg, rgba(176, 141, 79, 0.6), transparent);
+}
+.qr-head-text {
+  color: #a08a63;
+  font-size: 11px;
+  letter-spacing: 0.3em;
   white-space: nowrap;
 }
-.qr-rule { flex: 1; max-width: 150px; height: 1px; background: #1f2937; opacity: 0.72; }
-.qr-body { max-width: 720px; margin: 28px auto 0; }
-.qr-body p { margin: 2px 0; color: #374151; font-size: 15.5px; line-height: 2.15; text-align: center; }
-.qr-token { padding: 0 2px; color: #1d4ed1; font-weight: 700; font-size: 17px; }
-.qr-sign {
-  margin-top: 26px;
-  color: #111827;
-  font-family: 'Segoe Script', 'Snell Roundhand', 'Bradley Hand', cursive;
-  font-size: 20px;
-  text-align: right;
+
+.qr-title { display: flex; align-items: center; justify-content: center; gap: 20px; }
+.qr-title h2 {
+  margin: 0;
+  color: #17202e;
+  font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
 }
-@media (max-width: 640px) {
-  .qr-stage { padding: 14px 8px 24px; }
-  .qr-card { padding: 32px 22px 26px; }
-  .qr-title h2 { font-size: 24px; }
-  .qr-stamp { top: 22px; right: 18px; transform: scale(0.8) rotate(-4deg); transform-origin: top right; }
-  .qr-body p { font-size: 13.5px; line-height: 1.95; }
+.qr-diamond {
+  width: 8px; height: 8px;
+  background: #c9a961;
+  transform: rotate(45deg);
+  opacity: 0.9;
+}
+.qr-title-en {
+  margin: 11px 0 0;
+  color: #bcae93;
+  font-size: 10px;
+  letter-spacing: 0.42em;
+  text-align: center;
+}
+
+.qr-hero { margin: 24px 0 22px; text-align: center; }
+.qr-hero-name {
+  margin: 0;
+  color: #111827;
+  font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+}
+.qr-hero-sub {
+  margin: 10px 0 0;
+  color: #7c8798;
+  font-size: 12.5px;
+  letter-spacing: 0.12em;
+}
+
+.qr-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 4px 0 22px;
+}
+.qr-metric {
+  position: relative;
+  padding: 17px 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(176, 141, 79, 0.24);
+  background: linear-gradient(180deg, #ffffff 0%, #fbf6ec 100%);
+  text-align: center;
+}
+.qr-metric::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  width: 30px; height: 2px;
+  transform: translateX(-50%);
+  background: #c9a961;
+  border-radius: 0 0 2px 2px;
+}
+.qr-metric-label {
+  display: block;
+  color: #9a8a6c;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+}
+.qr-metric-value {
+  display: block;
+  margin: 7px 0 5px;
+  color: #17202e;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.qr-metric-value em {
+  margin-left: 5px;
+  color: #6b7280;
+  font-family: var(--font-body, system-ui);
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 500;
+}
+.qr-metric-note { display: block; color: #7c8799; font-size: 11px; }
+
+.qr-quote { position: relative; max-width: 720px; margin: 6px auto 0; }
+.qr-quote-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: #a08a63;
+  font-size: 10.5px;
+  letter-spacing: 0.3em;
+}
+.qr-quote-label::before,
+.qr-quote-label::after {
+  content: '';
+  width: 46px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(176, 141, 79, 0.5));
+}
+.qr-quote-label::after {
+  background: linear-gradient(90deg, rgba(176, 141, 79, 0.5), transparent);
+}
+.qr-body p {
+  margin: 2px 0;
+  color: #3b4453;
+  font-size: 15.5px;
+  line-height: 1.82;
+  text-align: center;
+}
+.qr-token {
+  padding: 0 3px;
+  color: #8a6520;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.qr-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(176, 141, 79, 0.32);
+}
+.qr-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 86px; height: 86px;
+  flex: none;
+  border: 2px solid rgba(192, 57, 43, 0.72);
+  border-radius: 50%;
+  color: rgba(192, 57, 43, 0.86);
+  font-family: Georgia, 'Times New Roman', serif;
+  transform: rotate(-9deg);
+}
+.qr-seal-top { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; }
+.qr-seal-mid { margin: 1px 0; font-size: 13px; font-style: normal; line-height: 1; }
+.qr-seal-bottom { font-size: 11px; letter-spacing: 0.2em; }
+.qr-sign-wrap { text-align: right; }
+.qr-sign {
+  margin: 0;
+  color: #1f2937;
+  font-family: 'Segoe Script', 'Snell Roundhand', 'Bradley Hand', cursive;
+  font-size: 22px;
+}
+.qr-date {
+  margin: 7px 0 0;
+  color: #9aa5b4;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 720px) {
+  .qr-stage { padding: 14px 8px 26px; }
+  .qr-card { padding: 34px 20px 26px; }
+  .qr-frame { inset: 9px; }
+  .qr-head { gap: 8px; margin-bottom: 18px; }
+  .qr-head-line { width: 40px; }
+  .qr-head-text { font-size: 9px; letter-spacing: 0.18em; }
+  .qr-title { gap: 12px; }
+  .qr-title h2 { font-size: 23px; letter-spacing: 0.08em; }
+  .qr-title-en { font-size: 9px; letter-spacing: 0.3em; }
+  .qr-hero { margin: 18px 0 16px; }
+  .qr-hero-name { font-size: 27px; letter-spacing: 0.12em; }
+  .qr-hero-sub { font-size: 11px; letter-spacing: 0.06em; }
+  .qr-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 20px; }
+  .qr-metric { padding: 13px 8px 11px; }
+  .qr-metric-value { font-size: 23px; margin: 5px 0 3px; }
+  .qr-metric-note { font-size: 9.5px; }
+  .qr-body p { font-size: 13.5px; line-height: 1.85; }
   .qr-token { font-size: 15px; }
+  .qr-foot { margin-top: 20px; padding-top: 14px; }
+  .qr-corner { width: 12px; height: 12px; }
+  .qr-corner-tl { top: 6px; left: 6px; border-width: 1.5px 0 0 1.5px; }
+  .qr-corner-tr { top: 6px; right: 6px; border-width: 1.5px 1.5px 0 0; }
+  .qr-corner-bl { bottom: 6px; left: 6px; border-width: 0 0 1.5px 1.5px; }
+  .qr-corner-br { bottom: 6px; right: 6px; border-width: 0 1.5px 1.5px 0; }
+  .qr-seal { width: 66px; height: 66px; }
+  .qr-quote-label::before,
+  .qr-quote-label::after { width: 28px; }
+  .qr-seal-top { font-size: 11px; }
+  .qr-seal-bottom { font-size: 9.5px; }
+  .qr-sign { font-size: 18px; }
+}
+
+/* 成绩单下方提示（不进导出图）：口语季度错位时给老师一个出口 */
+.qr-hint {
+  max-width: 880px;
+  margin: 12px auto 0;
+  color: #8b7a5c;
+  font-size: 12px;
+  text-align: center;
 }

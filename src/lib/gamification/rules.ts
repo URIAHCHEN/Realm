@@ -61,12 +61,30 @@ export function expProgress(exp: number, table: number[]): ExpProgress {
   return { level, isMax, current, need, percent: Math.min(100, Math.round((current / need) * 100)) };
 }
 
-/** 等级 → 外形阶段：1-2 幼体 / 3-5 成长 / 6-8 少年 / 9-10 守护 */
+/** 等级 → 外形阶段：1-2 幼体 / 3-4 成长 / 5-6 少年 / 7-8 守护（对齐原站 8 级） */
 export function stageOf(level: number): PetStage {
-  if (level >= 9) return 3;
-  if (level >= 6) return 2;
+  if (level >= 7) return 3;
+  if (level >= 5) return 2;
   if (level >= 3) return 1;
   return 0;
+}
+
+export type PetStatus = 'normal' | 'hungry' | 'sick' | 'egg';
+
+/**
+ * 宠物状态（对齐原站「宠物状态」配置）：
+ * - Lv.1 且经验 ≤ -10 → 变回蛋
+ * - Lv.1 且经验 < 0 → 生病
+ * - 超过 48 小时没有任何积分事件 → 饥饿
+ */
+export function petStatusOf(state: PetState, lastEventISO?: string, nowMs = Date.now()): PetStatus {
+  if (state.level <= 1 && state.exp <= -10) return 'egg';
+  if (state.level <= 1 && state.exp < 0) return 'sick';
+  if (lastEventISO) {
+    const last = Date.parse(lastEventISO);
+    if (Number.isFinite(last) && nowMs - last > 48 * 3600 * 1000) return 'hungry';
+  }
+  return 'normal';
 }
 
 export function petDefOf(petId: string) {

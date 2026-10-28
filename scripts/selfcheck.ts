@@ -9,7 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
-import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, listQuarters, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
+import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { planTeacherElfColumns, buildTeacherElfTable } from '@/lib/teacherElfExport';
@@ -41,6 +41,10 @@ import {
   normalizePetSnapshot, defaultPetSnapshot,
 } from '@/lib/gamification/store';
 import { PET_BADGES, type PetSettings } from '@/types/pet';
+import { makeGroups, groupScore, settleBattle, createBattle, activeBattleOf, buildProgress } from '@/lib/gamification/groups';
+import { saveGroups, startBattle, revealBattle, addScoresBatch, badgeBalance, buySkin, equipSkin, interactWithPet } from '@/lib/gamification/store';
+import { petStatusOf } from '@/lib/gamification/rules';
+import { DEFAULT_PET_SETTINGS, BUILD_STAGES } from '@/types/pet';
 
 let passed = 0;
 const failures: string[] = [];
@@ -995,6 +999,51 @@ group('季度成绩单：排名 / 击败比例 / 作业 / 口语口径');
   check(renderQuarterlyTemplate('{unknown}', {}) === '{unknown}', '未知占位符原样保留，避免模板写错整段消失');
 }
 
+group('季度口语口径 · 取自「口语得分」题型（2026-10-28 线上纠错）');
+{
+  // 真实数据形态：口语是独立题型，满分字段不可靠（有的填 29、有的填 93），
+  // 而「课后任务」那栏的 listeningScore 全是 0 —— 早期取的就是它，导致口语恒为 0 分。
+  check(isOralQuestionTypeName('口语得分') && isOralQuestionTypeName('朗读'), '题型名含口语/朗读即识别为口语');
+  check(!isOralQuestionTypeName('语法选择') && !isOralQuestionTypeName('词汇默写'), '普通题型不会被误判成口语');
+
+  const oralIds = new Set(['oral-1', 'oral-2']);
+  check(oralScoreOf({ scores: { 'oral-1': 90 }, listeningScore: 0 } as unknown as StudentRecord) === null,
+    '未传口语题型集合时不臆测题型分');
+  check(oralScoreOf({ scores: { 'oral-1': 90 }, listeningScore: 0 } as unknown as StudentRecord, oralIds) === 90,
+    '有口语题型分时取题型得分');
+  check(oralScoreOf({ scores: { 'oral-1': 100, 'oral-2': 80 }, listeningScore: 0 } as unknown as StudentRecord, oralIds) === 90,
+    '同一课多道口语题取该课平均，避免题目多的课次被放大权重');
+  check(oralScoreOf({ scores: { 'oral-1': 130 }, listeningScore: 0 } as unknown as StudentRecord, oralIds) === 100,
+    '异常分（>100）截断到 100');
+  check(oralScoreOf({ scores: { q1: 8 }, listeningScore: 88 } as unknown as StudentRecord, oralIds) === 88,
+    '没有口语题型时回退到课后任务栏直接录的分');
+
+  const mkOral = (studentName: string, lessonNumber: number, date: string, totalScore: number, oral: number) => ({
+    id: `${studentName}-${lessonNumber}`, studentName, lessonNumber,
+    seasons: ['秋'], attendance: '准时👍', homeworkStatus: '完成✅', listeningStatus: '很棒哦👏',
+    listeningScore: 0, scores: { [`oral-${lessonNumber}`]: oral }, customValues: {},
+    totalScore, correctRate: totalScore, rank: 0, date,
+  } as unknown as StudentRecord);
+  const oralRecords = [
+    mkOral('甲', 1, '2026-10-05', 80, 98),
+    mkOral('甲', 2, '2026-11-02', 90, 82),
+    mkOral('乙', 1, '2026-10-05', 70, 60),
+    mkOral('乙', 2, '2026-11-02', 80, 70),
+  ];
+  const q = listQuarters(oralRecords)[0];
+  const s = computeQuarterlyStats(oralRecords, ['甲', '乙'], '甲', q, '测试班', 'Lynn', oralIds);
+  check(s.oralAvg === 90 && s.oralCount === 2, '口语均分来自口语题型（98 与 82 → 90），不再恒为 0');
+  check(s.oralBeat === 50, '口语击败比例在有口语分的同学中比较（2 人中高于 1 人 → 50%）');
+
+  // 本季度无口语成绩：不能输出「—分」，要换成一句通顺的话
+  const noOral = computeQuarterlyStats(oralRecords, ['甲', '乙'], '甲', q, '测试班', 'Lynn', new Set(['其他题型']));
+  const broken = renderQuarterlyTemplate(DEFAULT_QUARTERLY_TEMPLATE, quarterlyVariables(noOral, { trait: '努力' }));
+  check(broken.includes('口语平均得分为【—】分'), '缺口语数据时变量先落成破折号（可被后处理识别）');
+  const fixed = humanizeEmptyOral(broken);
+  check(!fixed.includes('—分') && fixed.includes('本季度还没有登记成绩'), '破折号句式被替换成通顺说明');
+  check(humanizeEmptyOral('没有口语数据的一行') === '没有口语数据的一行', '含口语但没有破折号的行不被改写');
+}
+
 group('题型归并 · 同名跨课次溯源');
 {
   const cfgOf = (lessonNumber: number, questionTypes: QuestionType[]): LessonConfig => ({
@@ -1092,6 +1141,112 @@ group('伴学萌宠：积分推导与养成');
   check(isEnabledForClass({ ...defaultPetSnapshot(), settings: { ...settings, enabled: true, classScope: ['c9'] } }, 'c1') === false, '灰度限定班级外不可用');
   check(normalizePetSnapshot('broken').version === 1 && normalizePetSnapshot(null).settings.rules.homeworkDone === 5, '损坏快照回退默认值');
   check(PET_BADGES.every(b => b.rule.length > 4), '每枚徽章都有可读的判定口径');
+}
+
+
+group('小组 PK：分组、区间计分与结算');
+{
+  const students = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛'];
+  const groups = makeGroups(students, 3, 'auto');
+  check(groups.length === 3 && groups.map(g => g.members.length).join('/') === '3/3/2', '均分分组按人数尽量平均');
+  check(groups.flatMap(g => g.members).sort().join('') === [...students].sort().join(''), '分组不丢人也不重复');
+  const random = makeGroups(students, 2, 'random', () => 0.3);
+  check(random.flatMap(g => g.members).length === 8, '随机分组同样覆盖全部学生');
+
+  const a = { id: 'A', name: 'A 组', members: ['甲', '乙'] };
+  const b = { id: 'B', name: 'B 组', members: ['丙', '丁'] };
+  const events = [
+    { id: '1', studentName: '甲', lessonNumber: 1, delta: 5, reason: '', source: 'auto' as const, createdAt: 'x' },
+    { id: '2', studentName: '乙', lessonNumber: 2, delta: 10, reason: '', source: 'auto' as const, createdAt: 'x' },
+    { id: '3', studentName: '丙', lessonNumber: 1, delta: 12, reason: '', source: 'manual' as const, createdAt: 'x' },
+    { id: '4', studentName: '甲', lessonNumber: 5, delta: 99, reason: '', source: 'auto' as const, createdAt: 'x' },
+  ];
+  check(groupScore(events, a, 1, 2) === 15, '小组得分只累计区间内成员积分');
+  check(groupScore(events, a, 1, 5) === 114, '放宽区间后把后续课次计入');
+
+  const battle = createBattle('A', 'B', 1, 1);
+  const settled = settleBattle(battle, events, [a, b]);
+  check(settled.result?.aScore === 5 && settled.result?.bScore === 12 && settled.result?.winnerId === 'B', '按区间比分判定胜负');
+  const draw = settleBattle(createBattle('A', 'B', 1, 1), [{ ...events[0], delta: 12 }, events[2]], [a, b]);
+  check(draw.result?.winnerId === null, '同分判平局');
+  check(activeBattleOf([battle], 'A')?.id === battle.id && activeBattleOf([battle], 'B')?.id === battle.id, '对战中双方都锁定');
+
+  let snap = { ...defaultPetSnapshot(), settings: { ...defaultPetSnapshot().settings, enabled: true, classScope: [] } };
+  snap = adoptForStudent(snap, 'c1', '甲', 'moss');
+  snap = adoptForStudent(snap, 'c1', '丙', 'ink');
+  snap = saveGroups(snap, 'c1', [a, b]);
+  snap = startBattle(snap, 'c1', 'A', 'B', 1, 1);
+  const battleId = (snap.classes.c1.battles ?? [])[0].id;
+  snap = addManualScore(snap, 'c1', '甲', 5, '课堂表现', 'x', 1);
+  snap = addManualScore(snap, 'c1', '丙', 12, '课堂表现', 'x', 1);
+  snap = revealBattle(snap, 'c1', battleId);
+  const revealed = (snap.classes.c1.battles ?? [])[0];
+  check(revealed.status === 'settled' && revealed.result?.aScore === 5 && revealed.result?.bScore === 12, '揭晓后写入区间比分');
+}
+
+
+group('伴学萌宠：对齐原站的等级与状态');
+{
+  const table = DEFAULT_PET_SETTINGS.levelTable;
+  check(table.length === 8, '满级为 8 级（原站成长设置）');
+  check(table[1] - table[0] === 10 && table[2] - table[1] === 15 && table[7] - table[6] === 40, '逐级门槛为 10/15/20/25/30/35/40');
+  check(levelOf(9, table) === 1 && levelOf(10, table) === 2 && levelOf(175, table) === 8, '经验达门槛即升级、满级封顶');
+
+  const base = { petId: 'moss', level: 1, exp: -10, adoptedAt: 'x', badges: [], route: 'pet' as const, graduated: [] };
+  check(petStatusOf(base, undefined) === 'egg', 'Lv.1 且经验 ≤ -10 变回蛋');
+  check(petStatusOf({ ...base, exp: -1 }, undefined) === 'sick', 'Lv.1 且经验 < 0 生病');
+  check(petStatusOf({ ...base, level: 2, exp: -1 }, undefined) === 'normal', '等级 > 1 不触发生病');
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  check(petStatusOf({ ...base, exp: 5 }, '2026-10-26T11:00:00Z', now) === 'hungry', '超过 48 小时无积分进入饥饿');
+  check(petStatusOf({ ...base, exp: 5 }, '2026-10-27T13:00:00Z', now) === 'normal', '48 小时内不饥饿');
+
+  check(BUILD_STAGES.length === 7, '班级共建共 7 站');
+  check(buildProgress([]).stageIndex === 0 && buildProgress([]).stageName === '建造潜水艇', '0 分停在第 1 站');
+  const mid = buildProgress([{ id: 'a', studentName: '甲', delta: 250, reason: '', source: 'manual', createdAt: 'x' }]);
+  check(mid.stageIndex === 2 && mid.stageName === '海底森林' && mid.stageScore === 50, '净积分决定站数与站内进度');
+  const neg = buildProgress([{ id: 'b', studentName: '甲', delta: -84, reason: '', source: 'manual', createdAt: 'x' }]);
+  check(neg.total === -84 && neg.stageScore === 0, '负分时进度不倒退到负数');
+
+  let snap = { ...defaultPetSnapshot(), settings: { ...defaultPetSnapshot().settings, enabled: true, classScope: [] } };
+  snap = adoptForStudent(snap, 'c1', '甲', 'moss');
+  snap = adoptForStudent(snap, 'c1', '乙', 'ink');
+  const before = snap;
+  snap = addScoresBatch(snap, 'c1', ['甲', '乙'], 3, '主动帮助他人', 'x', 1);
+  const batchIds = new Set(snap.classes.c1.events.map(e => e.batchId).filter(Boolean));
+  check(snap.classes.c1.events.length === before.classes.c1.events.length + 2 && batchIds.size === 1, '批量评价一次提交、同一批次号');
+  check(snap.classes.c1.pets['甲'].exp === 3 && snap.classes.c1.pets['乙'].exp === 3, '批量评价同时落到每位学生');
+}
+
+
+group('小卖部：徽章货币与搞怪皮肤');
+{
+  let snap = { ...defaultPetSnapshot(), settings: { ...defaultPetSnapshot().settings, enabled: true, classScope: [] } };
+  snap = adoptForStudent(snap, 'c1', '甲', 'moss');
+  check(badgeBalance(snap.classes.c1.pets['甲']) === 0, 'Lv.1 时没有可花徽章');
+
+  const rich = addScoresBatch(snap, 'c1', ['甲'], 60, '基础分', 'x', 1);
+  check(badgeBalance(rich.classes.c1.pets['甲']) === 15, '每升 1 级发 5 枚徽章（4 级=15 枚）');
+
+  const poor = buySkin(snap, 'c1', '甲', 'noodle');
+  check(poor === snap, '徽章不足时购买不生效');
+
+  const bought = buySkin(rich, 'c1', '甲', 'noodle');
+  const petAfterBuy = bought.classes.c1.pets['甲'];
+  check((petAfterBuy.ownedSkins ?? []).includes('noodle') && petAfterBuy.skin === 'noodle', '购买后自动装备');
+  check(badgeBalance(petAfterBuy) === 12, '购买按标价扣除徽章（15-3）');
+
+  const off = equipSkin(bought, 'c1', '甲', 'noodle');
+  check(off.classes.c1.pets['甲'].skin === undefined, '已装备的皮肤可以卸下');
+  const on = equipSkin(off, 'c1', '甲', 'noodle');
+  check(on.classes.c1.pets['甲'].skin === 'noodle', '再次点击重新装备');
+
+  const interacted = interactWithPet(on, 'c1', '甲', 'feed', 'x', 1);
+  check(interacted.classes.c1.pets['甲'].exp === 62, '投喂花 1 徽章换 2 点经验');
+  check(badgeBalance(interacted.classes.c1.pets['甲']) === 11, '互动同样扣徽章');
+  check(interacted.classes.c1.events.some(e => e.reason.includes('亲密互动')), '互动写入积分流水，可撤回');
+
+  const normalized = normalizePetSnapshot(JSON.parse(JSON.stringify(interacted)));
+  check(normalized.classes.c1.pets['甲'].skin === 'noodle' && normalized.classes.c1.pets['甲'].badgesSpent === 4, '皮肤与花费随快照持久化');
 }
 
 console.log('');

@@ -8,9 +8,14 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
-import { PET_BADGES, PET_CATALOG, type PetBadgeDef, type PetSettings, type PetSnapshot } from '@/types/pet';
-import { expProgress, isMaxLevel, petDefOf, stageOf } from '@/lib/gamification/rules';
-import { isEnabledForClass } from '@/lib/gamification/store';
+import {
+  PET_BADGES, PET_CATALOG, PET_SKINS, PET_INTERACTIONS, SCORE_PRESETS, BUILD_STAGES,
+  type PetBadgeDef, type PetSettings, type PetSnapshot, type ScorePreset,
+} from '@/types/pet';
+import { activeBattleOf, buildProgress, groupContributors, groupScore } from '@/lib/gamification/groups';
+import { expProgress, isMaxLevel, petDefOf, petStatusOf, stageOf } from '@/lib/gamification/rules';
+import { badgeBalance, isEnabledForClass } from '@/lib/gamification/store';
+import { petStageImage, skinImage } from '@/lib/gamification/petAssets';
 import type { Class } from '@/types';
 
 interface PetGardenProps {
@@ -22,6 +27,15 @@ interface PetGardenProps {
   onAward: (studentName: string, badge: PetBadgeDef) => void;
   onUndo: (eventId: string) => void;
   onSettings: (patch: Partial<PetSettings>) => void;
+  /** 当前课次：用于小组 PK 的默认区间 */
+  lessonNumber: number;
+  onResetGroups: (count: number, mode: 'auto' | 'random') => void;
+  onStartBattle: (groupAId: string, groupBId: string, fromLesson: number, toLesson: number) => void;
+  onRevealBattle: (battleId: string) => void;
+  onBatchScore: (studentNames: string[], delta: number, reason: string) => void;
+  onBuySkin: (studentName: string, skinId: string) => void;
+  onEquipSkin: (studentName: string, skinId: string) => void;
+  onInteract: (studentName: string, kind: 'feed' | 'bath' | 'pat') => void;
 }
 
 const QUICK_SCORES = [
@@ -31,10 +45,26 @@ const QUICK_SCORES = [
 ];
 
 /** 极简纸艺风格头像：纯 CSS 绘制，不依赖图片资源 */
-function PetAvatar({ petId, level, size = 64 }: { petId: string; level: number; size?: number }) {
+function PetAvatar({ petId, level, size = 64, skin }: { petId: string; level: number; size?: number; skin?: string }) {
   const def = petDefOf(petId);
   const stage = stageOf(level);
   const ear = 8 + stage * 4;
+  const hasBodySkin = skin === 'dino';
+  const baseImage = petStageImage(petId, stage);
+  const overlayImage = skin ? skinImage(skin) : undefined;
+
+  // 有图时走「底图 + 配饰层」；缺图回退到下面的 CSS 绘制
+  if (baseImage) {
+    return (
+      <div className="relative shrink-0" style={{ width: size, height: size }} aria-hidden>
+        <img src={baseImage} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+        {overlayImage && (
+          <img src={overlayImage} alt="" className="absolute inset-0 h-full w-full object-contain" loading="lazy" decoding="async" />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative shrink-0 rounded-full"
@@ -64,6 +94,77 @@ function PetAvatar({ petId, level, size = 64 }: { petId: string; level: number; 
           className="absolute left-1/2 -translate-x-1/2 rounded-full"
           style={{ width: size * 0.6, height: 3, top: size * 0.82, background: `hsl(${def.hue} / 0.4)` }}
         />
+      )}
+
+      {/* 搞怪皮肤：全部用 CSS 叠层绘制 */}
+      {skin === 'noodle' && (
+        <div className="absolute inset-x-0" style={{ top: -size * 0.04, height: size * 0.34 }}>
+          {[0.2, 0.4, 0.6, 0.8].map((x, index) => (
+            <span
+              key={x}
+              className="absolute rounded-full border border-amber-700/40 bg-amber-200"
+              style={{ width: size * 0.26, height: size * 0.26, left: size * x - size * 0.13, top: size * (index % 2 ? 0.02 : 0.08) }}
+            />
+          ))}
+        </div>
+      )}
+      {skin === 'melon' && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-t-full border border-green-800/50"
+          style={{ width: size * 0.86, height: size * 0.42, top: size * 0.04, background: 'hsl(140 55% 45%)' }}
+        >
+          <span className="absolute inset-x-2 top-1/3 h-[2px] bg-green-900/30" />
+        </div>
+      )}
+      {skin === 'helmet' && (
+        <div
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-sky-300/80 bg-sky-100/20"
+          style={{ width: size * 0.94, height: size * 0.94 }}
+        >
+          <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80" />
+        </div>
+      )}
+      {skin === 'doge' && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-md border border-amber-800/40"
+          style={{ width: size * 0.52, height: size * 0.34, top: size * 0.36, background: 'hsl(38 70% 78%)' }}
+        >
+          <span className="absolute left-[22%] top-[30%] h-1 w-1 rounded-full bg-stone-800" />
+          <span className="absolute right-[22%] top-[30%] h-1 w-1 rounded-full bg-stone-800" />
+          <span className="absolute left-1/2 top-[62%] h-[2px] w-[10px] -translate-x-1/2 rounded bg-stone-700" />
+        </div>
+      )}
+      {skin === 'shades' && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-sm bg-stone-900"
+          style={{ width: size * 0.62, height: size * 0.18, top: size * 0.44 }}
+        >
+          <span className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-stone-600" />
+        </div>
+      )}
+      {skin === 'fish' && (
+        <div
+          className="absolute rounded-full border border-sky-800/40 bg-sky-200"
+          style={{ width: size * 0.7, height: size * 0.24, left: -size * 0.16, top: size * 0.56, transform: 'rotate(-18deg)' }}
+        >
+          <span className="absolute -right-2 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-l-[8px] border-y-transparent border-l-sky-300" />
+        </div>
+      )}
+      {skin === 'drumstick' && (
+        <div
+          className="absolute rounded-full border border-amber-900/40 bg-amber-300"
+          style={{ width: size * 0.34, height: size * 0.26, right: -size * 0.04, top: size * 0.5, transform: 'rotate(24deg)' }}
+        >
+          <span className="absolute -left-2 top-1/2 h-2 w-3 -translate-y-1/2 rounded-full bg-stone-100" />
+        </div>
+      )}
+      {hasBodySkin && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-b-xl rounded-t-md border border-green-900/40"
+          style={{ width: size * 0.72, height: size * 0.5, bottom: 0, background: 'hsl(140 45% 55%)' }}
+        >
+          <span className="absolute -top-2 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-green-700" />
+        </div>
       )}
     </div>
   );
@@ -101,9 +202,22 @@ function ExpBar({ percent, isMax }: { percent: number; isMax: boolean }) {
   );
 }
 
-export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward, onUndo, onSettings }: PetGardenProps) {
+export function PetGarden({
+  cls, snapshot, onAdopt, onScore, onGraduate, onAward, onUndo, onSettings,
+  lessonNumber, onResetGroups, onStartBattle, onRevealBattle, onBatchScore,
+  onBuySkin, onEquipSkin, onInteract,
+}: PetGardenProps) {
   const [detailStudent, setDetailStudent] = useState<string | null>(null);
   const [adoptStudent, setAdoptStudent] = useState<string | null>(null);
+  const [groupCount, setGroupCount] = useState(3);
+  const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
+  const [revealedBattleId, setRevealedBattleId] = useState<string | null>(null);
+  const [batchTargets, setBatchTargets] = useState<string[] | null>(null);
+  const [batchPreset, setBatchPreset] = useState<ScorePreset | null>(null);
+  const [customDelta, setCustomDelta] = useState('1');
+  const [customReason, setCustomReason] = useState('');
+  const [shopStudent, setShopStudent] = useState<string | null>(null);
+  const [shopTab, setShopTab] = useState<'skin' | 'interact'>('skin');
   const enabled = isEnabledForClass(snapshot, cls.id);
   const classData = snapshot.classes[cls.id] ?? { pets: {}, events: [] };
 
@@ -122,6 +236,22 @@ export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward
   }, [rows]);
 
   const adoptedCount = rows.filter(r => r.pet).length;
+  const groups = classData.groups ?? [];
+  const battles = classData.battles ?? [];
+  const groupStandings = groups
+    .map(group => ({ group, score: groupScore(classData.events, group, 1, Math.max(1, lessonNumber)) }))
+    .sort((a, b) => b.score - a.score);
+  const lastEventByStudent = new Map<string, string>();
+  classData.events.forEach(event => {
+    const prev = lastEventByStudent.get(event.studentName);
+    if (!prev || Date.parse(event.createdAt) > Date.parse(prev)) lastEventByStudent.set(event.studentName, event.createdAt);
+  });
+  const build = buildProgress(classData.events);
+  const adoptedRows = rows.filter(row => row.pet);
+  const activeShopStudent = shopStudent && classData.pets[shopStudent] ? shopStudent : adoptedRows[0]?.name ?? null;
+  const shopPet = activeShopStudent ? classData.pets[activeShopStudent] : null;
+  const activeBattles = battles.filter(b => b.status === 'active');
+  const settledBattles = battles.filter(b => b.status === 'settled').slice(-4).reverse();
   const detailPet = detailStudent ? classData.pets[detailStudent] : null;
   const detailEvents = detailStudent
     ? [...classData.events].filter(e => e.studentName === detailStudent).slice(-12).reverse()
@@ -174,7 +304,7 @@ export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward
                   {pet?.route === 'building' ? (
                     <CommunityAvatar level={pet.level} />
                   ) : pet ? (
-                    <PetAvatar petId={pet.petId} level={pet.level} />
+                    <PetAvatar petId={pet.petId} level={pet.level} skin={pet.skin} />
                   ) : (
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
                       未领养
@@ -189,6 +319,13 @@ export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward
                           : `${petDefOf(pet.petId).name} · ${petDefOf(pet.petId).stages[stageOf(pet.level)]}`
                         : '选择一只宠物'}
                     </div>
+                    {pet && <div className="mt-1 text-[11px] text-muted-foreground">徽章 {badgeBalance(pet)}</div>}
+                    {pet && (() => {
+                      const status = petStatusOf(pet, lastEventByStudent.get(name));
+                      const label = status === 'egg' ? '蛋形态' : status === 'sick' ? '生病中' : status === 'hungry' ? '饥饿中' : '';
+                      if (!label) return null;
+                      return <div className="mt-1 text-[11px] text-muted-foreground">{label}</div>;
+                    })()}
                     {pet && progress && (
                       <>
                         <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -239,6 +376,252 @@ export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward
               </Card>
             ))}
           </div>
+
+          <Card className="p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold">班级共建 · 海底两万里</h3>
+              <span className="text-xs text-muted-foreground">全班净积分 {build.total} 分</span>
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <span>第 {build.stageIndex + 1} 站 · {build.stageName}</span>
+              <span>{build.isFinal ? '已到终点站' : `下一站 ${BUILD_STAGES[build.stageIndex + 1]}`}</span>
+            </div>
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-300" style={{ width: `${Math.min(100, (build.stageScore / build.stageNeed) * 100)}%` }} />
+            </div>
+            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+              <span>{build.stageScore} / {build.stageNeed} 分</span>
+              <span>共 {BUILD_STAGES.length} 站</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {BUILD_STAGES.map((stage, index) => (
+                <span
+                  key={stage}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${index < build.stageIndex ? 'border-border bg-muted text-muted-foreground' : index === build.stageIndex ? 'border-foreground/30 bg-muted text-foreground' : 'border-dashed border-border text-muted-foreground'}`}
+                >
+                  {stage}
+                </span>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">小组 PK</h3>
+                <p className="mt-1 text-xs text-muted-foreground">按课次区间累计成员积分；同分即平局，只比团队、不改个人分。</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">发起方式：先点一个组的「挑战」，再点另一个组，即按当前课次开战。</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                  value={groupCount}
+                  onChange={event => setGroupCount(Number(event.target.value))}
+                  aria-label="分组数量"
+                >
+                  {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} 组</option>)}
+                </select>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => onResetGroups(groupCount, 'auto')}>均分</Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => onResetGroups(groupCount, 'random')}>随机</Button>
+              </div>
+            </div>
+
+            {groups.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">还没有分组。选好组数后点「均分」即可，学生按名单顺序分组。</p>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {groupStandings.map(({ group, score }, index) => {
+                  const battle = activeBattleOf(battles, group.id);
+                  const picked = pendingGroupId === group.id;
+                  return (
+                    <div
+                      key={group.id}
+                      className={`rounded-xl border p-3 ${picked ? 'border-foreground/40 bg-muted/60' : 'border-border'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{group.name}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">#{index + 1}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {group.members.length} 人 · 累计 {score} 分 · 均分 {(score / Math.max(1, group.members.length)).toFixed(1)}
+                      </div>
+                      <div className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{group.members.join('、')}</div>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant={picked ? 'secondary' : 'outline'}
+                          className="h-7 px-2 text-[11px]"
+                          disabled={!!battle}
+                          onClick={() => {
+                            if (!pendingGroupId) { setPendingGroupId(group.id); return; }
+                            if (pendingGroupId === group.id) { setPendingGroupId(null); return; }
+                            onStartBattle(pendingGroupId, group.id, lessonNumber, lessonNumber);
+                            setPendingGroupId(null);
+                          }}
+                        >
+                          {battle ? '对战中' : picked ? '再选对手' : '挑战'}
+                        </Button>
+                        {battle && (
+                          <Button
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => { onRevealBattle(battle.id); setRevealedBattleId(battle.id); }}
+                          >
+                            揭晓
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => setBatchTargets(group.members)}
+                        >
+                          评价小组
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeBattles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {activeBattles.map(battle => {
+                  const a = groups.find(g => g.id === battle.groupAId);
+                  const b = groups.find(g => g.id === battle.groupBId);
+                  if (!a || !b) return null;
+                  const aScore = groupScore(classData.events, a, battle.fromLesson, battle.toLesson);
+                  const bScore = groupScore(classData.events, b, battle.fromLesson, battle.toLesson);
+                  return (
+                    <div key={battle.id} className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                      <span className="min-w-0 flex-1 truncate text-sm">{a.name}</span>
+                      <span className="text-sm font-semibold tabular-nums">{aScore}</span>
+                      <span className="text-xs text-muted-foreground">:</span>
+                      <span className="text-sm font-semibold tabular-nums">{bScore}</span>
+                      <span className="min-w-0 flex-1 truncate text-right text-sm">{b.name}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">第 {battle.fromLesson} 课</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {settledBattles.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">最近战绩</div>
+                <div className="divide-y divide-border rounded-xl border border-border">
+                  {settledBattles.map(battle => {
+                    const a = groups.find(g => g.id === battle.groupAId);
+                    const b = groups.find(g => g.id === battle.groupBId);
+                    if (!a || !b || !battle.result) return null;
+                    const winner = battle.result.winnerId
+                      ? (battle.result.winnerId === a.id ? a.name : b.name)
+                      : null;
+                    return (
+                      <div key={battle.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                        <span className="min-w-0 flex-1 truncate">{a.name} vs {b.name}</span>
+                        <span className="tabular-nums text-muted-foreground">{battle.result.aScore} : {battle.result.bScore}</span>
+                        <span className={`shrink-0 ${winner ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {winner ? `${winner} 胜` : '平局'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">小卖部</h3>
+                <p className="mt-1 text-xs text-muted-foreground">徽章是升级奖励（每级 5 枚），买装扮或投喂宠物都会花掉它。</p>
+              </div>
+              {adoptedRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                    value={activeShopStudent ?? ''}
+                    onChange={event => setShopStudent(event.target.value)}
+                    aria-label="选择学生"
+                  >
+                    {adoptedRows.map(row => <option key={row.name} value={row.name}>{row.name}</option>)}
+                  </select>
+                  <span className="text-xs text-muted-foreground">徽章 {shopPet ? badgeBalance(shopPet) : 0}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex gap-1.5">
+              {([['skin', '装扮'], ['interact', '互动']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setShopTab(key)}
+                  className={`rounded-full border px-3 py-1 text-xs ${shopTab === key ? 'border-foreground/40 bg-muted text-foreground' : 'border-border text-muted-foreground'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {!shopPet && <p className="py-8 text-center text-sm text-muted-foreground">先领养宠物才能逛小卖部</p>}
+
+            {shopPet && shopTab === 'skin' && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {PET_SKINS.map(item => {
+                  const owned = (shopPet.ownedSkins ?? []).includes(item.id);
+                  const equipped = shopPet.skin === item.id;
+                  const affordable = badgeBalance(shopPet) >= item.price;
+                  return (
+                    <div key={item.id} className="rounded-xl border border-border p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-muted/50 p-1">
+                          <PetAvatar petId={shopPet.petId} level={shopPet.level} size={52} skin={item.id} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-medium">{item.name}</div>
+                          <div className="text-[11px] text-muted-foreground">{item.price} 徽章</div>
+                        </div>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{item.blurb}</p>
+                      <Button
+                        size="sm"
+                        variant={equipped ? 'secondary' : 'outline'}
+                        className="mt-2 h-7 w-full px-2 text-[11px]"
+                        disabled={!owned && !affordable}
+                        onClick={() => (owned ? onEquipSkin(activeShopStudent!, item.id) : onBuySkin(activeShopStudent!, item.id))}
+                      >
+                        {equipped ? '卸下' : owned ? '装备' : affordable ? '购买' : '徽章不够'}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {shopPet && shopTab === 'interact' && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {PET_INTERACTIONS.map(item => (
+                  <div key={item.id} className="rounded-xl border border-border p-3">
+                    <div className="text-xs font-medium">{item.name}</div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">花 {item.price} 徽章，经验 +{item.exp}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 h-7 w-full px-2 text-[11px]"
+                      disabled={badgeBalance(shopPet) < item.price}
+                      onClick={() => onInteract(activeShopStudent!, item.id)}
+                    >
+                      互动一下
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
             <Card className="p-5">
@@ -306,6 +689,148 @@ export function PetGarden({ cls, snapshot, onAdopt, onScore, onGraduate, onAward
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量评价 */}
+      <Dialog open={!!batchTargets} onOpenChange={open => !open && setBatchTargets(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>批量评价</DialogTitle>
+            <DialogDescription>
+              已选 {(batchTargets ?? []).length} 人 · 选择一条指标即可同时写入，扣分同样生效。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap gap-1.5">
+            {rows.map(row => {
+              const picked = (batchTargets ?? []).includes(row.name);
+              return (
+                <button
+                  key={row.name}
+                  type="button"
+                  className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${picked ? 'border-foreground/40 bg-muted text-foreground' : 'border-border text-muted-foreground'}`}
+                  onClick={() => setBatchTargets(prev => {
+                    const list = prev ?? [];
+                    return picked ? list.filter(n => n !== row.name) : [...list, row.name];
+                  })}
+                >
+                  {row.name}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-1 grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
+            {SCORE_PRESETS.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setBatchPreset(preset)}
+                className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${batchPreset?.id === preset.id ? 'border-foreground/40 bg-muted' : 'border-border hover:bg-muted/60'}`}
+              >
+                <span className="min-w-0 truncate">{preset.name}</span>
+                <span className={`ml-2 shrink-0 tabular-nums ${preset.delta > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {preset.delta > 0 ? `+${preset.delta}` : preset.delta}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-[11px] text-muted-foreground" htmlFor="custom-reason">自定义</label>
+              <input
+                id="custom-reason"
+                className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-2 text-sm"
+                placeholder="原因，例如：主动帮同学讲题"
+                value={customReason}
+                onChange={event => setCustomReason(event.target.value)}
+              />
+            </div>
+            <input
+              className="h-9 w-16 rounded-lg border border-border bg-background px-2 text-center text-sm tabular-nums"
+              value={customDelta}
+              onChange={event => setCustomDelta(event.target.value.replace(/[^-\d]/g, ''))}
+              aria-label="自定义分值"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBatchTargets(null)}>取消</Button>
+            <Button
+              disabled={!batchTargets?.length || (!batchPreset && !customReason.trim())}
+              onClick={() => {
+                if (!batchTargets?.length) return;
+                const delta = batchPreset ? batchPreset.delta : Number(customDelta) || 0;
+                const reason = batchPreset ? batchPreset.name : customReason.trim();
+                if (!delta || !reason) return;
+                onBatchScore(batchTargets, delta, reason);
+                setBatchPreset(null);
+                setCustomReason('');
+                setBatchTargets(null);
+              }}
+            >
+              提交
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 小组 PK 结果 */}
+      <Dialog open={!!revealedBattleId} onOpenChange={open => !open && setRevealedBattleId(null)}>
+        <DialogContent className="max-w-md">
+          {(() => {
+            const battle = battles.find(b => b.id === revealedBattleId);
+            if (!battle || !battle.result) {
+              return (
+                <DialogHeader>
+                  <DialogTitle>正在结算</DialogTitle>
+                  <DialogDescription>双方比分仍在汇总，请稍后再看。</DialogDescription>
+                </DialogHeader>
+              );
+            }
+            const a = groups.find(g => g.id === battle.groupAId);
+            const b = groups.find(g => g.id === battle.groupBId);
+            const winner = battle.result.winnerId
+              ? (battle.result.winnerId === a?.id ? a : b)
+              : null;
+            const aTop = a ? groupContributors(classData.events, a, battle.fromLesson, battle.toLesson).slice(0, 3) : [];
+            const bTop = b ? groupContributors(classData.events, b, battle.fromLesson, battle.toLesson).slice(0, 3) : [];
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{winner ? `${winner.name} 获胜` : '平局'}</DialogTitle>
+                  <DialogDescription>第 {battle.fromLesson} 课 · 按成员积分累计</DialogDescription>
+                </DialogHeader>
+                <div className="flex items-center justify-center gap-6 py-2">
+                  <div className="text-center">
+                    <div className="text-xs text-muted-foreground">{a?.name}</div>
+                    <div className="mt-1 text-3xl font-semibold tabular-nums">{battle.result.aScore}</div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">:</span>
+                  <div className="text-center">
+                    <div className="text-xs text-muted-foreground">{b?.name}</div>
+                    <div className="mt-1 text-3xl font-semibold tabular-nums">{battle.result.bScore}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {[aTop, bTop].map((list, index) => (
+                    <div key={index} className="rounded-lg border border-border p-2">
+                      <div className="mb-1 font-medium">{index === 0 ? a?.name : b?.name} 贡献</div>
+                      {list.length === 0 && <div className="text-muted-foreground">本课暂无加分</div>}
+                      {list.map(item => (
+                        <div key={item.studentName} className="flex justify-between text-muted-foreground">
+                          <span className="truncate">{item.studentName}</span>
+                          <span className="tabular-nums">{item.score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

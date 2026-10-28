@@ -71,7 +71,8 @@ import type { AppConfig, LessonConfig, StudentRecord } from '@/types';
 import { PetGarden } from '@/components/pet/PetGarden';
 import {
   addManualScore, adoptForStudent, awardBadge, graduatePet, isEnabledForClass,
-  loadPetSnapshot, savePetSnapshot, undoEvent, updateSettings,
+  loadPetSnapshot, resetGroups, revealBattle, savePetSnapshot, startBattle,
+  undoEvent, updateSettings, addScoresBatch, buySkin, equipSkin, interactWithPet,
 } from '@/lib/gamification/store';
 import { settleClassPets } from '@/lib/gamification/rules';
 import { normalizePetSnapshot } from '@/lib/gamification/store';
@@ -535,7 +536,21 @@ function App() {
   const handlePetAdopt = (studentName: string, petId: string) =>
     setPetSnapshot(s => adoptForStudent(s, petClassId, studentName, petId));
   const handlePetScore = (studentName: string, delta: number, reason: string) =>
-    setPetSnapshot(s => addManualScore(s, petClassId, studentName, delta, reason));
+    setPetSnapshot(s => addManualScore(s, petClassId, studentName, delta, reason, new Date().toISOString(), currentLessonNumber));
+  const handlePetResetGroups = (count: number, mode: 'auto' | 'random') =>
+    setPetSnapshot(s => resetGroups(s, petClassId, currentClass?.students ?? [], count, mode));
+  const handlePetStartBattle = (groupAId: string, groupBId: string, fromLesson: number, toLesson: number) =>
+    setPetSnapshot(s => startBattle(s, petClassId, groupAId, groupBId, fromLesson, toLesson));
+  const handlePetRevealBattle = (battleId: string) =>
+    setPetSnapshot(s => revealBattle(s, petClassId, battleId));
+  const handlePetBatchScore = (names: string[], delta: number, reason: string) =>
+    setPetSnapshot(s => addScoresBatch(s, petClassId, names, delta, reason, new Date().toISOString(), currentLessonNumber));
+  const handlePetBuySkin = (name: string, skinId: string) =>
+    setPetSnapshot(s => buySkin(s, petClassId, name, skinId));
+  const handlePetEquipSkin = (name: string, skinId: string) =>
+    setPetSnapshot(s => equipSkin(s, petClassId, name, skinId));
+  const handlePetInteract = (name: string, kind: 'feed' | 'bath' | 'pat') =>
+    setPetSnapshot(s => interactWithPet(s, petClassId, name, kind, new Date().toISOString(), currentLessonNumber));
   const handlePetGraduate = (studentName: string, route: 'pet' | 'building') =>
     setPetSnapshot(s => graduatePet(s, petClassId, studentName, route));
   const handlePetAward = (studentName: string, badge: PetBadgeDef) =>
@@ -1291,6 +1306,7 @@ function App() {
                   records={currentClass?.records || []}
                   currentClassName={currentClass?.name || ''}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                  getQuestionTypes={(lesson) => getLessonConfig(currentClassId || '', lesson).questionTypes}
                 />
               </Suspense>
             </ErrorBoundary>
@@ -1328,6 +1344,14 @@ function App() {
                     onAward={handlePetAward}
                     onUndo={handlePetUndo}
                     onSettings={handlePetSettings}
+                    lessonNumber={currentLessonNumber}
+                    onResetGroups={handlePetResetGroups}
+                    onStartBattle={handlePetStartBattle}
+                    onRevealBattle={handlePetRevealBattle}
+                    onBatchScore={handlePetBatchScore}
+                    onBuySkin={handlePetBuySkin}
+                    onEquipSkin={handlePetEquipSkin}
+                    onInteract={handlePetInteract}
                   />
                 ) : (
                   <p className="py-10 text-center text-sm text-muted-foreground">请先选择一个班级</p>

@@ -1,7 +1,7 @@
 // 云端同步模块：基于 Supabase REST API（fetch 直连，无需 SDK）
 // 数据表结构见 CloudSyncPanel 中的建表 SQL，单表按「作用域」存多行快照
 
-import { BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend } from '@/lib/config';
+import { BUILD_BACKEND, BUILD_ENV_TAG, BUILD_SCOPE, BUILD_SUPABASE_KEY, BUILD_SUPABASE_URL, hasBundledBackend } from '@/lib/config';
 import { ensureFreshToken, getAccessToken, getCachedSession } from '@/lib/auth';
 import { markBackendOffline, markBackendOnline, isTransientBackendFailure } from '@/lib/connectivity';
 import type { AppConfig, Class, SchoolScore } from '@/types';
@@ -25,11 +25,15 @@ export interface CloudSyncConfig {
   autoSync: boolean;
   /** 作用域 / 团队码：同一张表内以不同主键行隔离，支持多老师共用后端 */
   scope?: string;
+  /** 该配置所属的后端环境（BUILD_ENV_TAG），换后端后自动失效 */
+  backend?: string;
 }
 
 export interface CloudSyncMeta {
   lastPushedAt: number;
   lastPushedHash: string;
+  /** 写入时所属的后端环境（BUILD_ENV_TAG）；换后端后旧基线自动作废 */
+  backend?: string;
 }
 
 export type CloudSyncStatus =
@@ -49,11 +53,19 @@ export function loadSyncConfig(): CloudSyncConfig | null {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     // 1) 用户手动配置优先（便于本地调试 / 切换环境）
+    //    但同一浏览器换过后端时（例：ixdf.com 从 Supabase 站切到 CloudBase 站），
+    //    旧地址与旧团队码必须丢弃，否则会拿旧 scope 去写新库的行。
     if (raw) {
       const cfg = JSON.parse(raw);
-      if (cfg.supabaseUrl && cfg.supabaseKey) {
-        return { autoSync: true, scope: BUILD_SCOPE, ...cfg };
+      const sameEnv = !cfg.backend || cfg.backend === BUILD_ENV_TAG;
+      if (cfg.supabaseUrl && cfg.supabaseKey && sameEnv) {
+        const merged: CloudSyncConfig = { autoSync: true, scope: BUILD_SCOPE, backend: BUILD_ENV_TAG, ...cfg };
+        // CloudBase 侧团队码由构建决定：函数的成员名册固定写 scope='main'，
+        // 数据行必须同名，否则「谁是管理员」与「写哪一行」对不上，权限形同虚设。
+        if (BUILD_BACKEND === 'cloudbase') merged.scope = BUILD_SCOPE;
+        return merged;
       }
+      if (!sameEnv) console.info('[sync] 检测到后端环境变化，已忽略上一套同步配置');
     }
     // 2) 站点内置了共享后端：打开即同步，无需用户手填
     if (hasBundledBackend()) {
@@ -92,14 +104,24 @@ export function clearSyncConfig() {
 export function loadSyncMeta(): CloudSyncMeta {
   try {
     const raw = localStorage.getItem(META_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const meta = JSON.parse(raw) as CloudSyncMeta;
+      // 换后端后，旧库的基线在新库里毫无意义：带着它去条件更新一张空表，
+      // 受影响 0 行会被误判成「云端有他人改动」，数据永远传不上去。
+      if (meta.backend && meta.backend !== BUILD_ENV_TAG) {
+        console.info('[sync] 后端环境已变化，旧同步基线作废，本次按首次上传处理');
+        return { lastPushedAt: 0, lastPushedHash: '', backend: BUILD_ENV_TAG };
+      }
+      if (!meta.backend) return { ...meta, backend: BUILD_ENV_TAG };
+      return meta;
+    }
   } catch { /* ignore */ }
-  return { lastPushedAt: 0, lastPushedHash: '' };
+  return { lastPushedAt: 0, lastPushedHash: '', backend: BUILD_ENV_TAG };
 }
 
 export function saveSyncMeta(meta: CloudSyncMeta) {
   try {
-    localStorage.setItem(META_KEY, JSON.stringify(meta));
+    localStorage.setItem(META_KEY, JSON.stringify({ ...meta, backend: BUILD_ENV_TAG }));
   } catch (e) {
     console.warn('[sync] 同步元信息写入失败', e);
   }
@@ -327,11 +349,38 @@ export async function pushSnapshotConditional(
       throw new Error(`HTTP_${res.status}`);
     }
     const rows = await res.json().catch(() => []);
-    // 0 行 = 条件不满足：云端已被他端更新（或行被删）→ 冲突，交由上层处理
-    return Array.isArray(rows) && rows.length > 0 ? { ok: true } : { ok: false, reason: 'conflict' };
+    if (Array.isArray(rows) && rows.length > 0) return { ok: true };
+
+    // 0 行受影响有两种完全不同的原因，而 PostgREST 对它们返回同一个 `200 + []`：
+    //   (a) 行在，但 snapshot_hash 已变   → 真冲突，他端推进过，必须让用户选
+    //   (b) 行根本不在（新库首次上传 / 行被删）→ 不是冲突，应该插入
+    // 早期把 (b) 也当成冲突，结果换后端到空库后数据永远传不上去（表现为
+    // 「云端存在他人的新改动，本次上传已暂停」，而云端其实一行都没有）。
+    // 这里补一次存在性探测，把 (b) 自动纠正为首次插入。
+    const probe = await backendFetch(
+      restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&select=id`),
+      { headers: apiHeaders(config) }
+    );
+    if (probe.ok) {
+      const exist = await probe.json().catch(() => []);
+      if (Array.isArray(exist) && exist.length === 0) {
+        return insertSnapshot(config, payload);
+      }
+    }
+    return { ok: false, reason: 'conflict' };
   }
 
-  // 首次上传：插入而不合并——若已存在则由数据库报 409，避免"新设备直接覆盖云端"
+  return insertSnapshot(config, payload);
+}
+
+/**
+ * 首次写入：插入而不合并——若已存在则由数据库报 409，避免"新设备直接覆盖云端"。
+ * 也被上面的「云端无行」自愈路径复用。
+ */
+async function insertSnapshot(
+  config: CloudSyncConfig,
+  payload: { data: SyncSnapshot; snapshot_hash: string; updated_at: string },
+): Promise<PushOutcome> {
   const res = await backendFetch(restUrl(config, ''), {
     method: 'POST',
     headers: apiHeaders(config, { Prefer: 'return=representation' }),
@@ -350,9 +399,10 @@ export async function pushSnapshotConditional(
 // 测试连接：检查网络、密钥、登录态与建表情况
 export async function testConnection(config: CloudSyncConfig): Promise<{ ok: boolean; message: string }> {
   try {
-    new URL(normalizeUrl(config.supabaseUrl));
+    // 相对基址（同源 /api）时以当前页面为基准解析，避免误判为格式错误
+    new URL(normalizeUrl(config.supabaseUrl), window.location.origin);
   } catch {
-    return { ok: false, message: 'Project URL 格式不正确，应为 https://xxxx.supabase.co' };
+    return { ok: false, message: '后端地址格式不正确（应为同源 /api 或完整 URL）' };
   }
   // 先确保 access token 新鲜：RLS 已收紧为「仅登录可读写」，
   // 用过期 token 探测会被拒，从而误报为密钥错误

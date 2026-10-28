@@ -526,17 +526,21 @@ group('评价类关键词着色');
 group('云端条件推送 CAS');
 {
   const calls: { url: string; method: string; body?: string }[] = [];
-  let next: { status: number; json?: unknown; text?: string } = { status: 200, json: [{}] };
+  type MockResp = { status: number; json?: unknown; text?: string };
+  let next: MockResp | ((url: string, method: string) => MockResp) = { status: 200, json: [{}] };
   const g = globalThis as unknown as { fetch?: unknown };
   const origFetch = g.fetch;
   g.fetch = async (url: unknown, init: { method?: string; body?: string } = {}) => {
-    calls.push({ url: String(url), method: init.method || 'GET', body: init.body });
-    const status = next.status ?? 200;
+    const u = String(url);
+    const m = init.method || 'GET';
+    calls.push({ url: u, method: m, body: init.body });
+    const pick = typeof next === 'function' ? next(u, m) : next;
+    const status = pick.status ?? 200;
     return {
       ok: status >= 200 && status < 300,
       status,
-      json: async () => next.json ?? [],
-      text: async () => next.text ?? '',
+      json: async () => pick.json ?? [],
+      text: async () => pick.text ?? '',
     } as unknown;
   };
   try {
@@ -550,9 +554,20 @@ group('云端条件推送 CAS');
     check(last1.method === 'PATCH', 'CAS：有基线时走 PATCH 而非无条件 upsert');
     check(/snapshot_hash=eq\.base123/.test(last1.url), 'CAS：写请求带 snapshot_hash 条件');
 
-    next = { status: 200, json: [] };
+    // 0 行受影响有两种成因，PostgREST 的响应完全一样（200 + []），必须靠探测区分：
+    //   (a) 行还在、只是 hash 变了 → 真冲突
+    //   (b) 行根本不在（换后端到空库 / 行被删）→ 应当插入，不能报冲突
+    next = (u: string, m: string) => (m === 'PATCH' ? { status: 200, json: [] } : { status: 200, json: [{ id: 'main' }] });
     r = await pushSnapshotConditional(cfg, snap, 'base123');
-    check(r.ok === false && !r.ok && r.reason === 'conflict', 'CAS：0 行受影响 → 判为冲突，不覆盖');
+    check(r.ok === false && !r.ok && r.reason === 'conflict', 'CAS：行在但基线过期 → 判为冲突，不覆盖');
+    check(calls[calls.length - 1].method === 'GET' && /select=id/.test(calls[calls.length - 1].url),
+      'CAS：判冲突前先探测该行是否存在');
+
+    const postBefore = calls.filter(c => c.method === 'POST').length;
+    next = (u: string, m: string) => (m === 'POST' ? { status: 201, json: [{ id: 'main' }] } : { status: 200, json: [] });
+    r = await pushSnapshotConditional(cfg, snap, 'base123');
+    check(r.ok === true, 'CAS：云端无此行 → 自动改走插入（换后端到空库不再假冲突）');
+    check(calls.filter(c => c.method === 'POST').length === postBefore + 1, 'CAS：自愈路径确实发出了插入请求');
 
     next = { status: 201, json: [{ id: 'x' }] };
     r = await pushSnapshotConditional(cfg, snap, null);

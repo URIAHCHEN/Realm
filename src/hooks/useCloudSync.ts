@@ -31,8 +31,7 @@ function toSyncMessage(e: unknown): string {
 
 interface UseCloudSyncOptions {
   /** 是否管理员：非管理员不做自动推送，改动需「提交审核」 */
-  isAdmin?: boolean;
-  snapshot: SyncSnapshot;
+  isAdmin?: boolean;  snapshot: SyncSnapshot;
   onImport: (snapshot: SyncSnapshot) => void;
   /** 是否已登录：RLS 收紧后需携带用户 JWT，未登录时不做对账/自动推送 */
   enabled: boolean;
@@ -64,6 +63,13 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   const reconciling = useRef(false);
   /** doPush 单飞：定时推送 + 对账推送 + 手动推送可并发，慢的那次带旧快照后落盘会覆盖新数据 */
   const pushInFlight = useRef(false);
+  /**
+   * 云端为空、但对账时本地数据还没加载完（刷新后 restart 时序）→ 置位。
+   * 数据一旦到位立刻补一次首传，否则会一直停在"云端为空，等待首次同步"，
+   * 直到用户碰巧编辑或切窗口触发下一轮对账。
+   * 用 state 而非 ref：置位的时刻往往晚于数据加载，ref 不会让 effect 重跑。
+   */
+  const [awaitingFirstUpload, setAwaitingFirstUpload] = useState(false);
 
   snapshotRef.current = snapshot;
 
@@ -184,8 +190,11 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       if (!cloud.snapshot) {
         // 云端为空：本地有数据则上传
         if (Object.keys(snapshotRef.current.classes || {}).length > 0) {
+          setAwaitingFirstUpload(false);
           await doPush(cfg, true);
         } else {
+          // 本地也还没有数据（刚刷新、数据仍在加载）→ 标记待补传，别就此判定"无事可做"
+          setAwaitingFirstUpload(true);
           setStatus(canWrite ? 'connected' : 'readonly');
           statusRef.current = canWrite ? 'connected' : 'readonly';
           setMessage('云端为空，等待首次同步');
@@ -242,6 +251,17 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, sessionKey, canWrite]);
+
+  // 云端为空时，本地数据往往晚一步才从 localStorage 读出来（刷新后的加载时序）。
+  // 首次对账因此看不见数据、只留下"等待首次同步"，之后不会再有对账触发点。
+  // 这里监听快照到位，立刻补一次首传 —— 用户导入备份后也能自动上去，不必再点一次上传。
+  useEffect(() => {
+    if (!awaitingFirstUpload) return;
+    if (!config || !enabled || !canWrite) return;
+    if (Object.keys(snapshot.classes || {}).length === 0) return;
+    setAwaitingFirstUpload(false);
+    void doPush(config, true);
+  }, [awaitingFirstUpload, snapshot, config, enabled, canWrite, doPush]);
 
   // 导入落地：用"迁移/重算之后"的真实本地快照校准 lastPushedHash，
   // 否则本地会被判定为永远脏（假冲突 / 每次拉取后又回推一次）

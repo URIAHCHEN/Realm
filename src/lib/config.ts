@@ -35,8 +35,21 @@ export const BUILD_SUPABASE_KEY = BUILD_BACKEND === 'cloudbase'
 /**
  * 作用域 / 团队码：在单张 app_state 表内以不同主键行做隔离。
  * 两端可用同一个团队码，因为库本身是分开的。
+ *
+ * 2026-10-28：默认值由 huacheng 改回 main —— 云函数建名册时用的就是 `main`
+ * （app_members.scope='main'），数据行必须同名，否则「谁是管理员」与「写哪一行」对不上：
+ * 名册查不到当前 team 的行会走 bootstrap 放行，等于绕过了权限。
  */
-export const BUILD_SCOPE = ((SCOPE_ENV ?? '').trim()) || 'huacheng';
+export const BUILD_SCOPE = ((SCOPE_ENV ?? '').trim()) || 'main';
+
+/**
+ * 环境标识：写进 localStorage 的同步配置/基线里，用于「换后端后自动丢弃旧基线」。
+ *
+ * 出过的事故（2026-10-28）：ixdf.com 早期指向连 Supabase 的构建，浏览器里存着当时的
+ * lastPushedHash；换成 CloudBase 新库后基线还在，首次上传就成了「拿旧 hash 去条件更新一张空表」，
+ * 受影响 0 行被当成「云端有他人改动」，数据一直传不上去。带上环境标识即可从根上避免继承。
+ */
+export const BUILD_ENV_TAG = `${BUILD_BACKEND}:${BUILD_SUPABASE_URL}`;
 
 /** 站点是否已内置共享后端（决定「打开即同步」是否生效） */
 export function hasBundledBackend(): boolean {

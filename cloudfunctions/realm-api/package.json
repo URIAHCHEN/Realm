@@ -1,0 +1,7 @@
+{
+  "name": "realm-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Realm 学情系统：静态资源 + 鉴权 + PG 数据网关"
+}

@@ -3,6 +3,31 @@
 目标：让封装后的学情网站一打开就连接同一个共享后端，实现多设备 / 多位老师自动同步。
 架构：纯静态站（Vite 构建）+ 直连 Supabase REST（无需自建服务器）+ **Supabase Auth 登录 + 服务端 RLS 权限**。
 
+## 双端发布（2026-10-28 起）
+
+同一份 `dist` 必须同步到两个入口：
+
+| 端 | 地址 |
+|---|---|
+| GitHub Pages（主站 / 回滚） | https://uriahchen.github.io/Realm/ |
+| 腾讯云 CloudBase（国内直连） | https://realm-cb-env-chenhongl-221-d0a08260a99.webapps.tcloudbase.com/ |
+| CloudBase 备用域名 | https://cb-env-chenhongl-221-d0a08260a99-1252350207.tcloudbaseapp.com/ |
+
+```bash
+set -a && source .env.production && set +a
+npm run selfcheck
+npm run build:deploy        # 输出到干净的 dist-deploy（25 个文件 / 2.6MB）
+git add -A && git commit -m "..." && git push origin main
+
+# CloudBase 同步（--verify 逐文件核对，--safe 失败自动回滚）
+~/.workbuddy/binaries/node/cli-connector-packages/bin/tcb hosting deploy ./dist-deploy \
+  -e cb-env-chenhongl-221-d0a08260a99 --concurrency 10 --verify --safe
+```
+
+> `npm run build` 的 `dist` 因 `emptyOutDir:false` 会累积历史 hash 文件，只用于本地预览；双端发布统一用 `build:deploy` 的 `dist-deploy`，避免把几百个旧文件重复上传。
+
+判定标准：三个域名返回的 `index-*.css` 指纹一致。Pages 的 JS 哈希与本地不同属正常（GitHub Secrets 内联环境变量），不要用 JS 哈希判断。
+
 ## 第 1 步：建 Supabase 项目（免费）
 1. 打开 https://supabase.com ，用邮箱免费注册。
 2. New Project，起个名字（如 `xueqing`），设一个数据库密码，区域选就近的（新加坡/东京），创建。

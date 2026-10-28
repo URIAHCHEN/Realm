@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
+import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, listQuarters, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { planTeacherElfColumns, buildTeacherElfTable } from '@/lib/teacherElfExport';
@@ -927,6 +928,46 @@ group('表扬榜：离班学员有效性');
     { entranceTopN: 1 },
   );
   check(rateRankedPraise.indexOf('正确率高') >= 0 && (rateRankedPraise.indexOf('正确率高') < rateRankedPraise.indexOf('原始分高') || !rateRankedPraise.includes('原始分高')), '班群公示风云榜按正确率优先，不按原始分');
+}
+
+group('季度成绩单：排名 / 击败比例 / 作业 / 口语口径');
+{
+  const q = listQuarters([
+    rec({ date: '2026-10-05' }),
+    rec({ date: '2026-11-02' }),
+    rec({ date: '2026-07-01' }),
+  ]);
+  check(q[0].key === '2026-Q4' && q[0].label.includes('第 4 季度'), '季度从记录日期推导并按新到旧排序');
+
+  const q4 = q[0];
+  const mk = (studentName: string, lessonNumber: number, date: string, totalScore: number, homeworkStatus: string, listeningScore: number) => rec({
+    id: `${studentName}-${lessonNumber}`,
+    studentName,
+    lessonNumber,
+    date,
+    totalScore,
+    correctRate: totalScore,
+    homeworkStatus,
+    listeningScore,
+    scores: { q1: totalScore },
+  });
+  const quarterlyRecords = [
+    mk('甲', 1, '2026-10-05', 80, '完成✅', 8),
+    mk('甲', 2, '2026-11-02', 90, '未完成', 10),
+    mk('乙', 1, '2026-10-05', 70, '完成✅', 6),
+    mk('乙', 2, '2026-11-02', 80, '完成✅', 6),
+    mk('丙', 1, '2026-10-05', 60, '未完成', 0),
+    mk('丙', 2, '2026-11-02', 60, '未完成', 0),
+  ];
+  const stats = computeQuarterlyStats(quarterlyRecords, ['甲', '乙', '丙'], '甲', q4, '初二S班', 'Lynn');
+  check(stats.entryAvg === 85 && stats.entryRate === 85, '入门测均分与得分率按季度内有效测评取平均');
+  check(stats.rank === 1 && stats.classSize === 3, '班级排名按季度平均得分率计算');
+  check(stats.beatPct === 66.7, '击败比例 = 低于自己的同学数 ÷ 参评人数');
+  check(stats.hwDone === 1 && stats.hwTotal === 2 && stats.hwRate === 50, '作业完成数与完成率只统计已登记状态的记录');
+  check(stats.oralAvg === 9 && stats.oralBeat === 50, '口语均分与击败比例只统计有口语分数的同学');
+  const text = renderQuarterlyTemplate(DEFAULT_QUARTERLY_TEMPLATE, quarterlyVariables(stats, { trait: '努力' }));
+  check(text.includes('排名第【1】名') && text.includes('85') && text.includes('66.7'), '模板占位符替换出真实指标');
+  check(renderQuarterlyTemplate('{unknown}', {}) === '{unknown}', '未知占位符原样保留，避免模板写错整段消失');
 }
 
 group('题型归并 · 同名跨课次溯源');

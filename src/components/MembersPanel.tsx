@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Users, UserPlus, Copy, Trash2, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
 import { addMember, listMembers, myUserId, removeMember, setMemberAdmin } from '@/lib/members';
 import type { MemberRow } from '@/lib/members';
-import { BUILD_SCOPE } from '@/lib/config';
+import { BUILD_BACKEND, BUILD_SCOPE } from '@/lib/config';
+import { issueResetCode } from '@/lib/passwordReset';
 
 interface MembersPanelProps {
   /** 当前用户是否为管理员 */
@@ -25,6 +26,7 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
   const [newUid, setNewUid] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAdmin, setNewAdmin] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -54,6 +56,14 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
     const r = await setMemberAdmin(scope, row.user_id, !row.is_admin);
     if (!r.ok) { setErr(r.message); return; }
     await reload(); onChanged?.();
+  };
+
+  const onResetCode = async (row: MemberRow) => {
+    if (!row.email) { setErr('该成员没有邮箱，无法生成重置码'); return; }
+    const r = await issueResetCode(row.email);
+    if (!r.ok) { setErr(r.message); return; }
+    setErr('');
+    setNotice(`重置码（${row.email}）：${r.code} · ${Math.round((r.expiresIn || 1200) / 60)} 分钟内有效，请线下转给本人`);
   };
 
   const onRemove = async (row: MemberRow) => {
@@ -124,6 +134,11 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
                       {r.email && <div className="text-[11px] text-[#8e8e93] font-mono truncate">{r.user_id}</div>}
                     </div>
                     {r.user_id === me && <Badge variant="outline" className="text-[10px]">我</Badge>}
+                    {BUILD_BACKEND === 'cloudbase' && r.email && (
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onResetCode(r)} title="生成找回密码短码">
+                        重置码
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onToggle(r)} disabled={r.user_id === me}>
                       {r.is_admin ? '降为成员' : '设为管理'}
                     </Button>
@@ -136,6 +151,7 @@ export function MembersPanel({ isAdmin, onChanged }: MembersPanelProps) {
             </div>
           </>
         )}
+        {notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
         {err && <p className="text-sm text-[#ff3b30]">{err}</p>}
       </CardContent>
     </Card>

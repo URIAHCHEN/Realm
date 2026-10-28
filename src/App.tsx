@@ -43,6 +43,9 @@ const SchoolScorePanel = lazy(() =>
 const StudentReport = lazy(() =>
   import('@/components/StudentReport').then(m => ({ default: m.StudentReport }))
 );
+const QuarterlyReportPanel = lazy(() =>
+  import('@/components/QuarterlyReportPanel').then(m => ({ default: m.QuarterlyReportPanel }))
+);
 const StudentAnalysis = lazy(() =>
   import('@/components/StudentAnalysis').then(m => ({ default: m.StudentAnalysis }))
 );
@@ -127,7 +130,7 @@ function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('records');
   // 2026-10-24：校内成绩并入「学情报告」、反馈素材并入「反馈生成」，用二级切换保持独立视图
-  const [reportView, setReportView] = useState<'report' | 'school'>('report');
+  const [reportView, setReportView] = useState<'report' | 'school' | 'quarter'>('report');
   const [feedbackView, setFeedbackView] = useState<'generate' | 'library'>('generate');
   // 提前取出布尔值，避免在三元分支内比较被 TS 收窄成单一字面量
   const showLibrary = feedbackView === 'library';
@@ -1214,6 +1217,7 @@ function App() {
               <div className="mode-seg" role="tablist" aria-label="报告视图">
                 <button role="tab" aria-selected={reportView === 'report'} className={`mode-seg-item ${reportView === 'report' ? 'is-active' : ''}`} onClick={() => setReportView('report')}>学情报告</button>
                 <button role="tab" aria-selected={reportView === 'school'} className={`mode-seg-item ${reportView === 'school' ? 'is-active' : ''}`} onClick={() => setReportView('school')}>校内成绩</button>
+                <button role="tab" aria-selected={reportView === 'quarter'} className={`mode-seg-item ${reportView === 'quarter' ? 'is-active' : ''}`} onClick={() => setReportView('quarter')}>季度成绩单</button>
               </div>
             </div>
             {reportView === 'school' ? (
@@ -1225,6 +1229,17 @@ function App() {
                   onAddScore={addSchoolScore}
                   onDeleteScore={handleDeleteScore}
                   onImportExcel={handleImportExcel}
+                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                />
+              </Suspense>
+            </ErrorBoundary>
+            ) : reportView === 'quarter' ? (
+            <ErrorBoundary label="季度成绩单">
+              <Suspense fallback={<ModuleLoading label="季度成绩单" />}>
+                <QuarterlyReportPanel
+                  students={currentClass?.students || []}
+                  records={currentClass?.records || []}
+                  currentClassName={currentClass?.name || ''}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                 />
               </Suspense>

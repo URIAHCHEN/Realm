@@ -4330,3 +4330,78 @@ html[data-exporting] .praise-root .fengyun-poster {
 html[data-exporting] .report-panel,
 html[data-exporting] .report-container.report-personal,
 html[data-exporting] .class-report-shell { box-shadow: none; }
+/* ==================== 季度成绩单（2026-10-28） ====================
+   参考家长熟悉的纸质成绩单：细线、居中、一个红色印章式点缀；
+   颜色跟随站点 brand，不引入新的主色。 */
+.qr-stage {
+  padding: 26px 16px 40px;
+  border-radius: 18px;
+  background:
+    radial-gradient(1200px 200px at 50% 0%, rgba(29, 78, 209, 0.05), transparent 70%),
+    linear-gradient(180deg, #f7f8fa 0%, #eef1f5 100%);
+}
+.qr-card {
+  position: relative;
+  width: min(880px, 100%);
+  margin: 0 auto;
+  padding: 46px 56px 38px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 24px 60px -30px rgba(15, 23, 42, 0.38);
+}
+.qr-card::before {
+  content: '';
+  position: absolute;
+  inset: 13px;
+  border: 1px solid rgba(15, 23, 42, 0.055);
+  pointer-events: none;
+}
+.qr-top {
+  margin-bottom: 26px;
+  color: #9aa5b4;
+  font-size: 11px;
+  font-style: italic;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+.qr-stamp {
+  position: absolute;
+  top: 36px;
+  right: 44px;
+  color: #1f2937;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  transform: rotate(-4deg);
+}
+.qr-stamp span:first-child { font-size: 26px; }
+.qr-stamp i { margin: 0 4px; color: #d9534f; font-size: 20px; font-style: normal; }
+.qr-stamp span:last-child { font-size: 16px; letter-spacing: 0.06em; }
+.qr-title { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.qr-title h2 {
+  color: #111827;
+  font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+  font-size: 34px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.qr-rule { flex: 1; max-width: 150px; height: 1px; background: #1f2937; opacity: 0.72; }
+.qr-body { max-width: 720px; margin: 28px auto 0; }
+.qr-body p { margin: 2px 0; color: #374151; font-size: 15.5px; line-height: 2.15; text-align: center; }
+.qr-token { padding: 0 2px; color: #1d4ed1; font-weight: 700; font-size: 17px; }
+.qr-sign {
+  margin-top: 26px;
+  color: #111827;
+  font-family: 'Segoe Script', 'Snell Roundhand', 'Bradley Hand', cursive;
+  font-size: 20px;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .qr-stage { padding: 14px 8px 24px; }
+  .qr-card { padding: 32px 22px 26px; }
+  .qr-title h2 { font-size: 24px; }
+  .qr-stamp { top: 22px; right: 18px; transform: scale(0.8) rotate(-4deg); transform-origin: top right; }
+  .qr-body p { font-size: 13.5px; line-height: 1.95; }
+  .qr-token { font-size: 15px; }
+}

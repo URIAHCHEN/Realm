@@ -9,6 +9,8 @@ dist-ssr/
 .env
 .env.*
 !.env.example
+# 双端构建模式（无密钥，需入库保证可复现）
+!.env.cloudbase
 
 # logs / editor / OS
 *.local
@@ -19,3 +21,6 @@ dist-ssr/
 .idea/
 
 dist-deploy/
+
+# 云函数部署包内的构建产物（由脚本从 dist 复制，不入库）
+cloudfunctions/*/dist/

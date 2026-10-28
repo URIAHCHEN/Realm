@@ -9,8 +9,10 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, Mail, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Sparkles, Cloud } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Sparkles, Cloud, KeyRound } from 'lucide-react';
 import { signIn, signUp } from '@/lib/auth';
+import { BUILD_BACKEND } from '@/lib/config';
+import { resetPassword } from '@/lib/passwordReset';
 import { KAOMOJI, ICONS, QUOTES, pickRandom } from '@/components/brandMarkContent';
 
 interface LoginPageProps {
@@ -18,15 +20,17 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onSuccess }: LoginPageProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetCode, setResetCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === 'register';
+  const isReset = mode === 'reset';
 
   // 每次进入随机抽一次（与站内品牌区同一口径：刷新即换）
   const { kaomoji, icon, quote } = useMemo(
@@ -47,6 +51,17 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
     setInfo('');
     if (!email.trim()) { setError('请输入邮箱'); return; }
     if (!password.trim()) { setError('请输入密码'); return; }
+    if (isReset) {
+      if (!resetCode.trim()) { setError('请填写管理员给你的重置码'); return; }
+      setBusy(true);
+      const r = await resetPassword(email, resetCode, password);
+      setBusy(false);
+      if (r.ok) {
+        setInfo(r.message);
+        setMode('login'); setPassword(''); setResetCode(''); setError('');
+      } else setError(r.message);
+      return;
+    }
     setBusy(true);
     const res = isRegister ? await signUp(email, password) : await signIn(email, password);
     setBusy(false);
@@ -199,6 +214,21 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
                 </div>
               </div>
 
+              {isReset && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="resetCode" className="text-[13px] text-[color:var(--ink-2)]">重置码</Label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--ink-4)]" />
+                    <Input
+                      id="resetCode" placeholder="8 位短码，向管理员索取"
+                      value={resetCode}
+                      onChange={(e) => { setResetCode(e.target.value.toUpperCase()); setError(''); }}
+                      className={fieldCls}
+                    />
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <p role="alert" className="text-[13px] text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{error}</p>
               )}
@@ -216,13 +246,27 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
                 }}
               >
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                {busy ? '处理中…' : isRegister ? '创建账号' : '进入学情管理'}
+                {busy ? '处理中…' : isReset ? '重置密码' : isRegister ? '创建账号' : '进入学情管理'}
               </Button>
             </form>
 
             <p className="mt-5 text-[12px] text-[color:var(--ink-4)] text-center leading-relaxed">
-              {isRegister ? '注册后需管理员加入可写名单才能录入数据' : '使用学校分配的邮箱登录；忘记密码请联系管理员'}
+              {isReset
+                ? '重置码由管理员在「同步中心 → 团队权限」生成，20 分钟内有效'
+                : isRegister ? '注册后需管理员加入可写名单才能录入数据' : '使用学校分配的邮箱登录'}
             </p>
+            <div className="mt-2 flex items-center justify-center gap-4 text-[12px]">
+              {!isRegister && !isReset && BUILD_BACKEND === 'cloudbase' && (
+                <button type="button" className="text-[color:var(--brand)] hover:underline" onClick={() => { setMode('reset'); setError(''); setInfo(''); }}>
+                  忘记密码？
+                </button>
+              )}
+              {isReset && (
+                <button type="button" className="text-[color:var(--ink-3)] hover:underline" onClick={() => { setMode('login'); setError(''); }}>
+                  返回登录
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

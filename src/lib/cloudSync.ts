@@ -65,7 +65,8 @@ export function loadSyncConfig(): CloudSyncConfig | null {
     //    旧地址与旧团队码必须丢弃，否则会拿旧 scope 去写新库的行。
     if (raw) {
       const cfg = JSON.parse(raw);
-      const sameEnv = !cfg.backend || cfg.backend === BUILD_ENV_TAG;
+      const sameEnv = cfg.backend ? cfg.backend === BUILD_ENV_TAG :
+        BUILD_BACKEND !== 'cloudbase' || normalizeUrl(cfg.supabaseUrl || '') === normalizeUrl(BUILD_SUPABASE_URL);
       if (cfg.supabaseUrl && cfg.supabaseKey && sameEnv) {
         const merged: CloudSyncConfig = { autoSync: true, scope: BUILD_SCOPE, backend: BUILD_ENV_TAG, ...cfg };
         // CloudBase 侧团队码由构建决定：函数的成员名册固定写 scope='main'，
@@ -120,7 +121,11 @@ export function loadSyncMeta(): CloudSyncMeta {
         console.info('[sync] 后端环境已变化，旧同步基线作废，本次按首次上传处理');
         return { lastPushedAt: 0, lastPushedHash: '', backend: BUILD_ENV_TAG };
       }
-      if (!meta.backend) return { ...meta, backend: BUILD_ENV_TAG };
+      if (!meta.backend) {
+        // 未标记的旧基线无法证明属于新后端，CloudBase 迁移时按首次同步处理。
+        if (BUILD_BACKEND === 'cloudbase') return { lastPushedAt: 0, lastPushedHash: '', backend: BUILD_ENV_TAG };
+        return { ...meta, backend: BUILD_ENV_TAG };
+      }
       return meta;
     }
   } catch { /* ignore */ }

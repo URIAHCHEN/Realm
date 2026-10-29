@@ -170,7 +170,7 @@ async function pg(query, init = {}) {
 /** 取某团队码（scope）的名册；scope 与 app_state.id 一致 */
 async function listMembers(scope) {
   const r = await pg(`/app_members?scope=eq.${encodeURIComponent(scope)}&select=user_id,is_admin`)
-  if (!r.ok || !Array.isArray(r.data)) return []
+  if (!r.ok || !Array.isArray(r.data)) throw new Error('MEMBERS_LOOKUP_FAILED')
   return r.data
 }
 
@@ -366,7 +366,20 @@ async function handleRest(req, res, restPath, search, method) {
   }
 
   if (method !== 'GET') {
-    const row = Array.isArray(body) ? body[0] || {} : body || {}
+    if (Array.isArray(body)) return sendJson(res, 400, { message: 'batch writes are not supported' })
+    const row = body || {}
+    const field = table === 'app_state' ? 'id' : 'scope'
+    const filters = new URLSearchParams(search).getAll(field)
+    if (filters.length > 1 || (filters.length === 1 && !filters[0].startsWith('eq.'))) {
+      return sendJson(res, 400, { message: 'invalid scope filter' })
+    }
+    const filteredScope = filters.length ? filters[0].slice(3) : ''
+    if (filteredScope && row[field] != null && String(row[field]) !== filteredScope) {
+      return sendJson(res, 400, { message: 'scope cannot be changed' })
+    }
+    if ((method === 'PATCH' || method === 'DELETE') && !filteredScope) {
+      return sendJson(res, 400, { message: 'scope filter required' })
+    }
     if (table === 'app_state') {
       const scope = eqValue(search, 'id') || String(row.id || '')
       const gate = await canWrite(scope, auth.sub, false)

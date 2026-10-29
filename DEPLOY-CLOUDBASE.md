@@ -1,14 +1,15 @@
 # CloudBase 部署记录（腾讯云 · 国内站）
 
 > 2026-10-28 上线。架构已从「GitHub Pages 静态站 + Supabase」整体迁到 CloudBase：
-> 前端由云函数承载、数据落在 CloudBase PostgreSQL、对外域名 `lynn.xdf.cn`。
+> 前端由云函数承载、数据落在 CloudBase PostgreSQL、当前对外入口 `d0a08260a99-cb-env-pl.ixdf.com`（`lynn.xdf.cn` 已绑定但待 DNS，暂停推进）。
 
 ## 一、环境与入口
 
 | 项 | 值 |
 |---|---|
 | 环境 ID | `cb-env-chenhongl-221-d0a08260a99`（ap-shanghai，默认套餐按量计费） |
-| 对外域名 | **https://lynn.xdf.cn/**（自定义域名，证书 `V1aFoo4V`，网关 `/` → `WEB_SCF:realm-api`） |
+| 对外域名（当前） | **https://d0a08260a99-cb-env-pl.ixdf.com/**（平台分配的自定义域名，证书 `aqRDdjMP`，`/` 与 `/api` 两条路由 → `WEB_SCF:realm-api`，路径透传） |
+| 对外域名（待启用） | `https://lynn.xdf.cn/`（证书 `V1aFoo4V`，DNS 未加，暂停） |
 | 承载方式 | HTTP 云函数 `realm-api`（Nodejs20.19，`scf_bootstrap` 监听 9000） |
 | 数据库 | CloudBase PostgreSQL 实例 `postgres-fb38hz52`（SHARED，SDK/网关访问） |
 | 静态托管 | 已停用为交付入口（`*.webapps.tcloudbase.com`、`*.tcloudbaseapp.com` 两条 `/` 路由已 disable，可回滚启用） |
@@ -16,7 +17,7 @@
 ## 二、请求链路
 
 ```
-浏览器 ──HTTPS──> lynn.xdf.cn（网关，证书 V1aFoo4V）
+浏览器 ──HTTPS──> d0a08260a99-cb-env-pl.ixdf.com（网关，证书 aqRDdjMP；lynn.xdf.cn 同指向本函数）
                     ├─ / 与 /assets/*   → 函数内 dist/ 静态资源（带指纹长缓存）
                     ├─ /api/auth/v1/*   → 函数内鉴权（邮箱+口令，scrypt，自签 JWT）
                     └─ /api/rest/v1/*   → 校验登录态 + 成员/管理员权限
@@ -70,11 +71,11 @@ rm -rf cloudfunctions/realm-api/dist && cp -R dist cloudfunctions/realm-api/dist
 
 ## 六、待办 / 外部依赖
 
-1. **DNS（当前唯一阻塞项）**：`lynn.xdf.cn` 需一条 CNAME 指向
-   `lynn.xdf.cn.tcbaccess.tencentcloudbase.com`。
+1. **备用域名 DNS（暂停中）**：`lynn.xdf.cn` 需一条 CNAME 指向
+   `lynn.xdf.cn.tcbaccess.tencentcloudbase.com`（Lynn 已明确新域名暂缓，不影响当前 ixdf.com 入口使用）。
    解析由企业域名管理员维护，需 IT 添加；加完网关侧 `DNSStatus` 会从 `EMPTY` 变 `OK`，公网即可访问。
 2. **历史数据迁移**：旧站数据在 Supabase（团队码 `main`）。迁移不需要任何密钥——
-   在旧站（GitHub Pages，保持登录）用顶栏「导出备份（.json）」导出，再到 `lynn.xdf.cn` 导入备份。
+   在旧站（GitHub Pages，保持登录）用顶栏「导出备份（.json）」导出，再到 ixdf.com 入口导入备份。
    注意：新站首个注册账号会自动成为管理员，建议用你常用邮箱先注册再导入。
 3. Supabase 项目在数据确认搬完前不要删（作为回滚源）。
 
@@ -83,7 +84,7 @@ rm -rf cloudfunctions/realm-api/dist && cp -R dist cloudfunctions/realm-api/dist
 | 场景 | 操作 |
 |---|---|
 | 新前端有问题 | 用上一版 `dist` 重新 `updateFunctionCode` 部署 `realm-api` |
-| 回到静态托管老入口 | `manageGateway(enableRoute, domain=<webapps 域>, path="/")`，同时 `disableRoute` 掉 `lynn.xdf.cn` 的 `/` |
+| 回到静态托管老入口 | `manageGateway(enableRoute, domain=<webapps 域>, path="/")`，同时 `disableRoute` 掉当前域名（`d0a08260a99-cb-env-pl.ixdf.com`）的 `/` |
 | 完全回到 Supabase | 回退本批提交里的 `src/lib/config.ts`，走 GitHub Pages；Supabase 数据未改动 |
 | 数据写坏 | 用导出的 `.json` 备份 + `app_state` 单行覆盖（CAS 关闭时可直接 PATCH） |
 

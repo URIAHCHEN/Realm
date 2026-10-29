@@ -858,7 +858,7 @@ export function StudentTable({
                             >
                               {getNickname(studentName)}
                             </button>
-                            <span className="row-quick" aria-hidden="true">
+                            <span className="row-quick">
                               <button
                                 type="button"
                                 title="复制该生本课反馈"

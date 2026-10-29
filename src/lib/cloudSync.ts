@@ -36,7 +36,10 @@ export interface CloudSyncConfig {
 
 export interface CloudSyncMeta {
   lastPushedAt: number;
+  /** 云端实际存储的内容哈希；仅用作云端变更检测 / CAS 基线。 */
   lastPushedHash: string;
+  /** 导入迁移后本地快照的基线；旧元数据回退到 lastPushedHash。 */
+  lastLocalHash?: string;
   /** 写入时所属的后端环境（BUILD_ENV_TAG）；换后端后旧基线自动作废 */
   backend?: string;
 }
@@ -251,6 +254,17 @@ function sanitizeSnapshot(raw: unknown): SyncSnapshot | null {
     nicknames: asObj(r.nicknames) as SyncSnapshot['nicknames'],
     schoolScores: asObj(r.schoolScores) as SyncSnapshot['schoolScores'],
     templates: asObj(r.templates) as SyncSnapshot['templates'],
+    pendingVersions: Array.isArray(r.pendingVersions)
+      ? r.pendingVersions.filter((item): item is import('@/lib/pendingReview').PendingVersion => {
+        if (!item || typeof item !== 'object') return false;
+        const pending = item as Record<string, unknown>;
+        const snapshot = pending.snapshot as Record<string, unknown> | null;
+        return typeof pending.id === 'string' && typeof pending.by === 'string'
+          && typeof pending.at === 'number' && Number.isFinite(pending.at)
+          && !!snapshot && typeof snapshot === 'object'
+          && !!snapshot.classes && typeof snapshot.classes === 'object' && !Array.isArray(snapshot.classes);
+      })
+      : [],
     // 伴学萌宠：可选增量字段；旧快照没有该字段时保持 undefined
     pet: r.pet && typeof r.pet === 'object' ? (r.pet as SyncSnapshot['pet']) : undefined,
   };
@@ -330,19 +344,22 @@ export async function pushSnapshotConditional(
   config: CloudSyncConfig,
   snapshot: SyncSnapshot,
   baseHash: string | null,
+  baseUpdatedAt?: string,
 ): Promise<PushOutcome> {
   await ensureFreshToken();
   const hash = hashSnapshot(snapshot);
   const payload = {
     data: snapshot,
     snapshot_hash: hash,
-    updated_at: new Date().toISOString(),
+    // 队列不进入内容 hash，因此以 updated_at 作为整行 CAS 的第二个条件。
+    // 保证每次写入都推进版本，包含同一毫秒内完成的两次提交。
+    updated_at: new Date(Math.max(Date.now(), (Date.parse(baseUpdatedAt || '') || 0) + 1)).toISOString(),
   };
 
-  if (baseHash) {
+  if (baseHash !== null) {
     // 条件更新：只有云端 hash 仍等于我上次推送的基线时才允许写
     const res = await backendFetch(
-      restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&snapshot_hash=eq.${encodeURIComponent(baseHash)}`),
+      restUrl(config, `?id=eq.${encodeURIComponent(getStateId(config))}&snapshot_hash=eq.${encodeURIComponent(baseHash)}${baseUpdatedAt ? `&updated_at=eq.${encodeURIComponent(baseUpdatedAt)}` : ''}`),
       {
         method: 'PATCH',
         headers: apiHeaders(config, { Prefer: 'return=representation' }),
@@ -378,6 +395,25 @@ export async function pushSnapshotConditional(
   }
 
   return insertSnapshot(config, payload);
+}
+
+/** 上传主数据时保留最新待审队列；确认保留本地也仍保护读取后出现的并发更新。 */
+export async function pushLocalSnapshot(
+  config: CloudSyncConfig,
+  snapshot: SyncSnapshot,
+  baseHash: string | null,
+  overwriteConflict = false,
+): Promise<PushOutcome> {
+  const cloud = await fetchCloudState(config);
+  if (cloud.snapshot && !overwriteConflict && cloud.hash !== baseHash) {
+    return { ok: false, reason: 'conflict' };
+  }
+  return pushSnapshotConditional(
+    config,
+    { ...snapshot, pendingVersions: cloud.snapshot?.pendingVersions || [] },
+    cloud.snapshot ? cloud.hash : null,
+    cloud.updatedAt,
+  );
 }
 
 /**

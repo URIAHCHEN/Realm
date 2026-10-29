@@ -1,0 +1,37 @@
+.header-menu-panel {
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+}
+
+.header-menu-item:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  background: rgb(var(--brand-rgb) / 0.08);
+}
+
+.dark .header-menu-trigger {
+  background: #1b2736;
+  color: #e2e8f0;
+}
+
+.dark .header-menu-panel {
+  background: #172130;
+  border-color: #334155;
+}
+
+.dark .header-menu-item {
+  color: #e2e8f0;
+}
+
+.dark .header-menu-item:hover,
+.dark .header-menu-item:focus-visible {
+  background: #253449;
+}
+
+.dark .header-menu-item[data-danger] {
+  color: #fda4af;
+}
+
+.dark .header-menu-label {
+  color: #a9b8cd;
+}

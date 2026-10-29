@@ -961,9 +961,9 @@ function App() {
       {/* 顶部导航栏 */}
       <header className="liquid-glass-header sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between">
+          <div className="realm-header-row flex items-center justify-between">
             <BrandMark />
-            <div className="flex items-center gap-3">
+            <div className="realm-header-actions flex items-center gap-3">
               <button
                 onClick={async () => {
                   const id = myUserId();
@@ -992,7 +992,7 @@ function App() {
                 }`}
               >
                 <Cloud className="w-4 h-4" />
-                <span className="hidden sm:inline">云同步</span>
+                <span className="sr-only sm:not-sr-only">云同步</span>
                 <span
                   className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${
                     cloudSync.status === 'connected' ? 'bg-emerald-500' :
@@ -1017,15 +1017,16 @@ function App() {
               {membership?.admin ? (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full" onClick={async () => { await cloudSync.refreshPending(); setReviewOpen(true); }} title="查看其他成员提交的修订并批准/驳回">
                   <ShieldCheck className="w-4 h-4" />
-                  <span className="hidden sm:inline">审核队列{cloudSync.pending.length > 0 ? " (" + cloudSync.pending.length + ")" : ""}</span>
+                  <span className="sr-only sm:not-sr-only">审核队列{cloudSync.pending.length > 0 ? " (" + cloudSync.pending.length + ")" : ""}</span>
                 </Button>
               ) : (
                 <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => {
-                  const note = window.prompt("提交审核说明（会显示给管理员，可留空）：", "") ?? "";
+                  const note = window.prompt("提交审核说明（会显示给管理员，可留空）：", "");
+                  if (note === null) return;
                   void cloudSync.submitForReview(note || undefined);
                 }} title="把当前这一版提交管理员审核；批准前不会写入线上数据">
                   <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">提交审核</span>
+                  <span className="sr-only sm:not-sr-only">提交审核</span>
                 </Button>
               )}
               <Button
@@ -1120,6 +1121,7 @@ function App() {
                   就成了用户反复反馈的"上短下长"。加上后表格在自己容器内滚动，三块宽度对齐。 */}
               <div className="flex-1 min-w-0">
                 <StudentTable
+                  key={`${currentClassId ?? 'none'}:${currentLessonNumber}`}
                   students={rosterForLesson}
                   records={currentClass?.records || []}
                   lessonConfig={currentLessonConfig}

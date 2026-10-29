@@ -11,6 +11,7 @@ import {
   loadSyncConfig,
   loadSyncMeta,
   pushSnapshotConditional,
+  pushLocalSnapshot,
   saveSyncConfig,
   saveSyncMeta,
 } from '@/lib/cloudSync';
@@ -80,13 +81,18 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
 
   snapshotRef.current = snapshot;
 
-  const doPush = useCallback(async (cfg: CloudSyncConfig, silent = false) => {
+  const doPush = useCallback(async (cfg: CloudSyncConfig, silent = false, overwriteConflict = false) => {
     if (pushInFlight.current) return false;
     if (!canWrite) {
       setStatus('readonly');
       statusRef.current = 'readonly';
       setMessage('当前为只读：未列入可写名单');
       if (!silent) toast.info('你尚未被加入可写名单，改动只保存在本地');
+      return false;
+    }
+    if (!isAdmin) {
+      setMessage('改动保存在本地，请提交管理员审核');
+      if (!silent) toast.info('请提交管理员审核');
       return false;
     }
     setAction('pushing');
@@ -100,7 +106,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       // 若在上传途中继续录分，snapshotRef.current 会变成新内容；
       // 用新内容当 lastPushedHash 会让下次对账误判"云端有更新"→ 拉取覆盖刚录的分数。
       const pushed = snapshotRef.current;
-      const outcome = await pushSnapshotConditional(cfg, pushed, baseMeta.lastPushedHash || null);
+      const outcome = await pushLocalSnapshot(cfg, pushed, baseMeta.lastPushedHash || null, overwriteConflict);
       if (!outcome.ok) {
         if (outcome.reason === 'conflict') {
           setStatus('conflict');
@@ -144,7 +150,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       setAction('idle');
       pushInFlight.current = false;
     }
-  }, [canWrite]);
+  }, [canWrite, isAdmin]);
 
   const doPull = useCallback(async (cfg: CloudSyncConfig, silent = false) => {
     setAction('pulling');
@@ -161,7 +167,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       //   ② 也让抑制标记不会吃掉用户随后的一次真实编辑（原实现会）。
       pendingImportHash.current = true;
       onImport(cloud.snapshot);
-      const meta = { lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(cloud.snapshot) };
+      const meta = { lastPushedAt: Date.now(), lastPushedHash: cloud.hash };
       saveSyncMeta(meta);
       setLastSyncAt(meta.lastPushedAt);
       const okStatus: CloudSyncStatus = canWrite ? 'connected' : 'readonly';
@@ -225,7 +231,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
         return;
       }
 
-      const localChanged = localHash !== meta.lastPushedHash;
+      const localChanged = localHash !== (meta.lastLocalHash ?? meta.lastPushedHash);
       const cloudChanged = cloud.hash !== meta.lastPushedHash;
 
       if (!localChanged && !cloudChanged) {
@@ -236,7 +242,8 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
       } else if (!localChanged && cloudChanged) {
         await doPull(cfg, true);
       } else if (localChanged && !cloudChanged) {
-        await doPush(cfg, true);
+        if (isAdmin) await doPush(cfg, true);
+        else { setStatus('connected'); statusRef.current = 'connected'; setMessage('改动保存在本地，请提交管理员审核'); }
       } else {
         setStatus('conflict');
         statusRef.current = 'conflict';
@@ -255,7 +262,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
         if (run) setTimeout(() => { void run(cfg); }, 80);
       }
     }
-  }, [doPush, doPull, canWrite]);
+  }, [doPush, doPull, canWrite, isAdmin]);
   reconcileRef.current = reconcile;
 
   // 登录后对账：enabled 变 true、切换账号或权限变化时重新对账（此时已携带用户 JWT，可过 RLS）
@@ -282,7 +289,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
   useEffect(() => {
     if (!pendingImportHash.current || !config) return;
     pendingImportHash.current = false;
-    const meta = { lastPushedAt: Date.now(), lastPushedHash: hashSnapshot(snapshot) };
+    const meta = { ...loadSyncMeta(), lastPushedAt: Date.now(), lastLocalHash: hashSnapshot(snapshot) };
     saveSyncMeta(meta);
     suppressPush.current = true;
   }, [snapshot, config]);
@@ -377,7 +384,7 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
         const baseSnap = cloud.snapshot;
         if (!baseSnap) { toast.error('云端还没有基础数据，请先让管理员上传一版'); return; }
         const next = mergePending(baseSnap.pendingVersions, item);
-        const outcome = await pushSnapshotConditional(config, { ...baseSnap, pendingVersions: next }, cloud.hash || null);
+        const outcome = await pushSnapshotConditional(config, { ...baseSnap, pendingVersions: next }, cloud.hash, cloud.updatedAt);
         if (outcome.ok) { merged = next; break; }
         failReason = outcome.reason;
         // 只有「云端刚被改过」值得重读重试；其余（无表/无权限）直接失败
@@ -419,8 +426,9 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     try {
       // 条件写：批准前先取云端当前 hash 作基线，若期间他端写入则放弃本次批准（不覆盖别人）
       const cloud = await fetchCloudState(config);
-      const rest = removePending(cloud.snapshot?.pendingVersions || pending, item.id);
-      const outcome = await pushSnapshotConditional(config, { ...item.snapshot, pendingVersions: rest }, cloud.hash || null);
+      if (!cloud.snapshot?.pendingVersions?.some(p => p.id === item.id)) { toast.error('该修订已处理，请刷新待审列表'); return; }
+      const rest = removePending(cloud.snapshot.pendingVersions, item.id);
+      const outcome = await pushSnapshotConditional(config, { ...item.snapshot, pendingVersions: rest }, cloud.hash, cloud.updatedAt);
       if (!outcome.ok) {
         toast.error(outcome.reason === 'conflict'
           ? '云端刚被其他设备更新，请刷新待审列表后再批准'
@@ -434,15 +442,16 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     } catch (e) {
       toast.error('批准失败：' + toSyncMessage(e));
     }
-  }, [config, pending, onImport]);
+  }, [config, onImport]);
 
   /** 管理员驳回：仅把该条目从队列移除（线上数据不变） */
   const rejectPending = useCallback(async (item: import('@/lib/pendingReview').PendingVersion) => {
     if (!config) return;
     try {
       const cloud = await fetchCloudState(config);
-      const rest = removePending(cloud.snapshot?.pendingVersions || pending, item.id);
-      const outcome = await pushSnapshotConditional(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest }, cloud.hash || null);
+      if (!cloud.snapshot?.pendingVersions?.some(p => p.id === item.id)) { toast.error('该修订已处理，请刷新待审列表'); return; }
+      const rest = removePending(cloud.snapshot.pendingVersions, item.id);
+      const outcome = await pushSnapshotConditional(config, { ...(cloud.snapshot || snapshotRef.current), pendingVersions: rest }, cloud.hash, cloud.updatedAt);
       if (!outcome.ok) {
         toast.error('云端刚被其他设备更新，请刷新待审列表后重试');
         return;
@@ -452,14 +461,14 @@ export function useCloudSync({ snapshot, onImport, enabled, sessionKey, canWrite
     } catch (e) {
       toast.error('驳回失败：' + toSyncMessage(e));
     }
-  }, [config, pending]);
+  }, [config]);
 
   const reconcileNow = useCallback(() => {
     if (config) return reconcile(config);
   }, [config, reconcile]);
 
   const resolveConflictKeepLocal = useCallback(() => {
-    if (config) return doPush(config);
+    if (config) return doPush(config, false, true);
   }, [config, doPush]);
 
   const resolveConflictKeepCloud = useCallback(() => {

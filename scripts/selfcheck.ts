@@ -27,7 +27,7 @@ import {
   oralDistribution, oralToneClass, oralToneColor, oralKey, DEFAULT_ORAL_RATING,
 } from '@/lib/oralRating';
 import type { LessonConfig, QuestionType, StudentRecord, ClassStats } from '@/types';
-import { pushSnapshotConditional } from '@/lib/cloudSync';
+import { pushSnapshotConditional, pushLocalSnapshot, fetchCloudState } from '@/lib/cloudSync';
 import { isFullAttendance, isCumulativeFullAttendance, isListeningEligible, rankForLeaderboard, FENGYUN_LIMIT, groupFengyunAwards, buildFengyunRows } from '@/lib/leaderboardRules';
 import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
 import { getOverallFeedback, getTrajectoryFeedback } from '@/lib/reportFeedback';
@@ -588,6 +588,22 @@ group('云端条件推送 CAS');
     const last2 = calls[calls.length - 1];
     check(r.ok === true && last2.method === 'POST', 'CAS：无基线 → POST 插入');
     check(!/on_conflict/.test(last2.url), 'CAS：首次插入不带 on_conflict（不静默覆盖已有行）');
+
+    const pending = [{ id: 'p1', by: 'teacher', at: 1, snapshot: snap }];
+    const updatedAt = '2026-10-30T00:00:00.000Z';
+    next = (_u: string, m: string) => m === 'GET'
+      ? { status: 200, json: [{ data: { ...snap, pendingVersions: pending }, snapshot_hash: 'base123', updated_at: updatedAt }] }
+      : { status: 200, json: [{ id: 'main' }] };
+    const cloud = await fetchCloudState(cfg);
+    check(cloud.snapshot?.pendingVersions?.[0]?.id === 'p1', '拉取快照保留待审核队列');
+    r = await pushLocalSnapshot(cfg, snap, 'base123');
+    const patch = calls[calls.length - 1];
+    check(r.ok && JSON.parse(patch.body || '{}').data.pendingVersions[0].id === 'p1', '主数据上传保留云端待审核队列');
+    check(decodeURIComponent(patch.url).includes('updated_at=eq.' + updatedAt), '队列并发写入带更新时间条件');
+    r = await pushLocalSnapshot(cfg, snap, 'old');
+    check(!r.ok && r.reason === 'conflict', '基线过期时阻止上传');
+    r = await pushLocalSnapshot(cfg, snap, 'old', true);
+    check(r.ok, '明确选择保留本地时使用最新云端基线');
 
     next = { status: 409, text: 'duplicate key value' };
     r = await pushSnapshotConditional(cfg, snap, null);

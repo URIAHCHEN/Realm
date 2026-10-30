@@ -16,7 +16,7 @@ import {
   type PetState,
   type RaisingRoute,
 } from '@/types/pet';
-import { adoptPet, isMaxLevel, levelOf, petDefOf } from '@/lib/gamification/rules';
+import { adoptPet, applyExpPolicy, isMaxLevel, levelOf, petDefOf } from '@/lib/gamification/rules';
 import { createBattle, makeGroups, settleBattle } from '@/lib/gamification/groups';
 
 const PET_KEY = 'petData';
@@ -41,6 +41,10 @@ export function normalizePetSnapshot(raw: unknown): PetSnapshot {
 
   const settings: PetSettings = {
     enabled: Boolean(value.settings?.enabled),
+    autoScope: value.settings?.autoScope === 'sinceEnable' ? 'sinceEnable' : 'all',
+    enabledAt: typeof value.settings?.enabledAt === 'string' ? value.settings.enabledAt : undefined,
+    allowNegativeExp: Boolean(value.settings?.allowNegativeExp),
+    allowDeduction: value.settings?.allowDeduction !== false,
     classScope: Array.isArray(value.settings?.classScope) ? value.settings!.classScope.filter(Boolean) : [],
     rules: {
       homeworkDone: Number(value.settings?.rules?.homeworkDone) || base.settings.rules.homeworkDone,
@@ -59,9 +63,10 @@ export function normalizePetSnapshot(raw: unknown): PetSnapshot {
     const pets: ClassPetData['pets'] = {};
     Object.entries((data as ClassPetData).pets ?? {}).forEach(([student, pet]) => {
       if (!pet || typeof pet !== 'object') return;
-      const known = PET_CATALOG.some(p => p.id === (pet as PetState).petId);
+      // 关键：未知 id 原样保留（旧版 lamp 或未来新增），绝不静默替换成目录第一项
+      const rawId = String((pet as PetState).petId ?? '').trim();
       pets[student] = {
-        petId: known ? (pet as PetState).petId : PET_CATALOG[0].id,
+        petId: rawId || PET_CATALOG[0].id,
         level: Math.max(1, Number((pet as PetState).level) || 1),
         exp: Math.max(0, Number((pet as PetState).exp) || 0),
         adoptedAt: String((pet as PetState).adoptedAt ?? new Date().toISOString()),
@@ -148,10 +153,13 @@ export function addManualScore(
   reason: string,
   nowISO = new Date().toISOString(),
   lessonNumber?: number,
+  options: { force?: boolean } = {},
 ): PetSnapshot {
   const cls = ensureClass(snapshot, classId);
   const pet = cls.pets[studentName];
   if (!pet) return snapshot;
+  // 扣分总开关：撤回（force）不受限，否则负分一律拒绝
+  if (delta < 0 && !snapshot.settings.allowDeduction && !options.force) return snapshot;
 
   const event: PetEvent = {
     id: `manual:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -163,7 +171,7 @@ export function addManualScore(
     createdAt: nowISO,
   };
   const events = [...cls.events, event];
-  const exp = Math.max(0, events.reduce((sum, e) => (e.studentName === studentName ? sum + e.delta : sum), 0));
+  const exp = applyExpPolicy(events.reduce((sum, e) => (e.studentName === studentName ? sum + e.delta : sum), 0), snapshot.settings);
   const level = levelOf(exp, snapshot.settings.levelTable);
 
   return {
@@ -190,9 +198,12 @@ export function addScoresBatch(
   lessonNumber?: number,
 ): PetSnapshot {
   const cls = ensureClass(snapshot, classId);
-  const batchId = `batch:${Date.now()}`;
+  // 毫秒时间戳会撞车：同一毫秒内的两次提交必须产生不同批次，否则事件 id 相同会被合并覆盖
+  const batchId = `batch:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
   const events = [...cls.events];
   const pets = { ...cls.pets };
+
+  if (delta < 0 && !snapshot.settings.allowDeduction) return snapshot;
 
   studentNames.forEach(name => {
     const pet = pets[name];
@@ -207,7 +218,7 @@ export function addScoresBatch(
       batchId,
       createdAt: nowISO,
     });
-    const exp = Math.max(0, events.reduce((sum, e) => (e.studentName === name ? sum + e.delta : sum), 0));
+    const exp = applyExpPolicy(events.reduce((sum, e) => (e.studentName === name ? sum + e.delta : sum), 0), snapshot.settings);
     pets[name] = { ...pet, exp, level: levelOf(exp, snapshot.settings.levelTable) };
   });
 
@@ -224,7 +235,7 @@ export function undoEvent(
   const cls = ensureClass(snapshot, classId);
   const target = cls.events.find(e => e.id === eventId);
   if (!target) return snapshot;
-  return addManualScore(snapshot, classId, target.studentName, -target.delta, `撤回：${target.reason}`, nowISO);
+  return addManualScore(snapshot, classId, target.studentName, -target.delta, `撤回：${target.reason}`, nowISO, target.lessonNumber, { force: true });
 }
 
 /** 毕业：满级后可重领（pet）或转社区建设（building） */
@@ -285,7 +296,10 @@ export function awardBadge(
 
 /** 更新设置（灰度开关 / 班级范围 / 规则权重） */
 export function updateSettings(snapshot: PetSnapshot, patch: Partial<PetSettings>): PetSnapshot {
-  return { ...snapshot, settings: { ...snapshot.settings, ...patch } };
+  const next = { ...snapshot.settings, ...patch };
+  // 首次开启时记录启用时刻，供 autoScope='sinceEnable' 作为分界
+  if (patch.enabled === true && !next.enabledAt) next.enabledAt = new Date().toISOString();
+  return { ...snapshot, settings: next };
 }
 
 /** 是否对该班级开放（灰度） */
@@ -440,7 +454,7 @@ export function interactWithPet(
     createdAt: nowISO,
   };
   const events = [...cls.events, event];
-  const exp = Math.max(0, events.reduce((sum, item) => (item.studentName === studentName ? sum + item.delta : sum), 0));
+  const exp = applyExpPolicy(events.reduce((sum, item) => (item.studentName === studentName ? sum + item.delta : sum), 0), snapshot.settings);
   return {
     ...snapshot,
     classes: {
@@ -460,4 +474,39 @@ export function interactWithPet(
       },
     },
   };
+}
+
+
+/**
+ * 云端快照回写宠物数据时的合并规则（对应新版实施说明第 3 条）：
+ * - 云端没有 pet 字段（旧客户端推送）→ 保留本地，绝不覆盖；
+ * - 云端有 pet 字段 → 以云端为准（多端以最后写入者胜出，与主快照一致）。
+ * 抽成纯函数便于 selfcheck 直接断言，避免只在 App 里"看起来对"。
+ */
+export function mergeIncomingPet(local: PetSnapshot, incoming: unknown): PetSnapshot {
+  if (!incoming || typeof incoming !== 'object') return local;
+  const remote = normalizePetSnapshot(incoming);
+
+  // 业务合并规则（CAS 只保证"谁先写"，这里保证"事件不丢"）：
+  // 同一班级的事件按 id 取并集，宠物字段以远端为准；经验按并集事件重算。
+  const classes: PetSnapshot['classes'] = { ...remote.classes };
+  Object.entries(local.classes).forEach(([classId, localCls]) => {
+    const remoteCls = remote.classes[classId];
+    if (!remoteCls) { classes[classId] = localCls; return; }
+
+    const byId = new Map<string, PetEvent>();
+    [...localCls.events, ...remoteCls.events].forEach(event => byId.set(event.id, event));
+    const events = [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+
+    const pets = { ...localCls.pets, ...remoteCls.pets };
+    Object.keys(pets).forEach(name => {
+      const raw = events.reduce((sum, event) => (event.studentName === name ? sum + event.delta : sum), 0);
+      const exp = applyExpPolicy(raw, remote.settings);
+      pets[name] = { ...pets[name], exp, level: levelOf(exp, remote.settings.levelTable) };
+    });
+
+    classes[classId] = { ...remoteCls, pets, events };
+  });
+
+  return { ...remote, classes };
 }

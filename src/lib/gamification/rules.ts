@@ -12,6 +12,7 @@ import {
   DEFAULT_PET_SETTINGS,
   PET_BADGES,
   PET_CATALOG,
+  PET_LEGACY,
   type ClassPetData,
   type PetEvent,
   type PetSettings,
@@ -87,8 +88,11 @@ export function petStatusOf(state: PetState, lastEventISO?: string, nowMs = Date
   return 'normal';
 }
 
+/** 宠物定义：先查可领养目录，再查旧版保留；都查不到时给一个中性的占位定义，绝不改写原 id */
 export function petDefOf(petId: string) {
-  return PET_CATALOG.find(pet => pet.id === petId) ?? PET_CATALOG[0];
+  return PET_CATALOG.find(pet => pet.id === petId)
+    ?? PET_LEGACY.find(pet => pet.id === petId)
+    ?? { id: petId, name: '未知宠物', tagline: '数据保留中', hue: '0 0% 45%', stages: ['未知', '未知', '未知', '未知'] as [string, string, string, string] };
 }
 
 /** 单条记录可产生的自动积分事件（幂等 id） */
@@ -189,6 +193,21 @@ export function autoBadgesFor(
   return PET_BADGES.filter(b => next.has(b.id)).map(b => b.id);
 }
 
+/** 经验策略：默认按 0 下限展示/写回；allowNegativeExp=true 时保留负值 */
+export function applyExpPolicy(raw: number, settings: PetSettings): number {
+  return settings.allowNegativeExp ? raw : Math.max(0, raw);
+}
+
+/** 该记录是否参与自动结算（对应 autoScope 口径） */
+export function includeRecordByScope(record: StudentRecord, settings: PetSettings): boolean {
+  if (settings.autoScope !== 'sinceEnable') return true;
+  if (!settings.enabledAt) return true;
+  const at = Date.parse(settings.enabledAt);
+  const date = Date.parse(String(record.date ?? ''));
+  if (!Number.isFinite(at) || !Number.isFinite(date)) return true; // 数据不全时不擅自丢分
+  return date >= at;
+}
+
 /** 结算：把新记录折算成事件并更新宠物（幂等，可反复调用） */
 export function settleClassPets(
   cls: Class,
@@ -201,6 +220,7 @@ export function settleClassPets(
   const added: PetEvent[] = [];
 
   for (const record of cls.records ?? []) {
+    if (!includeRecordByScope(record, settings)) continue;
     for (const event of autoEventsForRecord(record, cls, settings, nowISO)) {
       if (!known.has(event.id)) {
         known.add(event.id);
@@ -215,7 +235,7 @@ export function settleClassPets(
   for (const studentName of cls.students ?? []) {
     const old = pets[studentName];
     if (!old) continue; // 未领养的不计算
-    const exp = Math.max(0, expOfEvents(events, studentName));
+    const exp = applyExpPolicy(expOfEvents(events, studentName), settings);
     const level = levelOf(exp, settings.levelTable);
     const badges = autoBadgesFor(cls.records ?? [], events, studentName, old.badges ?? []);
     pets[studentName] = { ...old, exp, level, badges };
@@ -240,4 +260,14 @@ export function isMaxLevel(state: PetState, settings: PetSettings): boolean {
 
 export function defaultSettings(): PetSettings {
   return { ...DEFAULT_PET_SETTINGS, rules: { ...DEFAULT_PET_SETTINGS.rules }, levelTable: [...DEFAULT_PET_SETTINGS.levelTable] };
+}
+
+
+/**
+ * 未经 0 下限裁剪的经验总额（= 流水代数和）。
+ * 经验展示用的是 max(0, rawExp)，因此出现负分时会与流水对不上；
+ * 对账、导出与审计一律用本函数，避免把下限当成"数据丢失"。
+ */
+export function rawExpOf(events: PetEvent[], studentName: string): number {
+  return events.reduce((sum, event) => (event.studentName === studentName ? sum + event.delta : sum), 0);
 }

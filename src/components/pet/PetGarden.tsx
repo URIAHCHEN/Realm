@@ -15,7 +15,8 @@ import {
 import { activeBattleOf, buildProgress, groupContributors, groupScore } from '@/lib/gamification/groups';
 import { expProgress, isMaxLevel, petDefOf, petStatusOf, stageOf } from '@/lib/gamification/rules';
 import { badgeBalance, isEnabledForClass } from '@/lib/gamification/store';
-import { petStageImage, skinImage } from '@/lib/gamification/petAssets';
+import { hasSizedAssets, hasWornImage, petStageSources, skinSources, wornSources } from '@/lib/gamification/petAssets';
+import { SKIN_RULES, headFitOf, skinRuleFor } from '@/lib/gamification/petFit';
 import type { Class } from '@/types';
 
 interface PetGardenProps {
@@ -45,21 +46,103 @@ const QUICK_SCORES = [
 ];
 
 /** 极简纸艺风格头像：纯 CSS 绘制，不依赖图片资源 */
-function PetAvatar({ petId, level, size = 64, skin }: { petId: string; level: number; size?: number; skin?: string }) {
+/**
+ * 配饰层定位：把配饰图按「头部几何」重新摆到宠物图同一坐标系里。
+ * 全部按 1024 画布计算，再换算成百分比，因此任意尺寸的头像都能用同一套数值。
+ */
+function skinLayerStyle(petId: string, stage: number, skinId: string) {
+  const rule = skinRuleFor(petId, skinId);
+  if (!rule) return null;
+  const fit = headFitOf(petId, stage);
+  const [x0, y0, x1, y1] = rule.crop;
+  const cropW = x1 - x0;
+  const cropH = y1 - y0;
+  if (cropW <= 0 || cropH <= 0) return null;
+
+  let targetW: number;
+  let targetH: number;
+  if (rule.h) {
+    targetH = fit.w * rule.h;
+    targetW = (targetH * cropW) / cropH;
+  } else {
+    targetW = fit.w * (rule.w ?? 1);
+    targetH = (targetW * cropH) / cropW;
+  }
+
+  const centerX = fit.cx + fit.w * (rule.dx ?? 0);
+  const centerY = fit.cy + fit.w * (rule.dy ?? 0);
+  const left = centerX - targetW / 2;
+  const top = centerY - targetH * (rule.anchor ?? 0.5);
+
+  const pct = (value: number) => `${(value / 1024) * 100}%`;
+  return {
+    box: {
+      left: pct(left),
+      top: pct(top),
+      width: pct(targetW),
+      height: pct(targetH),
+      zIndex: rule.z === 'behind' ? 0 : 2
+    } as React.CSSProperties,
+    // 裁剪框内的内容放大到铺满外层
+    image: {
+      width: `${(1024 / cropW) * 100}%`,
+      height: `${(1024 / cropH) * 100}%`,
+      left: `${(-x0 / cropW) * 100}%`,
+      top: `${(-y0 / cropH) * 100}%`
+    } as React.CSSProperties
+  };
+}
+
+/** 整套服装：只能靠官方成品图，叠层一定会露出原来的身体 */
+const FULL_SUIT_SKINS = new Set(['dino']);
+
+/** 该皮肤是否能用在指定宠物上：有成品图直接可用，其余走通用叠层 */
+function canWear(skinId: string, petId: string): boolean {
+  if (hasWornImage(skinId, petId)) return true;
+  if (FULL_SUIT_SKINS.has(skinId)) return false;
+  return Boolean(SKIN_RULES[skinId]);
+}
+
+export function PetAvatar({ petId, level, size = 64, skin }: { petId: string; level: number; size?: number; skin?: string }) {
   const def = petDefOf(petId);
   const stage = stageOf(level);
   const ear = 8 + stage * 4;
   const hasBodySkin = skin === 'dino';
-  const baseImage = petStageImage(petId, stage);
-  const overlayImage = skin ? skinImage(skin) : undefined;
+  const base = petStageSources(petId, stage);
+  // 整套服装（恐龙睡衣）必须用官方成品图：它要盖住全身，叠层会露出原来的身体
+  const worn = skin === 'dino' ? wornSources(skin, petId) : {};
+  const sized = hasSizedAssets();
+  const chosen = worn.large || worn.small ? worn : base;
+  const layer = chosen === base && skin ? skinLayerStyle(petId, stage, skin) : null;
+  const skinSrc = skin && layer ? skinSources(skin) : {};
 
-  // 有图时走「底图 + 配饰层」；缺图回退到下面的 CSS 绘制
-  if (baseImage) {
+  // 有图时直接用成品图；缺图回退到下面的 CSS 绘制
+  if (chosen.large || chosen.small) {
+    const srcSet = sized && chosen.small && chosen.large ? `${chosen.small} 128w, ${chosen.large} 256w` : undefined;
     return (
       <div className="relative shrink-0" style={{ width: size, height: size }} aria-hidden>
-        <img src={baseImage} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
-        {overlayImage && (
-          <img src={overlayImage} alt="" className="absolute inset-0 h-full w-full object-contain" loading="lazy" decoding="async" />
+        <img
+          src={chosen.large ?? chosen.small}
+          srcSet={srcSet}
+          sizes={`${size}px`}
+          width={size}
+          height={size}
+          alt=""
+          className="relative h-full w-full object-contain"
+          loading="lazy"
+          decoding="async"
+        />
+        {layer && (skinSrc.large || skinSrc.small) && (
+          <div className="absolute overflow-hidden" style={layer.box}>
+            <img
+              src={skinSrc.large ?? skinSrc.small}
+              alt=""
+              className="absolute max-w-none"
+              style={layer.image}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
         )}
       </div>
     );
@@ -218,6 +301,7 @@ export function PetGarden({
   const [customReason, setCustomReason] = useState('');
   const [shopStudent, setShopStudent] = useState<string | null>(null);
   const [shopTab, setShopTab] = useState<'skin' | 'interact'>('skin');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const enabled = isEnabledForClass(snapshot, cls.id);
   const classData = snapshot.classes[cls.id] ?? { pets: {}, events: [] };
 
@@ -268,6 +352,7 @@ export function PetGarden({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button size="sm" variant="outline" className="h-8" onClick={() => setSettingsOpen(true)}>计分设置</Button>
           <span className="text-sm text-muted-foreground">本班启用</span>
           <Switch
             checked={enabled}
@@ -575,11 +660,12 @@ export function PetGarden({
                   const owned = (shopPet.ownedSkins ?? []).includes(item.id);
                   const equipped = shopPet.skin === item.id;
                   const affordable = badgeBalance(shopPet) >= item.price;
+                  const wearable = canWear(item.id, shopPet.petId);
                   return (
                     <div key={item.id} className="rounded-xl border border-border p-3">
                       <div className="flex items-center gap-2">
                         <div className="rounded-lg bg-muted/50 p-1">
-                          <PetAvatar petId={shopPet.petId} level={shopPet.level} size={52} skin={item.id} />
+                          <PetAvatar petId={shopPet.petId} level={shopPet.level} size={52} skin={wearable ? item.id : undefined} />
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-xs font-medium">{item.name}</div>
@@ -591,10 +677,10 @@ export function PetGarden({
                         size="sm"
                         variant={equipped ? 'secondary' : 'outline'}
                         className="mt-2 h-7 w-full px-2 text-[11px]"
-                        disabled={!owned && !affordable}
+                        disabled={!wearable || (!owned && !affordable)}
                         onClick={() => (owned ? onEquipSkin(activeShopStudent!, item.id) : onBuySkin(activeShopStudent!, item.id))}
                       >
-                        {equipped ? '卸下' : owned ? '装备' : affordable ? '购买' : '徽章不够'}
+                        {!wearable ? '该宠物暂不支持' : equipped ? '卸下' : owned ? '装备' : affordable ? '购买' : '徽章不够'}
                       </Button>
                     </div>
                   );
@@ -662,6 +748,86 @@ export function PetGarden({
           </div>
         </>
       )}
+
+      {/* 计分设置 */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>计分设置</DialogTitle>
+            <DialogDescription>改动即时生效，只影响本班宠物，不改动学情记录。</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-medium">历史记录怎么算</div>
+              <div className="mt-1.5 flex gap-1.5">
+                {([['all', '全部记录'], ['sinceEnable', '仅启用后']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => onSettings({ autoScope: key })}
+                    className={`rounded-full border px-3 py-1 text-xs ${snapshot.settings.autoScope === key ? 'border-foreground/40 bg-muted text-foreground' : 'border-border text-muted-foreground'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                选「全部记录」会在启用当天一次性补分，榜首容易固化；选「仅启用后」只结算 {snapshot.settings.enabledAt ? snapshot.settings.enabledAt.slice(0, 10) : '启用日'} 之后的记录。
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-medium">允许经验为负</div>
+                <p className="text-[11px] text-muted-foreground">关闭时经验最低为 0，扣分只影响流水。</p>
+              </div>
+              <Switch
+                checked={snapshot.settings.allowNegativeExp}
+                onCheckedChange={checked => onSettings({ allowNegativeExp: checked })}
+                aria-label="允许经验为负"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-medium">允许人工扣分</div>
+                <p className="text-[11px] text-muted-foreground">关闭后只能正向加分；撤回历史流水不受影响。</p>
+              </div>
+              <Switch
+                checked={snapshot.settings.allowDeduction}
+                onCheckedChange={checked => onSettings({ allowDeduction: checked })}
+                aria-label="允许人工扣分"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ['homeworkDone', '作业完成'],
+                ['listeningDone', '课后任务'],
+                ['fullScoreBonus', '满分额外'],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="text-[11px] text-muted-foreground">
+                  {label}
+                  <input
+                    className="mt-1 h-8 w-full rounded-lg border border-border bg-background px-2 text-center text-sm tabular-nums"
+                    value={snapshot.settings.rules[key]}
+                    onChange={event => {
+                      const value = Number(event.target.value.replace(/[^-\d]/g, ''));
+                      if (!Number.isFinite(value)) return;
+                      onSettings({ rules: { ...snapshot.settings.rules, [key]: value } });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setSettingsOpen(false)}>关闭</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 领养 */}
       <Dialog open={!!adoptStudent} onOpenChange={open => !open && setAdoptStudent(null)}>

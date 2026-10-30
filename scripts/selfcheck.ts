@@ -42,9 +42,11 @@ import {
 } from '@/lib/gamification/store';
 import { PET_BADGES, type PetSettings } from '@/types/pet';
 import { makeGroups, groupScore, settleBattle, createBattle, activeBattleOf, buildProgress } from '@/lib/gamification/groups';
-import { saveGroups, startBattle, revealBattle, addScoresBatch, badgeBalance, buySkin, equipSkin, interactWithPet } from '@/lib/gamification/store';
-import { petStatusOf } from '@/lib/gamification/rules';
-import { DEFAULT_PET_SETTINGS, BUILD_STAGES } from '@/types/pet';
+import { saveGroups, startBattle, revealBattle, addScoresBatch, badgeBalance, buySkin, equipSkin, interactWithPet, mergeIncomingPet, updateSettings } from '@/lib/gamification/store';
+import { petStatusOf, rawExpOf, expOfEvents, includeRecordByScope } from '@/lib/gamification/rules';
+import { DEFAULT_PET_SETTINGS, BUILD_STAGES, PET_CATALOG, PET_LEGACY } from '@/types/pet';
+import { petDefOf } from '@/lib/gamification/rules';
+import { PET_FIT, SKIN_RULES, PET_SKIN_TWEAK, headFitOf, skinRuleFor } from '@/lib/gamification/petFit';
 
 let passed = 0;
 const failures: string[] = [];
@@ -1263,6 +1265,152 @@ group('小卖部：徽章货币与搞怪皮肤');
 
   const normalized = normalizePetSnapshot(JSON.parse(JSON.stringify(interacted)));
   check(normalized.classes.c1.pets['甲'].skin === 'noodle' && normalized.classes.c1.pets['甲'].badgesSpent === 4, '皮肤与花费随快照持久化');
+}
+
+
+group('宠物目录兼容：旧版灯仔不被静默替换');
+{
+  check(PET_CATALOG.length === 6, '新领养目录为六只');
+  check(PET_CATALOG.every(p => p.id !== 'lamp'), '灯仔不在新领养列表');
+  check(PET_LEGACY.some(p => p.id === 'lamp'), '灯仔在旧版保留名单');
+
+  const raw = {
+    version: 1,
+    settings: { ...defaultPetSnapshot().settings, enabled: true, classScope: [] },
+    classes: { c1: { events: [], pets: { 甲: { petId: 'lamp', level: 3, exp: 30, adoptedAt: 'x', badges: [], route: 'pet', graduated: [] } } } },
+  };
+  const normalized = normalizePetSnapshot(raw);
+  check(normalized.classes.c1.pets['甲'].petId === 'lamp', '归一化保留旧版 petId，不替换成目录第一项');
+  check(petDefOf('lamp').name === '灯仔', '旧版宠物仍能显示名称与阶段');
+
+  const unknown = normalizePetSnapshot({
+    version: 1,
+    settings: { ...defaultPetSnapshot().settings },
+    classes: { c1: { events: [], pets: { 乙: { petId: 'future-pet', level: 2, exp: 12, adoptedAt: 'x', badges: [], route: 'pet', graduated: [] } } } },
+  });
+  check(unknown.classes.c1.pets['乙'].petId === 'future-pet', '未识别 id 原样保留，等待后续版本处理');
+  check(petDefOf('future-pet').name === '未知宠物', '未识别 id 显示中性占位，不冒充其他宠物');
+}
+
+
+group('同步合并与经验对账口径');
+{
+  let local = { ...defaultPetSnapshot(), settings: { ...defaultPetSnapshot().settings, enabled: true, classScope: [] } };
+  local = adoptForStudent(local, 'c1', '甲', 'moss');
+  local = addScoresBatch(local, 'c1', ['甲'], 20, '基础分', 'x', 1);
+
+  const kept = mergeIncomingPet(local, undefined);
+  check(kept === local, '旧客户端推送（无 pet 字段）不覆盖本地宠物数据');
+
+  const remote = addScoresBatch(local, 'c1', ['甲'], 5, '云端加分', 'x', 2);
+  const merged = mergeIncomingPet(local, JSON.parse(JSON.stringify(remote)));
+  check(merged.classes.c1.pets['甲'].exp === 25, '云端带 pet 字段时以云端为准');
+
+  const events = [
+    { id: 'a', studentName: '甲', delta: 30, reason: '', source: 'manual' as const, createdAt: 'x' },
+    { id: 'b', studentName: '甲', delta: -40, reason: '扣分', source: 'manual' as const, createdAt: 'x' },
+  ];
+  check(rawExpOf(events, '甲') === -10, '流水代数和保留负值，供对账使用');
+  check(expOfEvents(events, '甲') === -10, '事件求和本身不裁剪（裁剪发生在写回 state）');
+}
+
+
+group('积分硬化：回算口径、负分、扣分与事件合并');
+{
+  const base = defaultPetSnapshot();
+  const on = { ...base.settings, enabled: true, classScope: [], enabledAt: '2026-10-01T00:00:00Z' };
+
+  const early = rec({ id: 'r-early', studentName: '甲', lessonNumber: 1, date: '2026-09-01', homeworkStatus: '已完成' });
+  const late = rec({ id: 'r-late', studentName: '甲', lessonNumber: 2, date: '2026-10-10', homeworkStatus: '已完成' });
+  check(includeRecordByScope(early, { ...on, autoScope: 'sinceEnable' }) === false, '仅启用后：启用前的记录不参与结算');
+  check(includeRecordByScope(late, { ...on, autoScope: 'sinceEnable' }) === true, '仅启用后：启用后的记录参与结算');
+  check(includeRecordByScope(early, { ...on, autoScope: 'all' }) === true, '全部记录：历史也参与结算');
+
+  const cls = {
+    id: 'c1', name: '测试班', students: ['甲'],
+    lessonConfigs: {}, records: [early, late],
+  } as unknown as Parameters<typeof settleClassPets>[0];
+  const sinceEvents = settleClassPets(cls, undefined, { ...on, autoScope: 'sinceEnable' }, 'x');
+  const allEvents = settleClassPets(cls, undefined, { ...on, autoScope: 'all' }, 'x');
+  check(sinceEvents.events.length === 1 && allEvents.events.length === 2, '两种口径产生的事件数不同（1 vs 2）');
+
+  let snap = { ...base, settings: { ...on, allowNegativeExp: false, allowDeduction: true } };
+  snap = adoptForStudent(snap, 'c1', '甲', 'moss');
+  snap = addManualScore(snap, 'c1', '甲', 10, '加分', 'x', 1);
+  const floored = addManualScore(snap, 'c1', '甲', -30, '扣分', 'x', 1);
+  check(floored.classes.c1.pets['甲'].exp === 0, '默认经验 0 下限：负分不会把经验打成负数');
+  check(rawExpOf(floored.classes.c1.events, '甲') === -20, '流水仍保留真实代数和对账');
+
+  const negativeAllowed = { ...floored, settings: { ...floored.settings, allowNegativeExp: true } };
+  const negative = addManualScore(negativeAllowed, 'c1', '甲', -5, '再扣', 'x', 1);
+  check(negative.classes.c1.pets['甲'].exp === -25, '允许负分时经验保留负值');
+  check(negative.classes.c1.pets['甲'].level === 1, '负分不会跌出 1 级');
+
+  const noDeduction = { ...snap, settings: { ...snap.settings, allowDeduction: false } };
+  const rejected = addManualScore(noDeduction, 'c1', '甲', -5, '扣分', 'x', 1);
+  check(rejected === noDeduction, '关闭扣分后人工负分被拒绝');
+  const batchRejected = addScoresBatch(noDeduction, 'c1', ['甲'], -3, '批量扣分', 'x', 1);
+  check(batchRejected === noDeduction, '关闭扣分后批量扣分同样被拒绝');
+  const undoStillWorks = undoEvent(rejected, 'c1', rejected.classes.c1.events[0].id);
+  check(undoStillWorks.classes.c1.pets['甲'].exp === 0, '撤回不受扣分开关限制（走 force）');
+
+  // 双端各自加分后合并：事件并集、经验按并集重算
+  const clientA = addManualScore(snap, 'c1', '甲', 5, 'A 端', '2026-10-28T10:00:00Z', 1);
+  const clientB = addManualScore(snap, 'c1', '甲', 7, 'B 端', '2026-10-28T10:01:00Z', 1);
+  const merged = mergeIncomingPet(clientA, JSON.parse(JSON.stringify(clientB)));
+  check(merged.classes.c1.events.length === 3, '合并后两端事件都保留（并集，不互相覆盖）');
+  check(merged.classes.c1.pets['甲'].exp === 22, '合并后经验按并集事件重算');
+
+  // 同一毫秒内两次批量提交：批次 id 必须不同，否则事件互相覆盖
+  const b1 = addScoresBatch(snap, 'c1', ['甲'], 4, '连点 A', '2026-10-28T11:00:00Z', 1);
+  const b2 = addScoresBatch(b1, 'c1', ['甲'], 6, '连点 B', '2026-10-28T11:00:00Z', 1);
+  const ids = new Set(b2.classes.c1.events.map(e => e.id));
+  check(b2.classes.c1.events.length === ids.size, '同一毫秒内的两次批量提交不会产生重复事件 id');
+  check(b2.classes.c1.pets['甲'].exp === 20, '两次批量提交的分数都计入经验（10+4+6）');
+
+  const enabled = updateSettings(defaultPetSnapshot(), { enabled: true });
+  check(typeof enabled.settings.enabledAt === 'string', '首次开启自动记录启用时刻');
+}
+
+
+group('配饰落位：逐宠物 × 逐阶段对齐');
+{
+  const pets = Object.keys(PET_FIT);
+  check(pets.length === 6, '六只宠物都有落位数据');
+  check(pets.every(p => PET_FIT[p].length === 4), '每只宠物覆盖 4 个成长阶段');
+  check(pets.every(p => PET_FIT[p].every(f => f.w > 0 && f.cx > 0 && f.cy > 0)), '头部几何均为有效数值');
+
+  const skins = Object.keys(SKIN_RULES);
+  check(skins.length === 8, '八款配饰都有落位规则');
+  check(
+    skins.every(id => {
+      const [x0, y0, x1, y1] = SKIN_RULES[id].crop;
+      return x1 > x0 && y1 > y0 && x0 >= 0 && y0 >= 0 && x1 <= 1024 && y1 <= 1024;
+    }),
+    '裁剪框都在 1024 画布内且宽高为正'
+  );
+  check(skins.every(id => SKIN_RULES[id].w !== undefined || SKIN_RULES[id].h !== undefined), '每款配饰至少约束一个边长');
+
+  check(headFitOf('moss', 0) === PET_FIT.moss[0], '已知宠物按阶段取头部几何');
+  check(headFitOf('moss', 9) === PET_FIT.moss[3], '阶段越界时回退到最后一个阶段');
+  check(headFitOf('not-a-pet', 2) === PET_FIT.moss[2], '未知宠物回退到苔苔，不返回 undefined');
+
+  check(skinRuleFor('moss', 'noodle') === SKIN_RULES.noodle, '没有微调时直接复用通用规则');
+  const tweaked = skinRuleFor('thunder', 'noodle');
+  check(
+    tweaked !== null &&
+      tweaked.dx === (SKIN_RULES.noodle.dx ?? 0) + (PET_SKIN_TWEAK['thunder-noodle'].dx ?? 0),
+    '逐组合微调在通用规则上叠加偏移'
+  );
+  check(skinRuleFor('moss', 'unknown-skin') === null, '未知配饰返回 null，由调用方回退');
+
+  // 目标尺寸推算：头宽 × 比例，宽高比必须与裁剪框一致，否则配饰会被拉变形
+  const rule = SKIN_RULES.helmet;
+  const fit = headFitOf('otter', 2);
+  const [x0, y0, x1, y1] = rule.crop;
+  const targetH = fit.w * (rule.h ?? 0);
+  const targetW = (targetH * (x1 - x0)) / (y1 - y0);
+  check(Math.abs(targetW / targetH - (x1 - x0) / (y1 - y0)) < 1e-6, '按高度约束时宽度按原比例推导，不会拉伸');
 }
 
 console.log('');

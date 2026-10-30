@@ -10,7 +10,11 @@
     "build:deploy": "tsc -b && vite build --mode cloudbase --outDir dist-deploy --emptyOutDir",
     "lint": "eslint .",
     "preview": "vite preview",
-    "selfcheck": "esbuild scripts/selfcheck.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/selfcheck.mjs --alias:@=./src --define:import.meta.env='{}' --log-level=error && node node_modules/.tmp/selfcheck.mjs"
+    "selfcheck": "esbuild scripts/selfcheck.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/selfcheck.mjs --alias:@=./src --define:import.meta.env='{}' --log-level=error && node node_modules/.tmp/selfcheck.mjs",
+    "images": "node scripts/optimize-images.mjs",
+    "images:pets": "node scripts/optimize-images.mjs raw-assets/pets src/assets/pets --sizes 128,256",
+    "images:skins": "node scripts/optimize-images.mjs raw-assets/skins src/assets/skins --sizes 128,256",
+    "images:all": "npm run images:pets && npm run images:skins"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",

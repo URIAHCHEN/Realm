@@ -73,9 +73,9 @@ import {
   addManualScore, adoptForStudent, awardBadge, graduatePet, isEnabledForClass,
   loadPetSnapshot, resetGroups, revealBattle, savePetSnapshot, startBattle,
   undoEvent, updateSettings, addScoresBatch, buySkin, equipSkin, interactWithPet,
+  mergeIncomingPet,
 } from '@/lib/gamification/store';
 import { settleClassPets } from '@/lib/gamification/rules';
-import { normalizePetSnapshot } from '@/lib/gamification/store';
 import type { PetBadgeDef, PetSettings, PetSnapshot } from '@/types/pet';
 import './App.css';
 
@@ -180,7 +180,7 @@ function App() {
       importData(snap);
       // 宠物快照：仅当云端确实带有该字段时才覆盖本地——
       // 旧版客户端推送的快照没有 pet 字段，若据此覆盖会把本地养成清空。
-      if (snap.pet) setPetSnapshot(normalizePetSnapshot(snap.pet));
+      setPetSnapshot(local => mergeIncomingPet(local, snap.pet));
     },
     enabled: isAuthenticated,
     sessionKey,

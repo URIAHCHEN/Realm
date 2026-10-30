@@ -102,6 +102,18 @@ export interface PetBadgeDef {
 export interface PetSettings {
   /** 灰度开关：仅控制「伴学萌宠」tab 的可见能力，不影响其他 tab */
   enabled: boolean;
+  /**
+   * 历史回算口径：
+   * - 'all' 启用时把既有记录一次性补分（当前默认，等同全量回算）
+   * - 'sinceEnable' 只结算启用之后日期的记录（避免开启当天榜首固化）
+   */
+  autoScope: 'all' | 'sinceEnable';
+  /** 启用时刻（ISO）：autoScope='sinceEnable' 时作为分界 */
+  enabledAt?: string;
+  /** 是否允许经验为负（false = 展示与写回都按 0 下限） */
+  allowNegativeExp: boolean;
+  /** 是否允许人工扣分（关闭后负分只能通过撤回产生） */
+  allowDeduction: boolean;
   /** 灰度范围：空数组=全部班级；否则仅这些班级可用 */
   classScope: string[];
   /** 自动计分规则（老师可在 tab 内调整） */
@@ -123,6 +135,9 @@ export interface PetSnapshot {
 export const DEFAULT_PET_SETTINGS: PetSettings = {
   enabled: false,
   classScope: [],
+  autoScope: 'all',
+  allowNegativeExp: false,
+  allowDeduction: true,
   rules: { homeworkDone: 5, listeningDone: 5, fullScoreBonus: 10 },
   // 原站「成长设置」实读：Lv1→2 10 分，之后 15/20/25/30/35/40，满级 8 级
   levelTable: [0, 10, 25, 45, 70, 100, 135, 175],
@@ -139,10 +154,12 @@ export const PET_BADGES: PetBadgeDef[] = [
 ];
 
 export const PET_CATALOG: PetDef[] = [
-  { id: 'moss', name: '苔苔', tagline: '慢一点，也在长', hue: '162 38% 34%', stages: ['苔芽', '小苔兽', '苔背行者', '苔原守护'] },
-  { id: 'ember', name: '焰尾', tagline: '热起来就别停', hue: '28 72% 46%', stages: ['火种', '小焰狐', '焰尾行者', '长明守卫'] },
-  { id: 'ink', name: '墨羽', tagline: '把想法写下来', hue: '222 30% 38%', stages: ['墨点', '小墨鸟', '墨羽信使', '砚台守望'] },
-  { id: 'lamp', name: '灯仔', tagline: '给晚归的人留盏灯', hue: '44 70% 44%', stages: ['灯芯', '小灯灵', '提灯行者', '灯塔守望'] },
+  { id: 'moss', name: '苔苔', tagline: '森林里最安静的那只', hue: '145 28% 40%', stages: ['苔芽', '叶耳少年', '苔衣行者', '森之守望'] },
+  { id: 'ember', name: '焰尾', tagline: '热起来就别停', hue: '24 62% 52%', stages: ['火绒', '焰尾少年', '赤焰行者', '长明守焰'] },
+  { id: 'ink', name: '墨羽', tagline: '把想法写下来', hue: '218 22% 42%', stages: ['墨点', '折纸信使', '卷轴行者', '砚台守望'] },
+  { id: 'thunder', name: '霆霆', tagline: '雷声先到，它才到', hue: '232 38% 36%', stages: ['雷纹幼豹', '疾电少年', '霆光行者', '雷渊守望'] },
+  { id: 'otter', name: '沫沫', tagline: '浪来了就追上去', hue: '178 38% 44%', stages: ['水花', '逐浪少年', '潮汐行者', '深澜守望'] },
+  { id: 'dream', name: '眠眠', tagline: '梦里也在长大', hue: '268 32% 60%', stages: ['星梦幼鹿', '眠云少年', '月痕行者', '星穹守望'] },
 ];
 
 
@@ -200,6 +217,24 @@ export const BUILD_STAGES = [
 
 export const BUILD_STEP_SCORE = 100;
 
+
+/**
+ * 旧版宠物：不再进入新领养列表，但已领养的数据必须原样保留。
+ * 只用于显示与兼容，不参与「可选宠物」渲染（领养弹窗只读 PET_CATALOG）。
+ */
+export const PET_LEGACY: PetDef[] = [
+  { id: 'lamp', name: '灯仔', tagline: '旧版宠物 · 数据保留', hue: '44 70% 44%', stages: ['灯芯', '小灯灵', '提灯行者', '灯塔守望'] },
+];
+
+/** 目录内可领养的宠物 id */
+export function isAdoptablePet(petId: string): boolean {
+  return PET_CATALOG.some(pet => pet.id === petId);
+}
+
+/** 已知宠物（含旧版保留） */
+export function isKnownPet(petId: string): boolean {
+  return isAdoptablePet(petId) || PET_LEGACY.some(pet => pet.id === petId);
+}
 
 /** 皮肤槽位：头饰 / 脸饰 / 背饰 / 全身 */
 export type SkinSlot = 'head' | 'face' | 'back' | 'body';

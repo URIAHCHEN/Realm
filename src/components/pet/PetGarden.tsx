@@ -2,6 +2,8 @@
 // 约束：只读既有 Class 数据；所有写操作通过回调交给上层（App）落库，组件本身无副作用。
 
 import { useMemo, useState } from 'react';
+import { Leaf, Sparkles, ShoppingBag, Compass, Search, Settings2, ArrowUpRight, Heart } from 'lucide-react';
+import './PetGarden.css';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +17,7 @@ import {
 import { activeBattleOf, buildProgress, groupContributors, groupScore } from '@/lib/gamification/groups';
 import { expProgress, isMaxLevel, petDefOf, petStatusOf, stageOf } from '@/lib/gamification/rules';
 import { badgeBalance, isEnabledForClass } from '@/lib/gamification/store';
-import { hasSizedAssets, hasWornImage, petStageSources, skinSources, wornSources } from '@/lib/gamification/petAssets';
+import { hasSizedAssets, hasWornImage, petFaceSources, petStageSources, skinSources, wornSources } from '@/lib/gamification/petAssets';
 import { SKIN_RULES, headFitOf, skinRuleFor } from '@/lib/gamification/petFit';
 import type { Class } from '@/types';
 
@@ -276,13 +278,18 @@ function CommunityAvatar({ level, size = 64 }: { level: number; size?: number })
 
 function ExpBar({ percent, isMax }: { percent: number; isMax: boolean }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+    <div className="pet-exp-track" role="progressbar" aria-label="等级经验" aria-valuemin={0} aria-valuemax={100} aria-valuenow={isMax ? 100 : percent}>
       <div
         className="h-full rounded-full transition-[width] duration-300"
-        style={{ width: `${isMax ? 100 : percent}%`, background: 'hsl(var(--foreground) / 0.72)' }}
+        style={{ width: `${isMax ? 100 : percent}%` }}
       />
     </div>
   );
+}
+
+function PetPortrait({ petId, level, face }: { petId: string; level: number; face: 'happy' | 'thinking' | 'celebrate' }) {
+  const sources = petFaceSources(petId, face);
+  return sources.large || sources.small ? <img className="pet-portrait-image" src={sources.large ?? sources.small} srcSet={sources.small && sources.large ? `${sources.small} 128w, ${sources.large} 256w` : undefined} sizes="132px" width={132} height={132} alt={`${petDefOf(petId).name}的${{ happy: '开心', thinking: '思考', celebrate: '庆祝' }[face]}表情`} /> : <PetAvatar petId={petId} level={level} size={132} />;
 }
 
 export function PetGarden({
@@ -290,6 +297,9 @@ export function PetGarden({
   lessonNumber, onResetGroups, onStartBattle, onRevealBattle, onBatchScore,
   onBuySkin, onEquipSkin, onInteract,
 }: PetGardenProps) {
+  const [view, setView] = useState<'garden' | 'shop' | 'adventure'>('garden');
+  const [search, setSearch] = useState('');
+  const [face, setFace] = useState<'happy' | 'thinking' | 'celebrate'>('happy');
   const [detailStudent, setDetailStudent] = useState<string | null>(null);
   const [adoptStudent, setAdoptStudent] = useState<string | null>(null);
   const [groupCount, setGroupCount] = useState(3);
@@ -342,17 +352,14 @@ export function PetGarden({
     : [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="pet-garden space-y-6" data-view={view}>
+      <div className="pet-topbar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">伴学萌宠</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            作业与课后任务完成各 +{snapshot.settings.rules.homeworkDone} 分，满分额外 +{snapshot.settings.rules.fullScoreBonus} 分。
-            自动结算，不用重复登记。
-          </p>
+          <h2 className="pet-wordmark"><Leaf size={19} />伴学萌宠<span>把每一点努力，养成光</span></h2>
+
         </div>
         <div className="flex items-center gap-3">
-          <Button size="sm" variant="outline" className="h-8" onClick={() => setSettingsOpen(true)}>计分设置</Button>
+          <Button size="sm" variant="outline" className="h-8" onClick={() => setSettingsOpen(true)}><Settings2 size={14} className="mr-1.5" />计分设置</Button>
           <span className="text-sm text-muted-foreground">本班启用</span>
           <Switch
             checked={enabled}
@@ -362,41 +369,66 @@ export function PetGarden({
         </div>
       </div>
 
+      <section className="pet-hero" aria-label="班级成长概览">
+        <div className="pet-hero-copy">
+          <span className="pet-eyebrow"><span />{cls.name} · 成长进行时</span>
+          <h3>每一份小努力，<br />都在悄悄长大。</h3>
+          <p>完成作业、认真练习，让陪伴你的伙伴一起成长。</p>
+          <div className="pet-hero-stats">
+            <div><strong>{adoptedCount}<small> / {rows.length}</small></strong><span>伙伴已相遇</span></div>
+            <div><strong>{ranking.filter(row => stageOf(row.pet!.level) >= 2).length}</strong><span>伙伴已进阶</span></div>
+            <div><strong>{classData.lastAutoLesson ?? 0}<small> 课</small></strong><span>努力已记录</span></div>
+          </div>
+        </div>
+        <div className="pet-hero-art" aria-hidden="true">
+          <span className="pet-orbit pet-orbit-one" /><span className="pet-orbit pet-orbit-two" />
+          <span className="pet-hero-note"><Sparkles size={14} />一起成长的日子</span>
+          <div className="pet-hero-moss"><PetAvatar petId="moss" level={1} size={220} /></div>
+          <div className="pet-hero-fox"><PetAvatar petId="ember" level={1} size={185} /></div>
+          <Leaf className="pet-hero-leaf" size={35} strokeWidth={1} />
+        </div>
+      </section>
+      {enabled && <nav className="pet-navigation" aria-label="萌宠视图">
+        {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
+          <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}><item.icon size={17} />{item.label}{view === item.id && <span className="pet-nav-dot" />}</button>
+        ))}
+      </nav>}
+
       {!enabled ? (
-        <Card className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+        <Card className="pet-panel pet-empty flex flex-col items-center justify-center gap-3 p-10 text-center">
           <div className="text-sm font-medium">这个班还没开启伴学萌宠</div>
           <p className="max-w-md text-sm text-muted-foreground">
-            开启后仅影响本页：其他标签页、学情记录与云端数据保持不变；积分由已登记的作业、课后任务与满分自动折算。
+            开启后，积分会按计分设置折算为成长经验。可以先查看历史记录范围，再为本班开启。
           </p>
           <Button onClick={() => onSettings({ enabled: true, classScope: [cls.id] })}>开启本班</Button>
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>已领养 {adoptedCount} / {rows.length} 人</span>
-            <span aria-hidden>·</span>
-            <span>积分自动结算到第 {classData.lastAutoLesson ?? 0} 课</span>
+          <div className="pet-section pet-garden-toolbar" data-section="garden">
+            <div><span className="pet-eyebrow">OUR LITTLE GARDEN</span><h3>我们的成长园地 <span>{rows.length} 位同学</span></h3><p>作业 +{snapshot.settings.rules.homeworkDone} · 课后任务 +{snapshot.settings.rules.listeningDone} · 满分额外 +{snapshot.settings.rules.fullScoreBonus}</p></div>
+            <label className="pet-search"><Search size={16} /><input aria-label="搜索学生" placeholder="寻找一位同学…" value={search} onChange={e => setSearch(e.target.value)} /></label>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {rows.map(({ name, pet, progress }) => (
-              <Card key={name} className="flex flex-col gap-3 p-4">
+          <div className="pet-section pet-students" data-section="garden">
+            {rows.length === 0 && <div className="pet-panel pet-empty">班级还没有学生，添加名单后就能一起领养伙伴。</div>}
+            {rows.length > 0 && !rows.some(row => row.name.includes(search.trim())) && <div className="pet-panel pet-empty" role="status">没有找到这位同学，试试其他名字。</div>}
+            {rows.filter(row => row.name.includes(search.trim())).map(({ name, pet, progress }) => (
+              <Card key={name} className="pet-student" style={{ '--pet-hue': pet ? petDefOf(pet.petId).hue : '155 20% 45%' } as React.CSSProperties}>
                 <button
                   type="button"
-                  className="flex items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
-                  onClick={() => (pet ? setDetailStudent(name) : setAdoptStudent(name))}
+                  className="pet-student-open" aria-label={`${pet ? '查看' : '为'}${name}${pet ? '的宠物' : '领养宠物'}`}
+                  onClick={() => { setFace('happy'); if (pet) setDetailStudent(name); else setAdoptStudent(name); }}
                 >
+                  <div className="pet-habitat"><span className="pet-card-level">{pet ? `Lv.${pet.level}` : '待相遇'}</span>
                   {pet?.route === 'building' ? (
-                    <CommunityAvatar level={pet.level} />
+                    <CommunityAvatar level={pet.level} size={140} />
                   ) : pet ? (
-                    <PetAvatar petId={pet.petId} level={pet.level} skin={pet.skin} />
+                    <PetAvatar petId={pet.petId} level={pet.level} skin={pet.skin} size={144} />
                   ) : (
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                      未领养
-                    </div>
+                    <div className="pet-adopt-placeholder"><Heart size={34} strokeWidth={1} /><span>等待一场相遇</span></div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{name}</div>
+                  </div>
+                  <div className="pet-student-info">
+                    <div className="pet-student-name">{name}<ArrowUpRight size={15} /></div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
                       {pet
                         ? pet.route === 'building'
@@ -426,7 +458,7 @@ export function PetGarden({
                 </button>
 
                 {pet && (
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="pet-earned-badges flex flex-wrap items-center gap-1.5">
                     {pet.badges.slice(0, 4).map(id => {
                       const badge = PET_BADGES.find(b => b.id === id);
                       return badge ? (
@@ -439,7 +471,7 @@ export function PetGarden({
                   </div>
                 )}
 
-                <div className="mt-auto flex flex-wrap gap-1.5">
+                <div className="pet-quick-scores mt-auto flex flex-wrap gap-1.5">
                   {pet ? (
                     QUICK_SCORES.map(item => (
                       <Button
@@ -447,9 +479,10 @@ export function PetGarden({
                         size="sm"
                         variant="outline"
                         className="h-7 px-2 text-[11px]"
+                        aria-label={`为${name}加${item.delta}分：${item.reason}`}
                         onClick={() => onScore(name, item.delta, item.reason)}
                       >
-                        +{item.delta}
+                        +{item.delta}<span>{item.reason}</span>
                       </Button>
                     ))
                   ) : (
@@ -462,7 +495,7 @@ export function PetGarden({
             ))}
           </div>
 
-          <Card className="p-5">
+          <Card className="pet-section pet-panel pet-expedition p-5" data-section="adventure">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-sm font-semibold">班级共建 · 海底两万里</h3>
               <span className="text-xs text-muted-foreground">全班净积分 {build.total} 分</span>
@@ -490,7 +523,7 @@ export function PetGarden({
             </div>
           </Card>
 
-          <Card className="p-5">
+          <Card className="pet-section pet-panel p-5" data-section="adventure">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">小组 PK</h3>
@@ -618,10 +651,10 @@ export function PetGarden({
             )}
           </Card>
 
-          <Card className="p-5">
+          <Card className="pet-section pet-panel pet-shop p-5" data-section="shop">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold">小卖部</h3>
+                <h3 className="pet-section-title"><ShoppingBag size={19} />给伙伴一点小惊喜</h3>
                 <p className="mt-1 text-xs text-muted-foreground">徽章是升级奖励（每级 5 枚），买装扮或投喂宠物都会花掉它。</p>
               </div>
               {adoptedRows.length > 0 && (
@@ -662,10 +695,10 @@ export function PetGarden({
                   const affordable = badgeBalance(shopPet) >= item.price;
                   const wearable = canWear(item.id, shopPet.petId);
                   return (
-                    <div key={item.id} className="rounded-xl border border-border p-3">
-                      <div className="flex items-center gap-2">
+                    <div key={item.id} className="pet-shop-item rounded-xl border border-border p-3">
+                      <div className="pet-shop-item-top flex items-center gap-2">
                         <div className="rounded-lg bg-muted/50 p-1">
-                          <PetAvatar petId={shopPet.petId} level={shopPet.level} size={52} skin={wearable ? item.id : undefined} />
+                          <PetAvatar petId={shopPet.petId} level={shopPet.level} size={108} skin={wearable ? item.id : undefined} />
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-xs font-medium">{item.name}</div>
@@ -709,8 +742,8 @@ export function PetGarden({
             )}
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-            <Card className="p-5">
+          <div className="pet-section grid gap-6 lg:grid-cols-[1.2fr_1fr]" data-section="garden">
+            <Card className="pet-panel p-5">
               <div className="flex items-baseline justify-between">
                 <h3 className="text-sm font-semibold">成长榜</h3>
                 <span className="text-xs text-muted-foreground">按等级、经验排序</span>
@@ -729,7 +762,7 @@ export function PetGarden({
               </div>
             </Card>
 
-            <Card className="p-5">
+            <Card className="pet-panel p-5">
               <h3 className="text-sm font-semibold">徽章口径</h3>
               <div className="mt-3 space-y-2">
                 {PET_BADGES.map(badge => (
@@ -751,7 +784,7 @@ export function PetGarden({
 
       {/* 计分设置 */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="pet-dialog max-w-md">
           <DialogHeader>
             <DialogTitle>计分设置</DialogTitle>
             <DialogDescription>改动即时生效，只影响本班宠物，不改动学情记录。</DialogDescription>
@@ -831,7 +864,7 @@ export function PetGarden({
 
       {/* 领养 */}
       <Dialog open={!!adoptStudent} onOpenChange={open => !open && setAdoptStudent(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="pet-dialog max-w-lg">
           <DialogHeader>
             <DialogTitle>选择宠物</DialogTitle>
             <DialogDescription>每位学生只拥有一只宠物；满级后可重领或转为社区建设。</DialogDescription>
@@ -841,13 +874,13 @@ export function PetGarden({
               <button
                 key={pet.id}
                 type="button"
-                className="flex items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="pet-adoption-option flex items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
                   if (adoptStudent) onAdopt(adoptStudent, pet.id);
                   setAdoptStudent(null);
                 }}
               >
-                <PetAvatar petId={pet.id} level={1} size={44} />
+                <PetAvatar petId={pet.id} level={1} size={86} />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{pet.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">{pet.tagline}</span>
@@ -860,7 +893,7 @@ export function PetGarden({
 
       {/* 批量评价 */}
       <Dialog open={!!batchTargets} onOpenChange={open => !open && setBatchTargets(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="pet-dialog max-w-2xl">
           <DialogHeader>
             <DialogTitle>批量评价</DialogTitle>
             <DialogDescription>
@@ -945,7 +978,7 @@ export function PetGarden({
 
       {/* 小组 PK 结果 */}
       <Dialog open={!!revealedBattleId} onOpenChange={open => !open && setRevealedBattleId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="pet-dialog max-w-md">
           {(() => {
             const battle = battles.find(b => b.id === revealedBattleId);
             if (!battle || !battle.result) {
@@ -1002,7 +1035,7 @@ export function PetGarden({
 
       {/* 详情 */}
       <Dialog open={!!detailStudent} onOpenChange={open => !open && setDetailStudent(null)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="pet-dialog max-w-xl">
           <DialogHeader>
             <DialogTitle>{detailStudent} 的伴学萌宠</DialogTitle>
             <DialogDescription>
@@ -1012,8 +1045,8 @@ export function PetGarden({
 
           {detailPet && (
             <div className="space-y-5">
-              <div className="flex items-center gap-4">
-                <PetAvatar petId={detailPet.petId} level={detailPet.level} size={72} />
+              <div className="pet-detail-portrait flex items-center gap-4">
+                <PetPortrait petId={detailPet.petId} level={detailPet.level} face={face} />
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Lv.{detailPet.level}</span>
@@ -1025,6 +1058,12 @@ export function PetGarden({
                 </div>
               </div>
 
+              <div className="pet-expression-picker" aria-label="宠物表情">
+                {([['happy', '开心'], ['thinking', '思考'], ['celebrate', '庆祝']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={face === id} onClick={() => setFace(id)}>{label}</button>)}
+              </div>
+              <div className="pet-growth-path" aria-label="四阶段成长路线">
+                {([1, 3, 5, 7] as const).map((level, index) => <div key={level} data-unlocked={detailPet.level >= level}><PetAvatar petId={detailPet.petId} level={level} size={64} /><strong>{petDefOf(detailPet.petId).stages[index]}</strong><span>Lv.{level}{index === 3 ? '+' : `–${level + 1}`}</span></div>)}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {PET_BADGES.filter(b => b.mode === 'manual').map(badge => {
                   const owned = detailPet.badges.includes(badge.id);

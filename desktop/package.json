@@ -1,0 +1,13 @@
+{
+  "name": "realm-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lynn's Realm 学情管理 · macOS 客户端",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^33.4.11"
+  }
+}

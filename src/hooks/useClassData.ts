@@ -1588,6 +1588,20 @@ export function useClassData() {
     }));
   }, []);
 
+  // 批量写入：一次 setState 落地整批，避免逐条写入触发 N 次渲染与 N 次云端推送
+  const addSchoolScores = useCallback((list: Omit<SchoolScore, 'id'>[]) => {
+    if (!list.length) return 0;
+    const rows = list.map(score => ({ ...score, id: generateId() }) as SchoolScore);
+    setSchoolScores(prev => {
+      const next = { ...prev };
+      rows.forEach(row => {
+        next[row.studentName] = [...(next[row.studentName] || []), row];
+      });
+      return next;
+    });
+    return rows.length;
+  }, []);
+
   // 批量导入校内成绩（从Excel）
   // xlsx 为大体积依赖，改为解析时动态加载，首屏不再携带 vendor-xlsx
   const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped: number }> => {
@@ -1843,6 +1857,7 @@ export function useClassData() {
     getStudentSchoolScores,
     addSchoolScore,
     importSchoolScoresFromExcel,
+    addSchoolScores,
     deleteSchoolScore,
     restoreSchoolScore,
     exportData,

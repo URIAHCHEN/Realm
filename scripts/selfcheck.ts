@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
+import { matchStudentName, parseIntake, parseRank, parseScorePair, scoreDedupKey } from '@/lib/scoreIntake';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
@@ -1060,6 +1061,51 @@ group('季度口语口径 · 取自「口语得分」题型（2026-10-28 线上�
   const fixed = humanizeEmptyOral(broken);
   check(!fixed.includes('—分') && fixed.includes('本季度还没有登记成绩'), '破折号句式被替换成通顺说明');
   check(humanizeEmptyOral('没有口语数据的一行') === '没有口语数据的一行', '含口语但没有破折号的行不被改写');
+}
+
+group('校内成绩智能录入 · 解析与学员匹配（2026-11-15）');
+{
+  const students = ['陈志佳', '陈梓铭', '段钰萱', '郭诗钰'];
+  const ctx = { students, nicknames: { 陈志佳: '志佳' } as Record<string, string>, examName: '期中考试', date: '2026-11-15', subject: '英语' };
+
+  // 表头语义定位列：列顺序变了也能对上
+  const withHeader = parseIntake('姓名\t学校\t满分\t得分\t班排\n陈志佳\t四中\t150\t126\t5\n陈梓铭\t七中\t150\t118\t12', ctx);
+  check(withHeader.mode === 'table' && withHeader.drafts.length === 2, '带表头的表格按行解析，不会被误判成单张表');
+  check(withHeader.drafts[0].studentName === '陈志佳' && withHeader.drafts[0].score === 126 && withHeader.drafts[0].totalScore === 150,
+    '表头列语义 → 姓名/得分/满分正确落位');
+  check(withHeader.drafts[0].classRank === 5 && withHeader.drafts[0].school === '四中', '班排与在读学校一并解析');
+
+  // 无表头：a/b 与单值
+  const noHeader = parseIntake('段钰萱 135/150\n郭诗钰 88', ctx);
+  check(noHeader.drafts[0].score === 135 && noHeader.drafts[0].totalScore === 150, '「135/150」解析为得分/满分');
+  check(noHeader.drafts[1].score === 88 && noHeader.drafts[1].totalScore === 100, '只有得分时满分回退 100');
+
+  // 单张调研表（一张纸一个学生）
+  const sheet = parseIntake('阶段教学服务调研\n学员姓名：郭诗钰  在读学校：四中逸园\n满分：150 得分：138 班排：3', ctx);
+  check(sheet.mode === 'sheet' && sheet.drafts.length === 1, '调研表识别为单张表');
+  check(sheet.drafts[0].studentName === '郭诗钰' && sheet.drafts[0].score === 138 && sheet.drafts[0].classRank === 3,
+    '调研表提取姓名/得分/班排');
+  check(sheet.drafts[0].school === '四中逸园', '调研表提取在读学校');
+
+  // 姓名匹配：宁可未匹配，也不错记
+  check(matchStudentName('陈志佳', students).confidence === 1, '精确匹配置信度 1');
+  check(matchStudentName('陈 志 佳', students).name === '陈志佳', '去掉空格后仍能匹配');
+  check(matchStudentName('志佳', students, { 陈志佳: '志佳' }).name === '陈志佳', '昵称可匹配到学员');
+  const typo = matchStudentName('练將産', ['练弈雅', '陈志佳'], {});
+  check(typo.name === '' && typo.confidence < 0.6, '手写误识别（练將産 ≠ 练弈雅）不硬凑成别的学员');
+  check(matchStudentName('', students).name === '', '空姓名不匹配');
+
+  // 分数/名次解析的边界
+  check(parseScorePair('满分：150 得分：138').score === 138, '显式「满分/得分」优先于裸数字');
+  check(parseScorePair('3/45').score === undefined, '「3/45」不被当成得分（是名次/人数）');
+  check(parseRank('3/45').classRank === 3 && parseRank('3/45').classSize === 45, '「3/45」解析为班排/班人数');
+  check(parseRank('第 7 名').classRank === 7, '「第 7 名」可解析');
+
+  // 去重键：同学生同考试同分数视为重复
+  const k1 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });
+  const k2 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });
+  const k3 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 120, totalScore: 150 });
+  check(k1 === k2 && k1 !== k3, '同学生同考试同分数判重，分数不同不判重');
 }
 
 group('题型归并 · 同名跨课次溯源');

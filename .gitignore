@@ -27,3 +27,9 @@ cloudfunctions/*/dist/
 
 # 图片原图（高清大图不入库，只提交 src/assets 下的 webp）
 raw-assets/
+
+# 桌面客户端（2026-11-15）：Electron 运行时、打包产物与离线副本体积过大，不入库
+desktop/node_modules/
+desktop/out/
+desktop/icon.iconset/
+dist-desktop/

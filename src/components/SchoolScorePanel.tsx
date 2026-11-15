@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceDot, ReferenceLine } from 'recharts';
 import { TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES } from '@/lib/chartTheme';
+import { ScoreIntakeDialog } from '@/components/ScoreIntakeDialog';
 import {
   Plus, Trash2, TrendingUp, Award, Upload, FileSpreadsheet,
   ClipboardList, Users, Target, CalendarDays, Medal, ArrowRight,
@@ -22,6 +23,10 @@ interface SchoolScorePanelProps {
   students: string[];
   scores: SchoolScore[];
   onAddScore: (score: Omit<SchoolScore, 'id'>) => void;
+  /** 批量写入（智能录入一次落整批，避免逐条触发推送） */
+  onAddScores?: (rows: Omit<SchoolScore, 'id'>[]) => void;
+  /** 班级昵称表：识别到的叫法也能匹配到学员 */
+  nicknames?: { [studentName: string]: string };
   onDeleteScore: (studentName: string, scoreId: string) => void;
   onImportExcel: (file: File) => Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number }>;
   getNickname: (name: string) => string;
@@ -47,11 +52,14 @@ export function SchoolScorePanel({
   students,
   scores,
   onAddScore,
+  onAddScores,
+  nicknames,
   onDeleteScore,
   onImportExcel,
   getNickname
 }: SchoolScorePanelProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -307,6 +315,14 @@ export function SchoolScorePanel({
             <span className="hidden sm:inline">导入Excel</span>
           </Button>
           <Button
+            variant="outline" title="粘贴文本或识别图片，批量录入成绩"
+            onClick={() => setIsIntakeOpen(true)}
+            className="rounded-[var(--r-md)] gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="hidden sm:inline">智能录入</span>
+          </Button>
+          <Button
             variant="outline" title="导出趋势图"
             disabled={scores.length === 0}
             onClick={() => {
@@ -408,6 +424,16 @@ export function SchoolScorePanel({
                       className="rounded-xl ios-input"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>在读学校</Label>
+                  <Input
+                    placeholder="如 四中逸园（可留空）"
+                    value={newScore.school || ''}
+                    onChange={(e) => setNewScore(prev => ({ ...prev, school: e.target.value }))}
+                    className="rounded-xl ios-input"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
@@ -844,6 +870,19 @@ export function SchoolScorePanel({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 智能录入：文本/图片 → 草稿 → 人工校正 → 批量写入 */}
+      {onAddScores && (
+        <ScoreIntakeDialog
+          open={isIntakeOpen}
+          onOpenChange={setIsIntakeOpen}
+          students={students}
+          nicknames={nicknames}
+          existingScores={scores}
+          onSave={onAddScores}
+          getNickname={getNickname}
+        />
+      )}
     </div>
   );
 }

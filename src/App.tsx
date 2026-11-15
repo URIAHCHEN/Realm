@@ -128,6 +128,7 @@ function App() {
   updateAppConfig,
   getStudentSchoolScores,
   addSchoolScore,
+  addSchoolScores,
   importSchoolScoresFromExcel,
   deleteSchoolScore,
   restoreSchoolScore,
@@ -1294,6 +1295,8 @@ function App() {
                   students={currentClass?.students || []}
                   scores={currentClass ? currentClass.students.flatMap(s => schoolScores[s] || []) : []}
                   onAddScore={addSchoolScore}
+                  onAddScores={addSchoolScores}
+                  nicknames={nicknames[currentClassId || ''] || {}}
                   onDeleteScore={handleDeleteScore}
                   onImportExcel={handleImportExcel}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}

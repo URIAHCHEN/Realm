@@ -249,18 +249,18 @@ export interface PetSkin {
 }
 
 /**
- * 搞怪皮肤：全部用 CSS 绘制，不依赖外部图片；后续可用同名图片替换。
+ * 搞怪皮肤：使用按物种和成长阶段制作的完整穿戴图。
  * 定价对齐原站（装扮 1 徽章起步），搞怪款略贵一点。
  */
 export const PET_SKINS: PetSkin[] = [
-  { id: 'noodle', name: '泡面头', slot: 'head', price: 3, blurb: '昨晚没睡，今早烫了个面' },
-  { id: 'melon', name: '西瓜盔', slot: 'head', price: 4, blurb: '夏天限定，防护力为零' },
-  { id: 'doge', name: '狗头面具', slot: 'face', price: 5, blurb: '看谁都像在憋笑' },
-  { id: 'shades', name: '大佬墨镜', slot: 'face', price: 6, blurb: '戴上就不想写作业' },
-  { id: 'fish', name: '咸鱼披风', slot: 'back', price: 7, blurb: '翻身是不可能翻身的' },
-  { id: 'drumstick', name: '鸡腿权杖', slot: 'back', price: 8, blurb: '加餐比加分更有说服力' },
-  { id: 'helmet', name: '鱼缸头盔', slot: 'head', price: 9, blurb: '隔绝噪音，专心摸鱼' },
-  { id: 'dino', name: '恐龙睡衣', slot: 'body', price: 12, blurb: '嗷——但只敢在被窝里嗷' },
+  { id: 'noodle', name: '泡面头', slot: 'head', price: 3, blurb: '知识没进脑子，面先泡开了。' },
+  { id: 'melon', name: '西瓜盔', slot: 'head', price: 4, blurb: '脑瓜保熟，答案不包。' },
+  { id: 'doge', name: '狗头面具', slot: 'face', price: 5, blurb: '我先戴上狗头，这题就当我会了。' },
+  { id: 'shades', name: '大佬墨镜', slot: 'face', price: 6, blurb: '别问，问就是深藏不露。' },
+  { id: 'fish', name: '咸鱼披风', slot: 'back', price: 7, blurb: '可以短暂躺平，不能一直躺赢。' },
+  { id: 'drumstick', name: '鸡腿权杖', slot: 'back', price: 8, blurb: '知识就是力量，加餐就是续航。' },
+  { id: 'helmet', name: '鱼缸头盔', slot: 'head', price: 9, blurb: '看似在发呆，其实脑内有片海。' },
+  { id: 'dino', name: '恐龙睡衣', slot: 'body', price: 12, blurb: '外表嗷嗷猛，内心求抱抱。' },
 ];
 
 /** 亲密互动：花 1 枚徽章，换 2 点经验 */

@@ -51,14 +51,20 @@ drop table if exists app_sessions; drop table if exists app_users;
 
 ```bash
 cd /Users/uriah/WorkBuddy/projects/realm-repo
-npm run build                                        # tsc + vite
-rm -rf cloudfunctions/realm-api/dist && cp -R dist cloudfunctions/realm-api/dist
-# 通过 CloudBase 连接器部署：
-#   manageFunctions(action="updateFunctionCode", functionName="realm-api",
-#                   functionRootPath="<repo>/cloudfunctions")
+npm run build:deploy                                 # CloudBase 模式，输出 dist-deploy/
+# 下载当前线上函数作为发布副本，并保留完整回滚备份：
+REALM_RELEASE_STAGE=$(mktemp -d /tmp/realm-release.XXXXXX)
+tcb fn code download realm-api "$REALM_RELEASE_STAGE/function" -e cb-env-chenhongl-221-d0a08260a99
+cp -R "$REALM_RELEASE_STAGE/function" "$REALM_RELEASE_STAGE/backup"
+rsync -a --delete dist-deploy/ "$REALM_RELEASE_STAGE/function/dist/"
+chmod +x "$REALM_RELEASE_STAGE/function/scf_bootstrap"
+cat > "$REALM_RELEASE_STAGE/cloudbaserc.json" <<'JSON'
+{"functions":[{"name":"realm-api"}]}
+JSON
+tcb fn code update realm-api --dir "$REALM_RELEASE_STAGE/function" --config-file "$REALM_RELEASE_STAGE/cloudbaserc.json" -e cb-env-chenhongl-221-d0a08260a99 --json
 ```
 
-改动仅前端时也必须重跑上面三步——函数内 `dist/` 就是线上前端。
+改动仅前端时也必须构建、备份、替换发布副本的 `dist/`，再更新函数代码。使用 `build:deploy` 保证同源 CloudBase API 配置；从当前线上副本打包可以保留服务端入口。代码更新不修改函数环境变量和运行时配置。
 
 ## 五、验收记录（2026-10-28）
 
@@ -93,3 +99,10 @@ rm -rf cloudfunctions/realm-api/dist && cp -R dist cloudfunctions/realm-api/dist
 GitHub Pages（uriahchen.github.io/Realm）仍是旧架构（Supabase）。本次把接口基址改为同源 `/api`，
 **该站点上已不可用**——它现在的定位是「导出历史备份的入口」。
 因此这批改动只在本地提交、**未推送**到 GitHub，避免触发 Pages 构建把线上旧站覆盖成打不开的版本。
+
+## 九、2026-11-04 萌宠装扮更新
+
+- 上线六宠 × 八款装扮 × 四阶段的 192 张完整穿戴图，网页使用 128/256 两档 WebP，共 384 个文件。
+- 当前入口脚本为 `index-QgXU8BSf.js`，样式为 `index-Ylej-vrq.css`；入口指纹和 384 个穿戴文件 SHA256 均已与本地 `dist-deploy` 对齐，`/api/health` 通过。
+- 本地 192 种组合浏览器检查、380 项 selfcheck、lint、`build:deploy` 通过。
+- 通过 CLI 的 `fn code update` 仅更新代码；发布副本沿用刚下载的线上服务端文件，保留函数配置。线上更新前完整副本保存在 `/tmp/realm-before-costumes-20261104-final`，发布副本为 `/tmp/realm-release-costumes-20261104`。

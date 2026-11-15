@@ -4,6 +4,7 @@
 //   src/assets/pets/{pet}-s{0..3}-{128|256}.webp
 //   src/assets/pets/{pet}-face-{happy|thinking|celebrate}-{128|256}.webp
 //   src/assets/skins/{skin}-{128|256}.webp
+//   src/assets/skins/{skin}-worn-{pet}-s{0..3}-{128|256}.webp
 // 兼容：也认原始 PNG（{pet}-s0.png / {skin}.png），但会显著增大包体。
 
 type Sources = { small?: string; large?: string };
@@ -35,7 +36,7 @@ function collect(modules: Record<string, string>, suffixPattern: RegExp): Map<st
 // 匹配 foo-128.webp / foo-256.webp
 const petSized = collect(petWebp, /^(.+)-(\d+)\.webp$/);
 const skinSized = collect(skinWebp, /^(.+)-(\d+)\.webp$/);
-// 穿戴成品图：{skin}-worn-{pet}-{size}.webp
+// 穿戴成品图：{skin}-worn-{pet}-s{stage}-{size}.webp，兼容旧的不分阶段命名
 const wornSized = collect(skinWebp, /^(.+-worn-.+)-(\d+)\.webp$/);
 
 // 未分档的原始图（png/webp）作为兜底
@@ -89,16 +90,21 @@ export function hasSizedAssets(): boolean {
 }
 
 
-/** 穿戴成品图（{skin}-worn-{pet}）：素材只对已提供的宠物有效，其余返回空 */
-export function wornSources(skinId: string, petId: string): Sources {
-  const sized = wornSized.get(`${skinId}-worn-${petId}`);
-  if (sized) return sized;
-  const full = skinFull.get(`${skinId}-worn-${petId}`);
-  return full ? { large: full, small: full } : {};
+/** 按宠物与成长阶段读取完整穿戴图；旧的不分阶段图片仅用于初始形态。 */
+export function wornSources(skinId: string, petId: string, stage = 0): Sources {
+  const keys = [`${skinId}-worn-${petId}-s${stage}`];
+  if (stage === 0) keys.push(`${skinId}-worn-${petId}`);
+  for (const key of keys) {
+    const sized = wornSized.get(key);
+    if (sized) return sized;
+    const full = skinFull.get(key);
+    if (full) return { large: full, small: full };
+  }
+  return {};
 }
 
-/** 该宠物是否有这款配饰的穿戴成品图 */
-export function hasWornImage(skinId: string, petId: string): boolean {
-  const src = wornSources(skinId, petId);
+/** 缺少当前阶段成图时，不将其他阶段或独立配饰叠在角色上。 */
+export function hasWornImage(skinId: string, petId: string, stage = 0): boolean {
+  const src = wornSources(skinId, petId, stage);
   return Boolean(src.large || src.small);
 }

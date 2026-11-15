@@ -17,8 +17,7 @@ import {
 import { activeBattleOf, buildProgress, groupContributors, groupScore } from '@/lib/gamification/groups';
 import { expProgress, isMaxLevel, petDefOf, petStatusOf, stageOf } from '@/lib/gamification/rules';
 import { badgeBalance, isEnabledForClass } from '@/lib/gamification/store';
-import { hasSizedAssets, hasWornImage, petFaceSources, petStageSources, skinSources, wornSources } from '@/lib/gamification/petAssets';
-import { SKIN_RULES, headFitOf, skinRuleFor } from '@/lib/gamification/petFit';
+import { hasSizedAssets, hasWornImage, petFaceSources, petStageSources, wornSources } from '@/lib/gamification/petAssets';
 import type { Class } from '@/types';
 
 interface PetGardenProps {
@@ -47,76 +46,20 @@ const QUICK_SCORES = [
   { delta: 5, reason: '额外坚持' },
 ];
 
-/** 极简纸艺风格头像：纯 CSS 绘制，不依赖图片资源 */
-/**
- * 配饰层定位：把配饰图按「头部几何」重新摆到宠物图同一坐标系里。
- * 全部按 1024 画布计算，再换算成百分比，因此任意尺寸的头像都能用同一套数值。
- */
-function skinLayerStyle(petId: string, stage: number, skinId: string) {
-  const rule = skinRuleFor(petId, skinId);
-  if (!rule) return null;
-  const fit = headFitOf(petId, stage);
-  const [x0, y0, x1, y1] = rule.crop;
-  const cropW = x1 - x0;
-  const cropH = y1 - y0;
-  if (cropW <= 0 || cropH <= 0) return null;
-
-  let targetW: number;
-  let targetH: number;
-  if (rule.h) {
-    targetH = fit.w * rule.h;
-    targetW = (targetH * cropW) / cropH;
-  } else {
-    targetW = fit.w * (rule.w ?? 1);
-    targetH = (targetW * cropH) / cropW;
-  }
-
-  const centerX = fit.cx + fit.w * (rule.dx ?? 0);
-  const centerY = fit.cy + fit.w * (rule.dy ?? 0);
-  const left = centerX - targetW / 2;
-  const top = centerY - targetH * (rule.anchor ?? 0.5);
-
-  const pct = (value: number) => `${(value / 1024) * 100}%`;
-  return {
-    box: {
-      left: pct(left),
-      top: pct(top),
-      width: pct(targetW),
-      height: pct(targetH),
-      zIndex: rule.z === 'behind' ? 0 : 2
-    } as React.CSSProperties,
-    // 裁剪框内的内容放大到铺满外层
-    image: {
-      width: `${(1024 / cropW) * 100}%`,
-      height: `${(1024 / cropH) * 100}%`,
-      left: `${(-x0 / cropW) * 100}%`,
-      top: `${(-y0 / cropH) * 100}%`
-    } as React.CSSProperties
-  };
+/** 装扮仅使用与当前物种、当前成长阶段匹配的完整穿戴图。 */
+function canWear(skinId: string, petId: string, level: number): boolean {
+  return hasWornImage(skinId, petId, stageOf(level));
 }
 
-/** 整套服装：只能靠官方成品图，叠层一定会露出原来的身体 */
-const FULL_SUIT_SKINS = new Set(['dino']);
-
-/** 该皮肤是否能用在指定宠物上：有成品图直接可用，其余走通用叠层 */
-function canWear(skinId: string, petId: string): boolean {
-  if (hasWornImage(skinId, petId)) return true;
-  if (FULL_SUIT_SKINS.has(skinId)) return false;
-  return Boolean(SKIN_RULES[skinId]);
-}
-
-export function PetAvatar({ petId, level, size = 64, skin }: { petId: string; level: number; size?: number; skin?: string }) {
+export function PetAvatar({ petId, level, size = 64, skin: requestedSkin }: { petId: string; level: number; size?: number; skin?: string }) {
   const def = petDefOf(petId);
   const stage = stageOf(level);
+  const skin = requestedSkin && hasWornImage(requestedSkin, petId, stage) ? requestedSkin : undefined;
   const ear = 8 + stage * 4;
-  const hasBodySkin = skin === 'dino';
   const base = petStageSources(petId, stage);
-  // 整套服装（恐龙睡衣）必须用官方成品图：它要盖住全身，叠层会露出原来的身体
-  const worn = skin === 'dino' ? wornSources(skin, petId) : {};
+  const worn = skin ? wornSources(skin, petId, stage) : {};
   const sized = hasSizedAssets();
   const chosen = worn.large || worn.small ? worn : base;
-  const layer = chosen === base && skin ? skinLayerStyle(petId, stage, skin) : null;
-  const skinSrc = skin && layer ? skinSources(skin) : {};
 
   // 有图时直接用成品图；缺图回退到下面的 CSS 绘制
   if (chosen.large || chosen.small) {
@@ -134,18 +77,6 @@ export function PetAvatar({ petId, level, size = 64, skin }: { petId: string; le
           loading="lazy"
           decoding="async"
         />
-        {layer && (skinSrc.large || skinSrc.small) && (
-          <div className="absolute overflow-hidden" style={layer.box}>
-            <img
-              src={skinSrc.large ?? skinSrc.small}
-              alt=""
-              className="absolute max-w-none"
-              style={layer.image}
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        )}
       </div>
     );
   }
@@ -179,77 +110,6 @@ export function PetAvatar({ petId, level, size = 64, skin }: { petId: string; le
           className="absolute left-1/2 -translate-x-1/2 rounded-full"
           style={{ width: size * 0.6, height: 3, top: size * 0.82, background: `hsl(${def.hue} / 0.4)` }}
         />
-      )}
-
-      {/* 搞怪皮肤：全部用 CSS 叠层绘制 */}
-      {skin === 'noodle' && (
-        <div className="absolute inset-x-0" style={{ top: -size * 0.04, height: size * 0.34 }}>
-          {[0.2, 0.4, 0.6, 0.8].map((x, index) => (
-            <span
-              key={x}
-              className="absolute rounded-full border border-amber-700/40 bg-amber-200"
-              style={{ width: size * 0.26, height: size * 0.26, left: size * x - size * 0.13, top: size * (index % 2 ? 0.02 : 0.08) }}
-            />
-          ))}
-        </div>
-      )}
-      {skin === 'melon' && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 rounded-t-full border border-green-800/50"
-          style={{ width: size * 0.86, height: size * 0.42, top: size * 0.04, background: 'hsl(140 55% 45%)' }}
-        >
-          <span className="absolute inset-x-2 top-1/3 h-[2px] bg-green-900/30" />
-        </div>
-      )}
-      {skin === 'helmet' && (
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-sky-300/80 bg-sky-100/20"
-          style={{ width: size * 0.94, height: size * 0.94 }}
-        >
-          <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80" />
-        </div>
-      )}
-      {skin === 'doge' && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 rounded-md border border-amber-800/40"
-          style={{ width: size * 0.52, height: size * 0.34, top: size * 0.36, background: 'hsl(38 70% 78%)' }}
-        >
-          <span className="absolute left-[22%] top-[30%] h-1 w-1 rounded-full bg-stone-800" />
-          <span className="absolute right-[22%] top-[30%] h-1 w-1 rounded-full bg-stone-800" />
-          <span className="absolute left-1/2 top-[62%] h-[2px] w-[10px] -translate-x-1/2 rounded bg-stone-700" />
-        </div>
-      )}
-      {skin === 'shades' && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 rounded-sm bg-stone-900"
-          style={{ width: size * 0.62, height: size * 0.18, top: size * 0.44 }}
-        >
-          <span className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-stone-600" />
-        </div>
-      )}
-      {skin === 'fish' && (
-        <div
-          className="absolute rounded-full border border-sky-800/40 bg-sky-200"
-          style={{ width: size * 0.7, height: size * 0.24, left: -size * 0.16, top: size * 0.56, transform: 'rotate(-18deg)' }}
-        >
-          <span className="absolute -right-2 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-l-[8px] border-y-transparent border-l-sky-300" />
-        </div>
-      )}
-      {skin === 'drumstick' && (
-        <div
-          className="absolute rounded-full border border-amber-900/40 bg-amber-300"
-          style={{ width: size * 0.34, height: size * 0.26, right: -size * 0.04, top: size * 0.5, transform: 'rotate(24deg)' }}
-        >
-          <span className="absolute -left-2 top-1/2 h-2 w-3 -translate-y-1/2 rounded-full bg-stone-100" />
-        </div>
-      )}
-      {hasBodySkin && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 rounded-b-xl rounded-t-md border border-green-900/40"
-          style={{ width: size * 0.72, height: size * 0.5, bottom: 0, background: 'hsl(140 45% 55%)' }}
-        >
-          <span className="absolute -top-2 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-green-700" />
-        </div>
       )}
     </div>
   );
@@ -693,7 +553,7 @@ export function PetGarden({
                   const owned = (shopPet.ownedSkins ?? []).includes(item.id);
                   const equipped = shopPet.skin === item.id;
                   const affordable = badgeBalance(shopPet) >= item.price;
-                  const wearable = canWear(item.id, shopPet.petId);
+                  const wearable = canWear(item.id, shopPet.petId, shopPet.level);
                   return (
                     <div key={item.id} className="pet-shop-item rounded-xl border border-border p-3">
                       <div className="pet-shop-item-top flex items-center gap-2">
@@ -713,7 +573,7 @@ export function PetGarden({
                         disabled={!wearable || (!owned && !affordable)}
                         onClick={() => (owned ? onEquipSkin(activeShopStudent!, item.id) : onBuySkin(activeShopStudent!, item.id))}
                       >
-                        {!wearable ? '该宠物暂不支持' : equipped ? '卸下' : owned ? '装备' : affordable ? '购买' : '徽章不够'}
+                        {!wearable ? '当前形态装扮制作中' : equipped ? '卸下' : owned ? '装备' : affordable ? '购买' : '徽章不够'}
                       </Button>
                     </div>
                   );

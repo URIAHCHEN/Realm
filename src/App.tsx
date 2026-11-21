@@ -1249,6 +1249,8 @@ function App() {
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}
               lessonNumber={currentLessonNumber}
+              lessonNumbers={currentClass ? allLessons : undefined}
+              onSelectLesson={setCurrentLessonNumber}
               getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
               calculateClassStats={calculateClassStats}
               oralRating={appConfig.oralRating}

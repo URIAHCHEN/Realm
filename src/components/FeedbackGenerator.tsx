@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  FileText, Copy, Check, Wand2, Users, ClipboardList,
+  BookOpen, FileText, Copy, Check, Wand2, Users, ClipboardList,
   CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
@@ -17,6 +17,7 @@ import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { computeStudentReportStats } from '@/lib/reportStats';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
 import type { StudentRecord, LessonConfig, QuestionType, ClassStats, OralRatingConfig } from '@/types';
+import './FeedbackGenerator.css';
 
 /**
  * 生成可直接粘进表格（Excel / 腾讯文档 / 金山）的 TSV：
@@ -41,6 +42,8 @@ interface FeedbackGeneratorProps {
   records: StudentRecord[];
   lessonConfig: LessonConfig;
   lessonNumber: number;
+  lessonNumbers?: number[];
+  onSelectLesson: (lesson: number) => void;
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
   calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[], customFields?: LessonConfig['customFields']) => ClassStats;
@@ -67,6 +70,8 @@ export function FeedbackGenerator({
   records,
   lessonConfig: lessonConfigProp,
   lessonNumber,
+  lessonNumbers,
+  onSelectLesson,
   getNickname,
   calculateClassStats,
   oralRating,
@@ -91,6 +96,7 @@ export function FeedbackGenerator({
   const [selected, setSelected] = useState<string | null>(null);
   const [generated, setGenerated] = useState<Record<string, string>>({});
   const [copiedSet, setCopiedSet] = useState<Set<string>>(new Set());
+  const copySession = useRef(new AbortController());
 
   // 模板旁编辑 + 实时预览
   const [showTemplate, setShowTemplate] = useState(false);
@@ -131,6 +137,9 @@ export function FeedbackGenerator({
     setGenerated({});
     setCopiedSet(new Set());
     setSelected(null);
+    const session = new AbortController();
+    copySession.current = session;
+    return () => session.abort();
   }, [lessonNumber]);
 
   const recordOf = (name: string) =>
@@ -194,8 +203,8 @@ export function FeedbackGenerator({
   }, [draftFeedback, draftFourInOne, scenario, variant, isNewStudent, withMaterials, feedbackMode, detailLevel, records, lessonConfig, stats, oralRating, libraryLinks.join('\u0001')]);
 
   // 外部模板变化（保存成功 / 切换课次或班级）时回填草稿
-  useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonConfig.feedbackTemplate]);
-  useEffect(() => { setDraftFourInOne(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE); }, [lessonConfig.fourInOneTemplate]);
+  useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonNumber, lessonConfig.feedbackTemplate]);
+  useEffect(() => { setDraftFourInOne(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE); }, [lessonNumber, lessonConfig.fourInOneTemplate]);
 
   const isFourInOne = feedbackMode === 'fourInOne';
   const activeTemplate = isFourInOne ? draftFourInOne : draftFeedback;
@@ -277,12 +286,20 @@ export function FeedbackGenerator({
     if (absentCount > 0) toast.info(`其中 ${absentCount} 名本课请假/缺勤，已按请假处理（不计入平均分）`);
   };
 
+  const copyFeedback = async (text: string, names: string[]) => {
+    const { signal } = copySession.current;
+    const ok = await copyToClipboard(text);
+    if (ok && !signal.aborted) {
+      setCopiedSet(previous => new Set([...previous, ...names]));
+    }
+    return ok;
+  };
+
   const handleCopyOne = async (name: string) => {
     const text = generated[name] ?? ensureGenerated(name);
     if (!text) return;
-    const ok = await copyToClipboard(text);
+    const ok = await copyFeedback(text, [name]);
     if (ok) {
-      setCopiedSet(prev => new Set(prev).add(name));
       toast.success(`已复制 ${getNickname(name)} 的私发反馈`);
     } else {
       toast.error('复制失败，请手动选择复制');
@@ -357,9 +374,8 @@ export function FeedbackGenerator({
     const isFour = feedbackMode === 'fourInOne';
     const rows = batchRows.map(r => [getNickname(r.name), r.text]);
     const text = buildTsvTable(['学生姓名', isFour ? '四个一反馈' : '私发反馈'], rows);
-    const ok = await copyToClipboard(text);
+    const ok = await copyFeedback(text, batchRows.map(row => row.name));
     if (ok) {
-      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
       toast.success(`已复制 ${rows.length} 位学员的${isFour ? '四个一' : '私发'}反馈（单列表格）`, {
         description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
       });
@@ -451,9 +467,8 @@ export function FeedbackGenerator({
       return;
     }
     const text = batchRows.map(r => `【${getNickname(r.name)}】\n${r.text}`).join('\n\n──────────────\n\n');
-    const ok = await copyToClipboard(text);
+    const ok = await copyFeedback(text, batchRows.map(row => row.name));
     if (ok) {
-      setCopiedSet(prev => { const n = new Set(prev); batchRows.forEach(r => n.add(r.name)); return n; });
       toast.success(`已复制 ${batchRows.length} 份反馈（纯文本，分隔线隔开）`, {
         description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
       });
@@ -463,9 +478,8 @@ export function FeedbackGenerator({
   };
 
   const handleCopyBatchRow = async (name: string, text: string) => {
-    const ok = await copyToClipboard(text);
+    const ok = await copyFeedback(text, [name]);
     if (ok) {
-      setCopiedSet(prev => new Set(prev).add(name));
       toast.success(`已复制 ${getNickname(name)} 的反馈`);
     } else {
       toast.error('复制失败，请手动选择复制');
@@ -486,6 +500,13 @@ export function FeedbackGenerator({
     : 0;
 
   const selectedRecord = selected ? recordOf(selected) : undefined;
+
+  const selectableLessons = lessonNumbers
+    ? [...new Set([...lessonNumbers, ...Object.keys(lessonConfigs).map(Number), lessonNumber])]
+        .filter(lesson => Number.isInteger(lesson) && lesson > 0)
+        .sort((a, b) => a - b)
+    : [];
+
 
   const statusBadge = (name: string) => {
     const tone = statusTone(name);
@@ -514,65 +535,91 @@ export function FeedbackGenerator({
     <div className="space-y-5">
       {/* 顶部：标题 + 批量操作 */}
       <Card className="ios-glass-card border-0">
-        <CardContent className="pt-5 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <CardContent className="feedback-workbench-content pt-5 pb-4">
+          <div className="feedback-workbench-header">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
+              <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center shadow-sm"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
                 <FileText className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</p>
+                <h2 className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</h2>
                 <p className="text-xs text-[color:var(--ink-4)]">一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，或直接导出教师精灵模板（请假 / 缺勤 / 调课调出自动排除）</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90" onClick={handleGenerateAll}>
-                <Wand2 className="w-4 h-4" />
-                一键生成全班
-              </Button>
-              <Button
-                variant="outline"
-                className={`h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] ${elfOpen ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}
-                onClick={() => setElfOpen(v => !v)}
-                title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                教师精灵表
-              </Button>
-              <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
-                title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
-                <Copy className="w-4 h-4" />
-                仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}
-              </Button>
-              <details className="fb-more">
-                <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
-                <div className="fb-more-menu" role="menu">
-                  <button role="menuitem" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里"><ClipboardList className="w-4 h-4" />复制纯文本</button>
-                  <button role="menuitem" onClick={handleResetStatus}><RotateCcw className="w-4 h-4" />重置状态</button>
+            <div className="feedback-workbench-controls">
+              <div className="feedback-workbench-actions">
+                <div className="feedback-workbench-batch">
+                  <Button size="sm" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand)]/90" onClick={handleGenerateAll}>
+                    <Wand2 className="w-4 h-4" />
+                    一键生成全班
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] ${elfOpen ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}
+                    onClick={() => setElfOpen(v => !v)}
+                    title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    教师精灵表
+                  </Button>
+                  <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
+                    title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
+                    <Copy className="w-4 h-4" />
+                    仅复制{feedbackMode === 'fourInOne' ? '四个一' : '私发'}
+                  </Button>
+                  <details className="fb-more">
+                    <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
+                    <div className="fb-more-menu" role="menu">
+                      <button role="menuitem" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里"><ClipboardList className="w-4 h-4" />复制纯文本</button>
+                      <button role="menuitem" onClick={handleResetStatus}><RotateCcw className="w-4 h-4" />重置状态</button>
+                    </div>
+                  </details>
                 </div>
-              </details>
-              <div role="tablist" className="mode-seg mode-seg--sm">
-              <button
-              role="tab" aria-selected={feedbackMode === 'normal'}
-              onClick={() => setFeedbackMode('normal')}
-              className={`mode-seg-item ${feedbackMode === 'normal' ? 'is-active' : ''}`}
-              >常规反馈</button>
-              <button
-              role="tab" aria-selected={feedbackMode === 'fourInOne'}
-              onClick={() => setFeedbackMode('fourInOne')}
-              className={`mode-seg-item inline-flex items-center gap-1.5 ${feedbackMode === 'fourInOne' ? 'is-active' : ''}`}
-              ><Sparkles className="w-3.5 h-3.5" />四个一</button>
+                <div className="feedback-workbench-modes">
+                  <div role="tablist" aria-label="反馈模式" className="mode-seg mode-seg--sm">
+                    <button
+                      role="tab" aria-selected={feedbackMode === 'normal'}
+                      onClick={() => setFeedbackMode('normal')}
+                      className={`mode-seg-item ${feedbackMode === 'normal' ? 'is-active' : ''}`}
+                    >常规反馈</button>
+                    <button
+                      role="tab" aria-selected={feedbackMode === 'fourInOne'}
+                      onClick={() => setFeedbackMode('fourInOne')}
+                      className={`mode-seg-item inline-flex items-center gap-1.5 ${feedbackMode === 'fourInOne' ? 'is-active' : ''}`}
+                    ><Sparkles className="w-3.5 h-3.5" />四个一</button>
+                  </div>
+                  {isFourInOne && (
+                    <div role="tablist" className="mode-seg mode-seg--sm" aria-label="详细程度">
+                      <button role="tab" aria-selected={detailLevel === 'brief'} className={`mode-seg-item ${detailLevel === 'brief' ? 'is-active' : ''}`} onClick={() => setDetailLevel('brief')}>精简版</button>
+                      <button role="tab" aria-selected={detailLevel === 'detailed'} className={`mode-seg-item ${detailLevel === 'detailed' ? 'is-active' : ''}`} onClick={() => setDetailLevel('detailed')}>详细版</button>
+                    </div>
+                  )}
+                  {viewSwitch && <span className="tb-divider" aria-hidden="true" />}
+                  {viewSwitch}
+                </div>
               </div>
-              {isFourInOne && (
-                <div role="tablist" className="mode-seg mode-seg--sm" aria-label="详细程度">
-                  <button role="tab" aria-selected={detailLevel === 'brief'} className={`mode-seg-item ${detailLevel === 'brief' ? 'is-active' : ''}`} onClick={() => setDetailLevel('brief')}>精简版</button>
-                  <button role="tab" aria-selected={detailLevel === 'detailed'} className={`mode-seg-item ${detailLevel === 'detailed' ? 'is-active' : ''}`} onClick={() => setDetailLevel('detailed')}>详细版</button>
+              {selectableLessons.length > 0 && (
+                <div className="feedback-lesson-switch" role="group" aria-label="切换课次">
+                  <span className="feedback-lesson-label">
+                    <BookOpen size={15} aria-hidden="true" />课次
+                  </span>
+                  <div className="feedback-lesson-options">
+                    {selectableLessons.map(lesson => (
+                      <button
+                        key={lesson}
+                        type="button"
+                        className="lesson-chip"
+                        aria-label={`第${lesson}课`}
+                        aria-pressed={lesson === lessonNumber}
+                        onClick={() => onSelectLesson(lesson)}
+                      >
+                        {lesson}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-              {viewSwitch && <span className="tb-divider" aria-hidden="true" />}
-              {viewSwitch}
-
             </div>
           </div>
 
@@ -617,30 +664,27 @@ export function FeedbackGenerator({
             </div>
           )}
 
-          {/* 反馈模式 */}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {feedbackMode === 'fourInOne' && (
-              <>
-                <Select value={scenario} onValueChange={(v) => setScenario(v as typeof scenario)}>
-                  <SelectTrigger className="w-32 h-8 text-sm rounded-[var(--r-md)]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SCENARIOS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none">
-                  <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
-                  新学员（补充孩子感受）
-                </label>
-                <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none" title="附上语法/完型/阅读/写作/听力的精选教辅清单">
-                  <input type="checkbox" checked={withMaterials} onChange={(e) => setWithMaterials(e.target.checked)} className="accent-[color:var(--brand)]" />
-                  附参考教辅
-                </label>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % FOUR_IN_ONE_VARIANT_COUNT)}>
-                  <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/{FOUR_IN_ONE_VARIANT_COUNT}）
-                </Button>
-              </>
-            )}
-          </div>
+          {isFourInOne && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Select value={scenario} onValueChange={(v) => setScenario(v as typeof scenario)}>
+                <SelectTrigger className="w-32 h-8 text-sm rounded-[var(--r-md)]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SCENARIOS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none">
+                <input type="checkbox" checked={isNewStudent} onChange={(e) => setIsNewStudent(e.target.checked)} className="accent-[color:var(--brand)]" />
+                新学员（补充孩子感受）
+              </label>
+              <label className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ink-2)] cursor-pointer select-none" title="附上语法/完型/阅读/写作/听力的精选教辅清单">
+                <input type="checkbox" checked={withMaterials} onChange={(e) => setWithMaterials(e.target.checked)} className="accent-[color:var(--brand)]" />
+                附参考教辅
+              </label>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[var(--r-md)]" onClick={() => setVariant(v => (v + 1) % FOUR_IN_ONE_VARIANT_COUNT)}>
+                <RotateCcw className="w-3.5 h-3.5" />换一版措辞（{variant + 1}/{FOUR_IN_ONE_VARIANT_COUNT}）
+              </Button>
+            </div>
+          )}
 
           {/* 进度条 */}
           <div className="mt-4 space-y-1.5">

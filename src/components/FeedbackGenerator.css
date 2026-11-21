@@ -1,0 +1,95 @@
+.feedback-workbench-header,
+.feedback-workbench-controls {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.feedback-workbench-actions,
+.feedback-workbench-batch,
+.feedback-workbench-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-lesson-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 5px 7px 5px 10px;
+  border: 1px solid rgb(var(--brand-rgb) / .12);
+  border-radius: var(--r-md);
+  background: rgb(var(--brand-rgb) / .045);
+}
+
+.feedback-lesson-label {
+  display: inline-flex;
+  flex: none;
+  min-height: 32px;
+  align-items: center;
+  gap: 5px;
+  padding-inline-end: 9px;
+  border-inline-end: 1px solid var(--hairline);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.feedback-lesson-label svg { color: var(--brand); }
+
+.feedback-lesson-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.feedback-lesson-options .lesson-chip {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: rgb(var(--brand-rgb) / .055);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.feedback-lesson-options .lesson-chip:hover {
+  background: rgb(var(--brand-rgb) / .12);
+}
+
+.feedback-lesson-options .lesson-chip[aria-pressed="true"] {
+  border-color: rgb(var(--brand-rgb) / .17);
+  background: var(--card);
+  box-shadow: var(--sh-sm);
+  color: color-mix(in srgb, var(--brand) 72%, var(--ink));
+}
+
+.dark .feedback-lesson-switch { background: rgb(255 255 255 / .04); }
+.dark .feedback-lesson-options .lesson-chip[aria-pressed="true"] {
+  background: rgb(var(--brand-rgb) / .22);
+  color: color-mix(in srgb, var(--brand) 30%, white);
+}
+
+@media (min-width: 1200px) {
+  .feedback-workbench-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 58%);
+    align-items: start;
+    gap: 16px;
+  }
+
+  .feedback-workbench-actions,
+  .feedback-workbench-modes { justify-content: flex-end; }
+}
+
+@media (max-width: 640px) {
+  .feedback-workbench-content { padding-inline: 14px; }
+  .feedback-workbench-actions { align-items: stretch; flex-direction: column; }
+  .feedback-workbench-modes .tb-divider { display: none; }
+  .feedback-lesson-label, .feedback-lesson-options .lesson-chip { min-block-size: 36px; }
+  .feedback-lesson-options .lesson-chip { min-inline-size: 36px; }
+}

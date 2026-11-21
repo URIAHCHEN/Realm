@@ -9,7 +9,7 @@ import type {
   ClassStats,
 } from '@/types';
 import { buildPublicityHTML } from '@/lib/publicityExport';
-import { hasLessonQuizInput, isAbsentRecord, isQuizAssessed, attendanceKind } from '@/lib/attendance';
+import { hasLessonQuizInput, isAbsentRecord, isRecordedQuiz, attendanceKind } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { migrateLegacyOption } from '@/lib/optionMatch';
 import { classSnapshotOfLesson } from '@/lib/lessonStats';
@@ -205,43 +205,21 @@ function computeTotals(
   return { totalScore: Math.round(total * 100) / 100, correctRate };
 }
 
-// 重算某课次排名（按总分降序），返回新数组（不可变，不改动入参对象）。
+// 重算某课次已录分学员的排名，返回新数组（不可变，不改动入参对象）。
 // 用 Map 定位代替逐条 findIndex，将 O(n²) 降为 O(n log n)；统一所有写路径的排名口径
-function rerankLesson(records: StudentRecord[], lessonNumber: number): StudentRecord[] {
+function rerankLesson(records: StudentRecord[], lessonNumber: number, config: LessonConfig): StudentRecord[] {
   // 口径统一交给 lib/lessonStats（唯一来源）：
   //  · 排除请假/缺勤（他们不该占名次，也不该把别人挤后一位）
   //  · 按正确率降序（总分随各次满分变化，跨课次不可比）
   //  · 同分并列同名次（与报告/分析弹窗一致）
-  const snap = classSnapshotOfLesson(records, lessonNumber);
+  const snap = classSnapshotOfLesson(records, lessonNumber, config);
   return records.map(r => {
     if (r.lessonNumber !== lessonNumber) return r;
     const pos = snap.rankById.get(r.id);
-    // 请假/缺勤无名次：显式置 0，避免表格显示上一轮的旧名次
+    // 未参测或未录分无名次：清除旧名次
     const next = pos ?? 0;
     return r.rank !== next ? { ...r, rank: next } : r;
   });
-}
-
-// 加载期自愈：无条件重排所有课次名次。
-// 背景：旧数据里可能留着"同分未并列"的历史 rank（旧版本写入、或某次导入带入），
-// 且这些数据的正确率往往与重算结果完全一致 → recomputeRatesInClass 检测不到变化、不会触发重排，
-// 错误排名就会一直挂在表/导出/榜单上。这里每次加载/导入都无条件重排一遍（O(n log n)，一次到位），
-// 保证「同分并列 + 后一名按并列数后移」的口径对存量数据同样生效。
-function rerankAllLessons(all: { [key: string]: Class }): { [key: string]: Class } {
-  let changed = false;
-  const next: { [key: string]: Class } = {};
-  Object.entries(all).forEach(([cid, cls]) => {
-    if (!cls?.records?.length) { next[cid] = cls; return; }
-    let records = cls.records;
-    new Set(cls.records.map(r => r.lessonNumber)).forEach(lesson => {
-      records = rerankLesson(records, lesson);
-    });
-    // rerankLesson 用 map 生成新数组；逐项比对引用判断是否真的发生变更
-    const didChange = records.some((r, i) => r !== cls.records[i]);
-    if (didChange) { changed = true; next[cid] = { ...cls, records }; }
-    else next[cid] = cls;
-  });
-  return changed ? next : all;
 }
 
 // 解析某课次生效配置（与 getLessonConfig 同口径的纯函数版本，供加载期/导入期迁移使用）
@@ -267,13 +245,12 @@ function recomputeRatesInClass(classData: Class, appConfig: AppConfig): Class {
     changed = true;
     return { ...r, totalScore, correctRate };
   });
-  if (!changed) return classData;
-  // 总分变化后同步重排各课次名次，保证排名与总分一致
+  // 配置变化时，有效成绩的范围也可能变化（例如 0 分题型改成附加项）。
   let ranked = records;
   new Set(records.map(r => r.lessonNumber)).forEach(lesson => {
-    ranked = rerankLesson(ranked, lesson);
+    ranked = rerankLesson(ranked, lesson, resolveLessonConfigPure(classData, lesson, appConfig));
   });
-  return { ...classData, records: ranked };
+  return changed || ranked.some((r, i) => r !== classData.records[i]) ? { ...classData, records: ranked } : classData;
 }
 
 function recomputeAllRates(classes: { [key: string]: Class }, appConfig: AppConfig): { [key: string]: Class } {
@@ -347,33 +324,6 @@ function migrateExcludeFromTotal(all: { [key: string]: Class }): { [key: string]
     });
     if (cfgChanged) { changed = true; next[cid] = { ...cls, lessonConfigs: nextCfgs }; }
     else next[cid] = cls;
-  });
-  return changed ? next : all;
-}
-
-function normalizeLeaveTotals(all: { [key: string]: Class }): { [key: string]: Class } {
-  let changed = false;
-  const next: { [key: string]: Class } = {};
-  Object.entries(all).forEach(([cid, cls]) => {
-    if (!cls?.records) { next[cid] = cls; return; }
-    let clsChanged = false;
-    let records = cls.records.map(r => {
-      if (attendanceKind(r.attendance) === 'leave' && (r.totalScore > 0 || r.correctRate > 0)) {
-        clsChanged = true;
-        return { ...r, totalScore: 0, correctRate: 0 };
-      }
-      return r;
-    });
-    if (clsChanged) {
-      changed = true;
-      const lessons = new Set(records.map(r => r.lessonNumber));
-      let ranked = records;
-      lessons.forEach(lesson => {
-        ranked = rerankLesson(ranked, lesson);
-      });
-      records = ranked;
-    }
-    next[cid] = clsChanged ? { ...cls, records } : cls;
   });
   return changed ? next : all;
 }
@@ -494,9 +444,9 @@ export function useClassData() {
         const saved = JSON.parse(raw) as { [key: string]: Class } | null;
         if (saved && typeof saved === 'object') {
           // 加载期迁移：请假清零 + 以当前课次真实满分重算正确率（修复历史 300 分母）
-          const migrated = recomputeAllRates(normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved))), appConfig);
+          const migrated = recomputeAllRates(migrateLegacyRecordOptions(migrateExcludeFromTotal(saved)), appConfig);
           // 课次模板自愈：登记表里的最后一次编辑优先；名次无条件重排（修复历史"同分未并列"）
-          return applyTemplateStore(appConfig, rerankAllLessons(migrateLegacyTemplates(migrated, appConfig))).classes;
+          return applyTemplateStore(appConfig, migrateLegacyTemplates(migrated, appConfig)).classes;
         }
       } catch {
         console.warn('[load] classData 损坏，已隔离为空（不回退示例数据，避免误推上云）');
@@ -604,6 +554,12 @@ export function useClassData() {
     safeSet('currentLessonByClass', JSON.stringify(lessonByClass));
   }, [lessonByClass]);
 
+  useEffect(() => {
+    if (currentClassId && classes[currentClassId]) return;
+    const firstClassId = Object.keys(classes)[0] ?? null;
+    if (currentClassId !== firstClassId) setCurrentClassId(firstClassId);
+  }, [classes, currentClassId]);
+
   // 切换班级：恢复该班课次（防止课次跨班串台）
   const lastClassForLesson = useRef<string | null>(null);
   useEffect(() => {
@@ -701,12 +657,12 @@ export function useClassData() {
 
   // 计算班级统计数据
   // 口径：请假/缺勤学员不计入总分与平均分（含各题型班均），0 分不再拉低统计
-  const calculateClassStats = useCallback((records: StudentRecord[], questionTypes: QuestionType[]): ClassStats => {
+  const calculateClassStats = useCallback((records: StudentRecord[], questionTypes: QuestionType[], customFields: LessonConfig['customFields'] = []): ClassStats => {
     if (records.length === 0) {
       return { maxScore: 0, minScore: 0, avgScore: 0, avgScores: {}, registeredCounts: {} };
     }
 
-    const present = records.filter(r => isQuizAssessed(r));
+    const present = records.filter(r => isRecordedQuiz(r, { questionTypes, customFields }));
     const scores = present.map(r => r.totalScore);
     const maxScore = scores.length ? Math.max(...scores) : 0;
     const minScore = scores.length ? Math.min(...scores) : 0;
@@ -730,12 +686,12 @@ export function useClassData() {
         registeredCounts[qt.id] = registered.length;
         return;
       }
-      // 仅统计出勤学员；到课学员的 0 分也计入班均（不再用 >0 过滤，避免班均虚高）
-      const typeScores = present.map(r => r.scores[qt.id] || 0);
+      // 题型班均只纳入这一题已登记的分数，包括 0 分。
+      const typeScores = present.map(r => r.scores?.[qt.id]).filter(Number.isFinite);
       avgScores[qt.id] = typeScores.length > 0
         ? Math.round(typeScores.reduce((a, b) => a + b, 0) / typeScores.length * 10) / 10
         : 0;
-      registeredCounts[qt.id] = present.filter(r => typeof r.scores[qt.id] === 'number').length;
+      registeredCounts[qt.id] = typeScores.length;
     });
 
     return { maxScore, minScore, avgScore, avgScores, registeredCounts };
@@ -912,7 +868,7 @@ export function useClassData() {
       removed = targets.length;
       const affected = new Set(targets.map(r => r.lessonNumber));
       let records = cls.records.filter(r => !(r.studentName === studentName && r.lessonNumber >= fromLesson));
-      affected.forEach(l => { records = rerankLesson(records, l); });
+      affected.forEach(l => { records = rerankLesson(records, l, resolveLessonConfigPure(cls, l, appConfig)); });
       const leaveMap = { ...(cls.studentLeaveLesson || {}) };
       leaveMap[studentName] = fromLesson;
       return {
@@ -926,7 +882,7 @@ export function useClassData() {
       };
     });
     return removed;
-  }, []);
+  }, [appConfig]);
 
   const removeStudentFromClass = useCallback((classId: string, studentName: string) => {
     setClasses(prev => {
@@ -934,7 +890,7 @@ export function useClassData() {
       if (!cls) return prev;
       const lessons = new Set(cls.records.filter(r => r.studentName === studentName).map(r => r.lessonNumber));
       let records = cls.records.filter(r => r.studentName !== studentName);
-      lessons.forEach(l => { records = rerankLesson(records, l); });
+      lessons.forEach(l => { records = rerankLesson(records, l, resolveLessonConfigPure(cls, l, appConfig)); });
       const joinMap = { ...(cls.studentJoinLesson || {}) };
       const leaveMap = { ...(cls.studentLeaveLesson || {}) };
       delete joinMap[studentName];
@@ -950,7 +906,7 @@ export function useClassData() {
         }
       };
     });
-  }, []);
+  }, [appConfig]);
 
   // 转班：只移动名单，不动任何学情记录。
   // 转出班：移出名单、保留历史记录（历史课次统计不受影响）；转入班：仅加入名单，学情从零开始。
@@ -1113,7 +1069,7 @@ export function useClassData() {
       }
 
       // 重新计算排名
-      const ranked = rerankLesson(newRecords, lessonNumber);
+      const ranked = rerankLesson(newRecords, lessonNumber, lessonConfig);
 
       return {
         ...prev,
@@ -1152,7 +1108,7 @@ export function useClassData() {
         newRecords[recordIndex].correctRate = correctRate;
 
         // 重新计算排名
-        const ranked = rerankLesson(newRecords, lesson);
+        const ranked = rerankLesson(newRecords, lesson, lessonConfig);
         return {
           ...prev,
           [classId]: { ...classData, records: ranked }
@@ -1249,7 +1205,7 @@ export function useClassData() {
               ? { ...r, totalScore, correctRate }
               : r;
           }),
-          lessonNumber
+          lessonNumber, updatedConfig
         );
         return {
           ...prev,
@@ -1305,7 +1261,7 @@ export function useClassData() {
             ? { ...r, totalScore, correctRate }
             : r;
         }),
-        lessonNumber
+        lessonNumber, updatedConfig
       );
       return {
         ...prev,
@@ -1326,10 +1282,10 @@ export function useClassData() {
       if (!cls) return prev;
       const removed = cls.records.find(r => r.id === recordId);
       const filtered = cls.records.filter(r => r.id !== recordId);
-      const records = removed ? rerankLesson(filtered, removed.lessonNumber) : filtered;
+      const records = removed ? rerankLesson(filtered, removed.lessonNumber, resolveLessonConfigPure(cls, removed.lessonNumber, appConfig)) : filtered;
       return { ...prev, [classId]: { ...cls, records } };
     });
-  }, []);
+  }, [appConfig]);
 
   // 清空某条记录的全部内容（保留考勤/学习轨迹与学生与记录本身）——服务于「请假生什么都不用记」
   const clearRecordContent = useCallback((classId: string, recordId: string) => {
@@ -1356,11 +1312,11 @@ export function useClassData() {
 
       // 重算该课次排名
       const lesson = newRecords[idx].lessonNumber;
-      const ranked = rerankLesson(newRecords, lesson);
+      const ranked = rerankLesson(newRecords, lesson, resolveLessonConfigPure(classData, lesson, appConfig));
 
       return { ...prev, [classId]: { ...classData, records: ranked } };
     });
-  }, []);
+  }, [appConfig]);
 
   // 新增课次时自动继承最近一次历史课的学习轨迹（seasons）：
   // 有轨迹的学生在新课次建空记录并带入轨迹；已有记录但轨迹为空则回填。其余内容留空。
@@ -1427,11 +1383,11 @@ export function useClassData() {
 
       const newRecords = [...classData.records, record];
       // 重算该课次排名，与 saveRecord 保持一致
-      const ranked = rerankLesson(newRecords, record.lessonNumber);
+      const ranked = rerankLesson(newRecords, record.lessonNumber, resolveLessonConfigPure(classData, record.lessonNumber, appConfig));
 
       return { ...prev, [classId]: { ...classData, records: ranked } };
     });
-  }, []);
+  }, [appConfig]);
 
   // 一键删除某课次全部记录（返回被删记录，供撤销恢复）
   const deleteLessonRecords = useCallback((classId: string, lessonNumber: number): StudentRecord[] => {
@@ -1483,11 +1439,11 @@ export function useClassData() {
       let nextRecords = cd.records;
       if (toAdd.length > 0) {
         nextRecords = [...cd.records, ...toAdd];
-        nextRecords = rerankLesson(nextRecords, lessonNumber);
+        nextRecords = rerankLesson(nextRecords, lessonNumber, resolveLessonConfigPure({ ...cd, lessonConfigs }, lessonNumber, appConfig));
       }
       return { ...prev, [classId]: { ...cd, records: nextRecords, lessonConfigs } };
     });
-  }, []);
+  }, [appConfig]);
 
   // 批量恢复记录（撤销用），并重算受影响课次排名
   const restoreRecords = useCallback((classId: string, records: StudentRecord[]) => {
@@ -1502,11 +1458,11 @@ export function useClassData() {
       let ranked = newRecords;
       const affected = new Set(toAdd.map(r => r.lessonNumber));
       affected.forEach(lesson => {
-        ranked = rerankLesson(ranked, lesson);
+        ranked = rerankLesson(ranked, lesson, resolveLessonConfigPure(cd, lesson, appConfig));
       });
       return { ...prev, [classId]: { ...cd, records: ranked } };
     });
-  }, []);
+  }, [appConfig]);
 
   // 恢复被移除的学生及其全部记录（用于移除学生的撤销）
   const restoreStudent = useCallback((classId: string, studentName: string, records: StudentRecord[]) => {
@@ -1529,7 +1485,7 @@ export function useClassData() {
       // 重算受影响课次的排名
       const affectedLessons = new Set(toRestore.map(r => r.lessonNumber));
       affectedLessons.forEach(lesson => {
-        newRecords = rerankLesson(newRecords, lesson);
+        newRecords = rerankLesson(newRecords, lesson, resolveLessonConfigPure(classData, lesson, appConfig));
       });
 
       const leaveMap = { ...(classData.studentLeaveLesson || {}) };
@@ -1544,7 +1500,7 @@ export function useClassData() {
         },
       };
     });
-  }, []);
+  }, [appConfig]);
 
   // 更新应用配置
   const updateAppConfig = useCallback((newConfig: Partial<AppConfig>) => {
@@ -1781,10 +1737,10 @@ export function useClassData() {
 
     const baseAppConfig = migrateDefaultOptions({ ...defaultAppConfig, ...(data?.appConfig || {}) }, data?.appConfig);
     // 导入期迁移：请假清零 + 以课次真实满分重算正确率；名次无条件重排（修复历史"同分未并列"）
-    const migratedClasses = rerankAllLessons(recomputeAllRates(
-      normalizeLeaveTotals(migrateLegacyRecordOptions(migrateExcludeFromTotal(data?.classes || {}))),
+    const migratedClasses = recomputeAllRates(
+      migrateLegacyRecordOptions(migrateExcludeFromTotal(data?.classes || {})),
       baseAppConfig
-    ));
+    );
     // 用合并后的登记表覆盖配置中的模板字段（本地更新者胜出）
     const healed = applyTemplateStore(baseAppConfig, migratedClasses);
     setAppConfig(healed.appConfig);

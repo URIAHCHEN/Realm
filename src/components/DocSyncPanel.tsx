@@ -130,9 +130,9 @@ export function DocSyncPanel({
 
   return (
     // 顶部并排双卡：推送（左）/ 导入（右），宽屏两列、窄屏单列
-    <div className={`grid gap-5 lg:grid-cols-2 ${className || ''}`}>
+    <div className={`grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2 ${className || ''}`}>
       {/* 推送到在线文档 */}
-      <Card className="ios-glass-card border-0 h-full">
+      <Card className="ios-glass-card min-w-0 border-0 h-full">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <FileSpreadsheet className="w-5 h-5" style={{ color: 'var(--brand)' }} />
@@ -145,7 +145,7 @@ export function DocSyncPanel({
             <p className="font-medium">使用方式（约 30 秒成表）：</p>
             <p>1️⃣ 点下方按钮复制学情表 → 2️⃣ 打开腾讯文档/金山文档新建在线表格 → 3️⃣ Ctrl+V 粘贴，行列自动对齐 → 4️⃣ 分享公示链接</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-2">
             <Button className={BTN_PRIMARY + " gap-2"} onClick={handleCopyTSV}>
               <ClipboardCopy className="w-4 h-4" />
               复制表格（粘贴到在线表格）
@@ -163,7 +163,7 @@ export function DocSyncPanel({
       </Card>
 
       {/* 从在线表格回导 */}
-      <Card className="ios-glass-card border-0">
+      <Card className="ios-glass-card min-w-0 border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <ClipboardPaste className="w-5 h-5" style={{ color: 'var(--brand)' }} />
@@ -202,7 +202,7 @@ export function DocSyncPanel({
             onChange={(e) => setPasteText(e.target.value)}
             className="min-h-[140px] text-sm rounded-xl"
           />
-          <Button className="gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" disabled={parsing} onClick={handleParse}>
+          <Button className="h-auto max-w-full whitespace-normal break-words py-2 text-left gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" disabled={parsing} onClick={handleParse}>
             {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
             解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>
@@ -304,7 +304,7 @@ export function DocSyncPanel({
 /** 同步机制与冲突策略（独立卡片，通常置于同步中心页底部） */
 export function DocSyncInfo({ display }: { display: Display }) {
   return (
-    <Card className="ios-glass-card border-0">
+    <Card className="ios-glass-card min-w-0 border-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-[color:var(--ink)]">
             <CloudCog className="w-5 h-5" style={{ color: 'var(--brand)' }} />

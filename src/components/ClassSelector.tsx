@@ -14,8 +14,6 @@ interface ClassSelectorProps {
   onUpdateClass: (classId: string, patch: { name?: string; term?: string; batchCode?: string }) => void;
   onDeleteClass: (classId: string) => void;
   onAddStudents: (classId: string, studentNames: string[]) => void;
-  /** 右上角插槽（主 Tab 行放在这里，与"班级选择"同一行，2026-10-24） */
-  rightSlot?: React.ReactNode;
 }
 
 export function ClassSelector({
@@ -26,10 +24,9 @@ export function ClassSelector({
   onUpdateClass,
   onDeleteClass,
   onAddStudents,
-  rightSlot,
 }: ClassSelectorProps) {
   const [newClassName, setNewClassName] = useState('');
-  const [newTerm, setNewTerm] = useState('FY27Q1');
+  const [newTerm, setNewTerm] = useState('');
   const [newBatchCode, setNewBatchCode] = useState('');
   const [manageOpen, setManageOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -45,16 +42,19 @@ export function ClassSelector({
     return ['全部', ...Array.from(terms).sort()];
   }, [allClasses]);
 
-  const visibleClasses = useMemo(
-    () => allClasses.filter(c => activeTerm === '全部' || c.term === activeTerm),
-    [allClasses, activeTerm]
-  );
+  const term = allTerms.includes(activeTerm) ? activeTerm : '全部';
+  const visibleClasses = allClasses.filter(cls => term === '全部' || cls.term === term);
+  const currentClass = currentClassId ? classes[currentClassId] : undefined;
+  const currentOutsideFilter = currentClass && !visibleClasses.includes(currentClass);
 
   const totalEmpty = allClasses.length === 0;
 
   const handleCreateClass = () => {
     if (newClassName.trim()) {
-      onCreateClass(newClassName.trim(), newTerm.trim(), newBatchCode.trim());
+      const id = onCreateClass(newClassName.trim(), newTerm.trim(), newBatchCode.trim());
+      setActiveTerm('全部');
+      onSelectClass(id);
+      setManageOpen(false);
       setNewClassName('');
       setNewBatchCode('');
     }
@@ -79,7 +79,7 @@ export function ClassSelector({
   const ManageButton = (
     <Dialog open={manageOpen} onOpenChange={setManageOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
+        <Button variant="outline" size="sm" aria-label="班级管理" className="gap-2 rounded-[var(--r-md)] border-[rgb(var(--brand-rgb)/0.25)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)]">
           <Settings className="w-4 h-4" />
           <span className="hidden sm:inline">班级管理</span>
         </Button>
@@ -98,7 +98,7 @@ export function ClassSelector({
               className="ios-input"
             />
             <div className="flex gap-2">
-              <Input placeholder="财年季度，如 FY27Q1" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} className="ios-input" />
+              <Input placeholder="财年季度（选填）" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} className="ios-input" />
               <Input
                 placeholder="批次编号，如 TG3ZY078（选填）"
                 value={newBatchCode}
@@ -171,18 +171,19 @@ export function ClassSelector({
   );
 
   return (
-    <div className="ios-glass-card p-4 sm:p-6 mx-auto max-w-[1600px]">
-      {/* 标题行 */}
-      <div className="class-selector-head flex items-center justify-between gap-3">
-        <h2 className="class-selector-title text-[color:var(--ink)] font-semibold text-base flex items-center gap-3">
-          <span className="w-9 h-9 bg-[rgb(var(--brand-rgb)/0.1)] rounded-[var(--r-md)] flex items-center justify-center">
-            <Users className="w-5 h-5 text-[color:var(--brand)]" />
-          </span>
-          班级选择
-          {!totalEmpty && <span className="text-[color:var(--ink-4)] text-sm font-normal">· {visibleClasses.length}/{allClasses.length}</span>}
-        </h2>
-        <div className="class-selector-actions flex items-center gap-2 flex-wrap justify-end">
-          {rightSlot}
+    <section className="realm-class-picker" aria-labelledby="realm-class-heading">
+      <div className="realm-class-heading">
+        <h2 id="realm-class-heading"><Users size={17} aria-hidden="true" />班级选择</h2>
+        <div className="realm-class-tools">
+          {allTerms.length > 2 && (
+            <label className="realm-class-term">
+              <CalendarDays size={15} aria-hidden="true" />
+              <span className="sr-only">筛选学期</span>
+              <select aria-label="筛选学期" value={term} onChange={event => setActiveTerm(event.target.value)}>
+                {allTerms.map(option => <option key={option} value={option}>{option === '全部' ? '全部学期' : option}</option>)}
+              </select>
+            </label>
+          )}
           {ManageButton}
         </div>
       </div>
@@ -202,33 +203,19 @@ export function ClassSelector({
         </div>
       ) : (
         <>
-          {/* 学期筛选 */}
-          {allTerms.length > 2 && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-4">
-              <span className="text-xs text-[color:var(--ink-4)] mr-1 inline-flex items-center gap-1">
-                <CalendarDays className="w-3.5 h-3.5" />学期：
-              </span>
-              {allTerms.map(term => (
-                <button
-                  key={term}
-                  onClick={() => setActiveTerm(term)}
-                  aria-pressed={activeTerm === term}
-                  className={
-                    'px-2.5 h-7 rounded-[var(--r-sm)] text-xs font-medium transition-colors ' +
-                    (activeTerm === term
-                      ? 'bg-[color:var(--brand)] text-white shadow-[0_2px_8px_rgb(var(--brand-rgb)/0.30)]'
-                      : 'bg-black/[0.05] text-[color:var(--ink-3)] hover:bg-black/[0.09]')
-                  }
-                >
-                  {term}
-                </button>
-              ))}
-            </div>
-          )}
+          <label className="realm-class-mobile">
+            <span className="sr-only">当前班级</span>
+            <select aria-label="当前班级" value={currentClassId ?? ''} onChange={event => onSelectClass(event.target.value)}>
+              {!currentClass && <option value="" disabled>请选择班级</option>}
+              {currentOutsideFilter && <option value={currentClass.id}>当前 · {currentClass.name}</option>}
+              {visibleClasses.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+            </select>
+          </label>
+          {currentOutsideFilter && <p className="realm-class-context">当前班级：{currentClass.name}</p>}
 
           {/* 班级胶囊 */}
           {visibleClasses.length > 0 ? (
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="realm-class-chips">
               {visibleClasses.map((cls) => {
                 const active = currentClassId === cls.id;
                 return (
@@ -237,14 +224,14 @@ export function ClassSelector({
                     onClick={() => onSelectClass(cls.id)}
                     aria-pressed={active}
                     className={
-                      'class-chip px-4 h-10 rounded-[var(--r-md)] text-sm font-medium inline-flex items-center gap-2 transition-all duration-200 ' +
+                      'class-chip px-3 h-9 rounded-[var(--r-md)] text-sm font-medium inline-flex items-center gap-2 transition-colors ' +
                       (active
                         ? 'bg-[color:var(--brand)] text-white shadow-[0_6px_18px_rgb(var(--brand-rgb)/0.30)]'
                         : 'bg-white/70 text-[color:var(--ink)] ring-1 ring-black/5 hover:ring-[rgb(var(--brand-rgb)/0.4)] hover:bg-white')
                     }
                   >
                     <span className="truncate max-w-[12rem]">{cls.name}</span>
-                    {cls.term && (
+                    {term === '全部' && cls.term && (
                       <span className={'text-[10px] px-1.5 py-0.5 rounded-md ' + (active ? 'bg-white/20 text-white' : 'bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)]')}>
                         {cls.term}
                       </span>
@@ -261,7 +248,7 @@ export function ClassSelector({
           ) : (
             <div className="empty-general mt-2 py-10">
               <span className="empty-ico"><SearchX className="w-6 h-6" /></span>
-              <div className="empty-t">「{activeTerm}」暂无班级</div>
+              <div className="empty-t">「{term}」暂无班级</div>
               <div className="empty-d">换一个学期，或新建一个班级。</div>
               <div className="flex gap-2 mt-1">
                 <Button variant="outline" className="rounded-[var(--r-md)]" onClick={() => setActiveTerm('全部')}>查看全部学期</Button>
@@ -279,6 +266,6 @@ export function ClassSelector({
         onCreateClass={onCreateClass}
         onAddStudents={onAddStudents}
       />
-    </div>
+    </section>
   );
 }

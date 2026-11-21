@@ -30,7 +30,7 @@ import {
   CalendarCheck, BookOpen, Mic, Trophy, Layers, FileText, Target, Download } from 'lucide-react';
 import type { StudentRecord, LessonConfig, SchoolScore } from '@/types';
 
-import { attendanceRateOf, isQuizAssessed } from '@/lib/attendance';
+import { attendanceRateOf, isQuizAssessed, isRecordedQuiz } from '@/lib/attendance';
 import {
   AXIS_TICK, AXIS_TICK_SM, AXIS_TICK_XS, GRID, TOOLTIP_CONTENT, TOOLTIP_LABEL,
   LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL,
@@ -48,12 +48,8 @@ interface StudentAnalysisProps {
   nickname: string;
   allRecords: { classId: string; className: string; records: StudentRecord[] }[];
   schoolScores: SchoolScore[];
-  /**
-   * 全班记录（含其他学员）。用于「班级最高 / 班级平均 / 班级排名 / 班级人数」等班级口径。
-   * 注意：不能用 allRecords —— 那里只有该生自己的记录，拿它算班均会变成"自己跟自己比"，
-   * 排名恒为 1/1（历史 bug）。
-   */
-  classRecords?: StudentRecord[];
+  initialClassId: string;
+  recordsByClass: Record<string, StudentRecord[]>;
   getLessonConfig: (classId: string, lessonNumber: number) => LessonConfig;
   /** 题型大类归类的人工覆盖（雷达/趋势/对比按大类统计） */
   qtCategoryOverrides?: Record<string, string>;
@@ -164,13 +160,14 @@ export function StudentAnalysis({
   nickname,
   allRecords,
   schoolScores,
-  classRecords,
+  initialClassId,
+  recordsByClass,
   getLessonConfig,
   qtCategoryOverrides
 }: StudentAnalysisProps) {
-  const [selectedClassIndex, setSelectedClassIndex] = useState(0);
-
-  const currentClassData = allRecords[selectedClassIndex];
+  const [selectedClassId, setSelectedClassId] = useState(initialClassId);
+  const currentClassData = allRecords.find(data => data.classId === selectedClassId) ?? allRecords[0];
+  const classRecords = currentClassData ? recordsByClass[currentClassData.classId] : undefined;
   const records = useMemo(() =>
     [...(currentClassData?.records || [])].sort((a, b) => a.lessonNumber - b.lessonNumber),
     [currentClassData]
@@ -225,45 +222,39 @@ export function StudentAnalysis({
   /** 板块聚合结果（类别名/颜色/板块得分率/样本数/成员题型） */
   const categories = useMemo(() => aggregateByCategory(qtDetailItems, qtCategoryOverrides), [qtDetailItems, qtCategoryOverrides]);
 
-  // KPI 统计
+  const quizRecords = useMemo(() => records.filter(record =>
+    isRecordedQuiz(record, getLessonConfig(currentClassData.classId, record.lessonNumber))),
+    [records, currentClassData, getLessonConfig]);
+
+  // 考勤统计使用全部课次，成绩只使用已登记的小测。
   const kpis = useMemo(() => {
     if (records.length === 0) return null;
-    // 请假/缺勤课次不计入平均/最低/正确率（与班级口径一致）
-    const present = records.filter(r => isQuizAssessed(r));
-    const scorePool = present.length > 0 ? present : records;
-    const scores = scorePool.map(r => r.totalScore);
-    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
-    const max = Math.max(...scores);
-    const min = Math.min(...scores);
-    const avgRate = Math.round(scorePool.reduce((a, r) => a + r.correctRate, 0) / scorePool.length * 10) / 10;
-    const latest = records[records.length - 1];
-    const prev = records[records.length - 2];
-    // 保留一位小数：浮点减法会产生 1.3000000000000007 这类噪声，直接显示很扎眼
+    const scores = quizRecords.map(r => r.totalScore);
+    const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10 : 0;
+    const max = scores.length ? Math.max(...scores) : 0;
+    const min = scores.length ? Math.min(...scores) : 0;
+    const avgRate = quizRecords.length
+      ? Math.round(quizRecords.reduce((a, r) => a + r.correctRate, 0) / quizRecords.length * 10) / 10 : 0;
+    const latest = quizRecords.at(-1) ?? records[records.length - 1];
+    const prev = quizRecords.at(-2);
     const trend = prev ? Math.round((latest.totalScore - prev.totalScore) * 10) / 10 : 0;
     const fullScore = getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber));
     const attendanceRate = attendanceRateOf(records.map(r => r.attendance));
     return { total: records.length, avg, max, min, avgRate, latest, trend, fullScore, attendanceRate };
-  }, [records, currentClassData, getLessonConfig]);
+  }, [quizRecords, records, currentClassData, getLessonConfig]);
 
-  // 总分 + 正确率组合图
   const trendChartData = useMemo(() =>
-    records.map(r => ({ name: `D${r.lessonNumber}`, 总分: r.totalScore, 正确率: r.correctRate })),
-    [records]
+    quizRecords.map(r => ({ name: `D${r.lessonNumber}`, 总分: r.totalScore, 正确率: r.correctRate })),
+    [quizRecords]
   );
-
-  // 本生正确率均值（参考线）：与 KPI 口径一致，排除请假/缺勤课次
-  const rateAvg = useMemo(() => {
-    const pool = records.filter(r => isQuizAssessed(r)).map(r => r.correctRate);
-    if (pool.length === 0) return 0;
-    return Math.round((pool.reduce((a, b) => a + b, 0) / pool.length) * 10) / 10;
-  }, [records]);
+  const rateAvg = kpis?.avgRate ?? 0;
 
   // 各题型得分率对比：本人 vs 班级平均（都用各课次自己的满分作分母，跨课次取均值）
   // 用途：与雷达图配对 —— 雷达看"形状"，这里看"与班均的具体差距"，并标出 85/60 分档线
   // 板块得分率对比（2026-10-16 按大类聚合）：本人 vs 班级平均
   const qtCompareData = useMemo(() => {
     if (qtNamesWithData.length === 0) return [];
-    const classPool = (classRecords || []).filter(r => isQuizAssessed(r));
+    const classPool = (classRecords || []).filter(r => isQuizAssessed(r, getLessonConfig(currentClassData.classId, r.lessonNumber)));
     const avg = (a: number[]) => a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0;
     const mineItems = qtNamesWithData.map(name => {
       const pcts = records.map(r => rateOfQt(r, name)).filter((v): v is number => v != null);
@@ -318,7 +309,7 @@ export function StudentAnalysis({
     setExportingTrend(true);
     let container: HTMLDivElement | null = null;
     try {
-      const latest = [...records].reverse().find(r => isQuizAssessed(r)) || records[records.length - 1];
+      const latest = quizRecords.at(-1);
       const fullScore = latest ? getLessonFullScore(getLessonConfig(currentClassData.classId, latest.lessonNumber)) : 0;
       container = document.createElement('div');
       container.style.cssText = 'position:fixed;left:-20000px;top:0;width:1200px;z-index:-1;pointer-events:none;';
@@ -358,8 +349,9 @@ export function StudentAnalysis({
   // 排名格式为「个人名次 / 当次班级人数」。此前用 allRecords（只含该生）当全班记录，
   // 导致排名恒为 1/1 —— 换用 classRecords 后由深模块统一保证正确。
   const entranceTrend = useMemo(() => {
-    const pool = classRecords && classRecords.length ? classRecords : (currentClassData?.records || []);
-    return studentLessonTrend(records, pool).map(t => ({
+    const pool = classRecords ?? [];
+    const configForLesson = currentClassData ? (lesson: number) => getLessonConfig(currentClassData.classId, lesson) : undefined;
+    return studentLessonTrend(records, pool, configForLesson).map(t => ({
       lesson: t.lessonNumber,
       rankText: t.rankText,
       学生正确率: t.rate,
@@ -368,7 +360,7 @@ export function StudentAnalysis({
       班级排名: t.rank,
       班级人数: t.size,
     }));
-  }, [records, currentClassData, classRecords]);
+  }, [records, currentClassData, classRecords, getLessonConfig]);
 
   // 校内成绩
   const schoolData = useMemo(() =>
@@ -442,13 +434,14 @@ export function StudentAnalysis({
         {/* 多班级切换 */}
         {allRecords.length > 1 && (
           <div className="flex flex-wrap gap-2 -mt-2">
-            {allRecords.map((data, i) => (
+            {allRecords.map(data => (
               <Button
                 key={data.classId}
-                variant={selectedClassIndex === i ? 'default' : 'outline'}
+                variant={currentClassData?.classId === data.classId ? 'default' : 'outline'}
                 size="sm"
-                className={`h-8 rounded-xl ${selectedClassIndex === i ? 'ios-button' : 'bg-white/60'}`}
-                onClick={() => setSelectedClassIndex(i)}
+                className={`h-8 rounded-xl ${currentClassData?.classId === data.classId ? 'ios-button' : 'bg-white/60'}`}
+                aria-pressed={currentClassData?.classId === data.classId}
+                onClick={() => setSelectedClassId(data.classId)}
               >
                 {data.className}
               </Button>

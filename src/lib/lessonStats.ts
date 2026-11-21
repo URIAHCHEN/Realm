@@ -12,7 +12,7 @@
 //  2. 正确率 = 得分 ÷ 该课次满分（满分见 lib/lessonFullScore，已排除口语等附加项）；
 //  3. 排名按正确率降序；同分同名次（并列取最小名次）。
 import type { StudentRecord } from '@/types';
-import { isQuizAssessed } from '@/lib/attendance';
+import { isQuizAssessed, isRecordedQuiz, type QuizConfig } from '@/lib/attendance';
 
 export interface LessonClassSnapshot {
   lessonNumber: number;
@@ -43,8 +43,9 @@ export interface StudentLessonRow {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** 某课次的班级快照：有效人数、平均/最高/最低正确率、各人名次 */
-export function classSnapshotOfLesson(records: StudentRecord[], lessonNumber: number): LessonClassSnapshot {
-  const present = records.filter(r => r.lessonNumber === lessonNumber && isQuizAssessed(r));
+export function classSnapshotOfLesson(records: StudentRecord[], lessonNumber: number, config?: QuizConfig): LessonClassSnapshot {
+  const present = records.filter(r => r.lessonNumber === lessonNumber &&
+    (config ? isRecordedQuiz(r, config) : isQuizAssessed(r)));
   const rankById = new Map<string, number>();
   if (present.length === 0) {
     return { lessonNumber, size: 0, avgRate: 0, maxRate: 0, minRate: 0, rankById };
@@ -75,9 +76,10 @@ export function classSnapshotOfLesson(records: StudentRecord[], lessonNumber: nu
 /** 某个学生某课次的「个人 / 班级」对比行（入门测趋势表格的一行） */
 export function studentLessonRow(
   studentRecord: StudentRecord,
-  classRecords: StudentRecord[]
+  classRecords: StudentRecord[],
+  config?: QuizConfig
 ): StudentLessonRow {
-  const snap = classSnapshotOfLesson(classRecords, studentRecord.lessonNumber);
+  const snap = classSnapshotOfLesson(classRecords, studentRecord.lessonNumber, config);
   const rank = snap.rankById.get(studentRecord.id) ?? 0;
   return {
     lessonNumber: studentRecord.lessonNumber,
@@ -94,11 +96,13 @@ export function studentLessonRow(
 /** 入门测趋势：按课次升序输出该生每课次的班级对比行 */
 export function studentLessonTrend(
   studentRecords: StudentRecord[],
-  classRecords: StudentRecord[]
+  classRecords: StudentRecord[],
+  quizConfigForLesson?: (lesson: number) => QuizConfig
 ): StudentLessonRow[] {
-  return [...studentRecords]
+  return studentRecords
+    .filter(record => !quizConfigForLesson || isRecordedQuiz(record, quizConfigForLesson(record.lessonNumber)))
     .sort((a, b) => a.lessonNumber - b.lessonNumber)
-    .map(r => studentLessonRow(r, classRecords));
+    .map(r => studentLessonRow(r, classRecords, quizConfigForLesson?.(r.lessonNumber)));
 }
 
 /** 排名展示：「个人名次 / 当次班级人数」，如 12/28；缺数据时给出可读占位 */

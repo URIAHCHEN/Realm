@@ -273,7 +273,7 @@ export function buildPublicityHTML(
 
   // 排名独立重算（同分并列 + 后一名按并列数后移）：不依赖落库里的历史 rank，
   // 旧数据即便还带着"未并列"的名次，导出也会按当前口径重新算 —— 与学情表/榜单完全一致
-  const rankSnap = classSnapshotOfLesson(records, lessonNumber);
+  const rankSnap = classSnapshotOfLesson(records, lessonNumber, { questionTypes, customFields });
   const rows = sorted.map((r, i) => {
     const ratePct = r.correctRate || 0;
     const rankVal: number | string = rankSnap.rankById.get(r.id) ?? '-';

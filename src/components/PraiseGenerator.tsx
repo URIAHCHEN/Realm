@@ -19,7 +19,7 @@ interface PraiseGeneratorProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[], customFields?: LessonConfig['customFields']) => ClassStats;
   /** 保存本课次的公示参数（名额/板块） */
   onSaveLessonConfig?: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 当前班级名单与在读区间，用于排除已离班学员 */
@@ -87,8 +87,8 @@ export function PraiseGenerator({
   );
 
   const stats = useMemo(() =>
-    calculateClassStats(lessonRecords, lessonConfig.questionTypes),
-    [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
+    calculateClassStats(lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields),
+    [lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields, calculateClassStats]
   );
 
   const quickStats = useMemo(() => {

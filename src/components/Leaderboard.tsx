@@ -27,7 +27,7 @@ interface LeaderboardProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[], customFields?: LessonConfig['customFields']) => ClassStats;
   /** 当前班级名单与在读区间，用于排除已离班学员的历史记录 */
   students?: string[];
   studentJoinLesson?: Record<string, number>;
@@ -190,8 +190,8 @@ export function Leaderboard({
   );
 
   const stats = useMemo(() =>
-    calculateClassStats(lessonRecords, lessonConfig.questionTypes),
-    [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
+    calculateClassStats(lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields),
+    [lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields, calculateClassStats]
   );
 
   // 入门测排名（前十名）

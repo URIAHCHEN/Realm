@@ -35,3 +35,13 @@
 .dark .header-menu-label {
   color: #a9b8cd;
 }
+
+@media (max-width: 600px) {
+  .realm-header-actions { position: relative; }
+  .realm-header-actions .header-menu-root { position: static; }
+  .realm-header-actions .header-menu-panel {
+    top: calc(100% + 6px);
+    inset-inline-end: 0;
+    max-width: 100%;
+  }
+}

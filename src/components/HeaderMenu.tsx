@@ -58,7 +58,7 @@ export function HeaderMenu({ children, label = '更多' }: { children: ReactNode
   };
 
   return (
-    <div className="relative" ref={ref} onBlur={(event) => {
+    <div className="header-menu-root relative" ref={ref} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
       <button

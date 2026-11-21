@@ -12,7 +12,7 @@ import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camer
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
 import { isColumnVisible } from '@/lib/displaySettings';
 import { computeCategoryWeakPoints, isQtWeak, isQtStrong } from '@/lib/weakPoints';
-import { isAbsentRecord, isQuizAssessed, isTransferIn, isTransferRecord, transferDisplayLabel } from '@/lib/attendance';
+import { isAbsentRecord, isRecordedQuiz, isTransferIn, isTransferRecord, transferDisplayLabel } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_ATTENDANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
 import { resolveOptionForDisplay } from '@/lib/optionMatch';
@@ -28,7 +28,7 @@ interface StudentTableProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[], customFields?: LessonConfig['customFields']) => ClassStats;
   /** 口语等附加项的档位自动判定配置；缺省用默认档位（见 lib/oralRating） */
   oralRating?: OralRatingConfig;
   onUpdateRecord: (recordId: string, field: keyof StudentRecord, value: StudentRecord[keyof StudentRecord]) => void;
@@ -98,13 +98,13 @@ function optionCellStyle(hex: string | undefined): CSSProperties | undefined {
 }
 
 /** 成绩输入：自持文本以允许输入小数；提交为 number（支持 8.5 这类分值） */
-function ScoreInput({ value, max, onCommit, className, placeholder }: {
-  value: number; max?: number; onCommit: (n: number) => void; className?: string; placeholder?: string;
+function ScoreInput({ value, max, onCommit, className, placeholder, label }: {
+  value?: number; label?: string; max?: number; onCommit: (n: number) => void; className?: string; placeholder?: string;
 }) {
-  const [text, setText] = useState(() => (value > 0 ? String(value) : ''));
+  const [text, setText] = useState(() => (value !== undefined ? String(value) : ''));
   const [focused, setFocused] = useState(false);
   // 显示值：聚焦时用本地缓冲（输入即时可见），失焦时直接用记录值（无需 effect 同步，避免级联渲染）
-  const shown = focused ? text : (value > 0 ? String(value) : '');
+  const shown = focused ? text : (value !== undefined ? String(value) : '');
   // 性能（2026-10-23）：原来每次按键都 onCommit → 整表重算 + 重排 + 落库，40 人×20 课次时每键 ~67ms。
   // 现在输入即时显示、落库防抖 260ms；失焦/卸载立即 flush，不丢数据。
   const pendingRef = useRef<number | null>(null);
@@ -133,36 +133,36 @@ function ScoreInput({ value, max, onCommit, className, placeholder }: {
     let raw = e.target.value.replace(/[^\d.]/g, '');
     const dot = raw.indexOf('.');
     if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, ''); // 仅保留一个小数点
-    const n = clamp(parseFloat(raw));
     const entered = parseFloat(raw);
+    const n = clamp(entered);
     // 超限/非法时把输入框同步成落库值：否则用户看到 12、实际存的是 10，短暂误导
     setText(Number.isNaN(entered) ? raw : (n !== entered ? String(n) : raw));
-    pendingRef.current = n;
+    pendingRef.current = Number.isFinite(entered) ? n : null;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(flush, 260);
   };
 
   const handleBlur = () => {
     setFocused(false);
-    if (text.trim() === '') {
+    if (text.trim() === '' || text.trim() === '.') {
       // 空文本区分两种情形：
       //  · 原本未录入 → 保持「未录入」，不提交（若提交 0，hasQuizScores 会把调出学生误判成调入并进统计）
       //  · 原本有分数、用户主动清空 → 仍按 0 分提交，保留原有的「清零」能力
       pendingRef.current = null;
-      if (value > 0) onCommit(0);
+      if (value !== undefined && value > 0) onCommit(0);
       setText('');
       return;
     }
     const n = clamp(parseFloat(text));
-    setText(n > 0 ? String(n) : '');
+    setText(String(n));
     pendingRef.current = n;
     flush();   // 失焦立即落库
   };
 
   return (
     <Input
-      type="text" inputMode="decimal" placeholder={placeholder} value={shown}
-      onFocus={() => { setText(value > 0 ? String(value) : ''); setFocused(true); }}
+      type="text" inputMode="decimal" aria-label={label} placeholder={placeholder} value={shown}
+      onFocus={() => { setText(value !== undefined ? String(value) : ''); setFocused(true); }}
       onChange={handleChange} onBlur={handleBlur}
       className={className}
     />
@@ -332,8 +332,8 @@ export function StudentTable({
     [records, lessonNumber]
   );
   const stats = useMemo(
-    () => calculateClassStats(lessonRecords, lessonConfig.questionTypes),
-    [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
+    () => calculateClassStats(lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields),
+    [lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields, calculateClassStats]
   );
 
   // 口语等附加项的档位自动判定：一次算好「本课次全班 × 各附加项」，行渲染时直接查表。
@@ -580,7 +580,7 @@ export function StudentTable({
   const NEG_OPT_RE = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
   const isNegOpt = (v?: string | null) => !!v && NEG_OPT_RE.test(String(v));
 
-  const statsRateRecords = lessonRecords.filter(r => isQuizAssessed(r));
+  const statsRateRecords = lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig));
   const classRate = statsRateRecords.length > 0
     ? statsRateRecords.reduce((s, r) => s + r.correctRate, 0) / statsRateRecords.length
     : 0;
@@ -1002,7 +1002,7 @@ export function StudentTable({
                                             style={{ width: `calc(${barPct}% - 6px)` }}
                                           />
                                         )}
-                                        <ScoreInput value={score} max={qt.fullScore} placeholder={hideCell ? '-' : isOptional ? '—' : '0'} onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-16 h-9 text-center text-lg font-semibold rounded-lg`} />
+                                        <ScoreInput value={rawScore} max={qt.fullScore} label={`${studentName} ${qt.name}`} placeholder="—" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-16 h-9 text-center text-lg font-semibold rounded-lg`} />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent><p>班均: {avgScore.toFixed(1)}</p><p>差距: {(score - avgScore) >= 0 ? '+' : ''}{(score - avgScore).toFixed(1)}</p></TooltipContent>

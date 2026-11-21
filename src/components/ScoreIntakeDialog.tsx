@@ -14,10 +14,10 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertCircle, CheckCircle2, ImagePlus, Loader2, ScanText, Trash2, Wand2 } from 'lucide-react';
+import { ImagePlus, Loader2, ScanText, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SchoolScore } from '@/types';
-import { parseIntake, scoreDedupKey, type ScoreDraft } from '@/lib/scoreIntake';
+import { parseIntake, schoolScoreDate, schoolScoreIssue, scoreDedupKey, type ScoreDraft } from '@/lib/scoreIntake';
 
 interface ScoreIntakeDialogProps {
   open: boolean;
@@ -30,8 +30,6 @@ interface ScoreIntakeDialogProps {
   defaultSubject?: string;
 }
 
-const todayISO = () => new Date().toISOString().split('T')[0];
-
 export function ScoreIntakeDialog({
   open,
   onOpenChange,
@@ -43,7 +41,7 @@ export function ScoreIntakeDialog({
   defaultSubject = '英语',
 }: ScoreIntakeDialogProps) {
   const [examName, setExamName] = useState('校内考试');
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(schoolScoreDate);
   const [subject, setSubject] = useState(defaultSubject);
   const [text, setText] = useState('');
   const [drafts, setDrafts] = useState<ScoreDraft[] | null>(null);
@@ -81,6 +79,7 @@ export function ScoreIntakeDialog({
       if (!path) return;
       const recognized = await desktop.ocr!(path);
       setText(prev => (prev.trim() ? `${prev}\n${recognized}` : recognized));
+      setDrafts(null);
       toast.success('图片已识别，内容已填入下方文本框，请核对后解析');
     } catch (e) {
       toast.error(`识别失败：${e instanceof Error ? e.message : String(e)}`);
@@ -97,44 +96,37 @@ export function ScoreIntakeDialog({
     setDrafts(prev => (prev ? prev.filter((_, i) => i !== index) : prev));
   };
 
-  const stats = useMemo(() => {
-    const list = drafts || [];
-    const matched = list.filter(d => d.studentName);
-    const dup = matched.filter(d => existingKeys.has(
-      scoreDedupKey({ studentName: d.studentName, examName, date, score: d.score, totalScore: d.totalScore }),
-    ));
-    return { total: list.length, matched: matched.length, unmatched: list.length - matched.length, dup: dup.length };
-  }, [drafts, existingKeys, examName, date]);
+  const seenKeys = new Set(existingKeys);
+  const reviewedRows = (drafts || []).map(draft => {
+    const row: Omit<SchoolScore, 'id'> = {
+      studentName: draft.studentName,
+      examName: examName.trim(),
+      date,
+      score: draft.score,
+      totalScore: draft.totalScore,
+      classRank: draft.classRank,
+      classSize: draft.classSize,
+      school: draft.school?.trim() || undefined,
+      subject: draft.subject?.trim() || subject.trim() || undefined,
+      note: draft.note,
+      isRecorded: true,
+      isImproved: false,
+    };
+    const issue = !students.includes(row.studentName) ? '请指定学员' : draft.problem || schoolScoreIssue(row);
+    const key = scoreDedupKey(row);
+    const duplicate = !issue && seenKeys.has(key);
+    if (!issue) seenKeys.add(key);
+    return { row, issue, duplicate };
+  });
+  const readyRows = reviewedRows.filter(item => !item.issue && !item.duplicate);
+  const issueCount = reviewedRows.filter(item => item.issue).length;
+  const duplicateCount = reviewedRows.filter(item => item.duplicate).length;
+  const canSave = !!examName.trim() && !!date && issueCount === 0 && readyRows.length > 0 && !ocrBusy;
 
   const save = () => {
-    const list = drafts || [];
-    const usable = list.filter(d => d.studentName && d.score > 0);
-    if (!usable.length) {
-      toast.error('没有可写入的行：至少要有学员和得分');
-      return;
-    }
-    const rows = usable
-      .filter(d => !existingKeys.has(scoreDedupKey({ studentName: d.studentName, examName, date, score: d.score, totalScore: d.totalScore })))
-      .map(d => ({
-        studentName: d.studentName,
-        examName,
-        date,
-        score: d.score,
-        totalScore: d.totalScore,
-        classRank: d.classRank,
-        classSize: d.classSize,
-        school: d.school || undefined,
-        subject: d.subject || subject,
-        note: d.note,
-        isRecorded: true,
-        isImproved: false,
-      }));
-    if (!rows.length) {
-      toast.error('这些成绩都已经录过了（同学生、同考试、同分数）');
-      return;
-    }
-    onSave(rows);
-    toast.success(`已写入 ${rows.length} 条成绩`);
+    if (!canSave) return;
+    onSave(readyRows.map(item => item.row));
+    toast.success(`已写入 ${readyRows.length} 条成绩`);
     setDrafts(null);
     setText('');
     onOpenChange(false);
@@ -187,10 +179,11 @@ export function ScoreIntakeDialog({
               className="min-h-[130px] w-full resize-y rounded-xl border border-black/10 bg-white p-3 font-mono text-[13px] leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--brand)]"
               placeholder={'陈志佳\t四中\t150\t126\t5\n陈梓铭\t七中\t150\t118\t12\n\n或单张调研表：\n学员姓名：胡怡萱  在读学校：四中逸园\n满分：150 得分：138 班排：3'}
               value={text}
-              onChange={e => setText(e.target.value)}
+              aria-label="成绩原文"
+              onChange={e => { setText(e.target.value); setDrafts(null); }}
             />
             <div className="flex items-center gap-2">
-              <Button size="sm" className="gap-1.5" onClick={parse}>
+              <Button size="sm" className="gap-1.5" onClick={parse} disabled={ocrBusy}>
                 <Wand2 className="w-3.5 h-3.5" />解析
               </Button>
               {!canOcr && (
@@ -204,11 +197,11 @@ export function ScoreIntakeDialog({
           {drafts && drafts.length > 0 && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="secondary">共 {stats.total} 条</Badge>
-                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">已匹配 {stats.matched}</Badge>
-                {stats.unmatched > 0 && <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">待指认 {stats.unmatched}</Badge>}
-                {stats.dup > 0 && <Badge variant="outline">重复 {stats.dup}</Badge>}
-                <span className="text-[color:var(--ink-4)]">未匹配的行请下拉指定学员，或删掉它</span>
+                <Badge variant="secondary">共 {reviewedRows.length} 条</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">可写入 {readyRows.length}</Badge>
+                {issueCount > 0 && <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">待核对 {issueCount}</Badge>}
+                {duplicateCount > 0 && <Badge variant="outline">重复 {duplicateCount}</Badge>}
+                <span className="text-[color:var(--ink-4)]">修正或移除待核对的行。重复成绩会跳过。</span>
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-black/5">
@@ -219,24 +212,24 @@ export function ScoreIntakeDialog({
                       <TableHead className="w-[18%]">学校</TableHead>
                       <TableHead className="w-[14%]">得分</TableHead>
                       <TableHead className="w-[14%]">满分</TableHead>
-                      <TableHead className="w-[14%]">班排</TableHead>
-                      <TableHead className="w-[8%] text-center">状态</TableHead>
+                      <TableHead>班排</TableHead>
+                      <TableHead>班级人数</TableHead>
+                      <TableHead>科目</TableHead>
+                      <TableHead>状态</TableHead>
                       <TableHead className="w-[6%]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {drafts.map((draft, index) => {
-                      const isDup = !!draft.studentName && existingKeys.has(scoreDedupKey({
-                        studentName: draft.studentName, examName, date, score: draft.score, totalScore: draft.totalScore,
-                      }));
+                      const { issue, duplicate } = reviewedRows[index];
                       return (
-                        <TableRow key={index} className={draft.studentName ? '' : 'bg-rose-50/50'}>
+                        <TableRow key={index} className={issue ? 'bg-rose-50/50' : ''}>
                           <TableCell>
                             <Select
                               value={draft.studentName || '__none__'}
                               onValueChange={(v) => updateDraft(index, { studentName: v === '__none__' ? '' : v, confidence: 1 })}
                             >
-                              <SelectTrigger className="h-8 w-full text-xs">
+                              <SelectTrigger className="h-8 w-full min-w-24 text-xs" aria-label={`第 ${index + 1} 行学员`}>
                                 <SelectValue placeholder="指定学员" />
                               </SelectTrigger>
                               <SelectContent>
@@ -260,32 +253,46 @@ export function ScoreIntakeDialog({
                           </TableCell>
                           <TableCell>
                             <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.score}
-                              onChange={e => updateDraft(index, { score: Number(e.target.value) || 0 })}
+                              className="h-8 w-16 text-xs" type="number" value={draft.problem ? '' : draft.score} min={0} max={draft.totalScore} step="any"
+                              aria-label={`第 ${index + 1} 行得分`}
+                              onChange={e => {
+                                const score = e.target.valueAsNumber;
+                                updateDraft(index, { score: Number.isFinite(score) ? score : 0, problem: Number.isFinite(score) ? undefined : '请填写得分' });
+                              }}
                             />
                           </TableCell>
                           <TableCell>
                             <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.totalScore}
-                              onChange={e => updateDraft(index, { totalScore: Number(e.target.value) || 100 })}
+                              className="h-8 w-16 text-xs" type="number" value={draft.totalScore} min={0} step="any"
+                              aria-label={`第 ${index + 1} 行满分`}
+                              onChange={e => updateDraft(index, { totalScore: Number(e.target.value) })}
                             />
                           </TableCell>
                           <TableCell>
                             <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.classRank ?? ''}
+                              className="h-8 w-16 text-xs" type="number" value={draft.classRank ?? ''} min={1} step={1}
+                              aria-label={`第 ${index + 1} 行班排`}
                               placeholder="—"
                               onChange={e => updateDraft(index, { classRank: e.target.value ? Number(e.target.value) : undefined })}
                             />
                           </TableCell>
                           <TableCell>
-                            {isDup
-                              ? <span className="text-[11px] text-amber-600">重复</span>
-                              : draft.studentName
-                                ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                : <AlertCircle className="w-4 h-4 text-rose-500" />}
+                            <Input className="h-8 w-16 text-xs" type="number" value={draft.classSize ?? ''} min={1} step={1}
+                              aria-label={`第 ${index + 1} 行班级人数`} placeholder="—"
+                              onChange={e => updateDraft(index, { classSize: e.target.value ? Number(e.target.value) : undefined })} />
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeDraft(index)}>
+                            <Input className="h-8 w-16 text-xs" value={draft.subject || ''}
+                              aria-label={`第 ${index + 1} 行科目`} placeholder={subject || '—'}
+                              onChange={e => updateDraft(index, { subject: e.target.value })} />
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {issue ? <span className="whitespace-normal text-rose-700">{issue}</span>
+                              : duplicate ? <span className="text-amber-700">重复</span>
+                              : <span className="text-emerald-700">可写入</span>}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeDraft(index)} aria-label={`移除第 ${index + 1} 行`}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </TableCell>
@@ -298,8 +305,8 @@ export function ScoreIntakeDialog({
 
               <div className="flex items-center justify-end gap-2 pt-1">
                 <Button variant="outline" size="sm" onClick={() => { setDrafts(null); }}>返回修改文本</Button>
-                <Button size="sm" onClick={save} disabled={stats.matched === 0}>
-                  写入 {Math.max(0, stats.matched - stats.dup)} 条
+                <Button size="sm" onClick={save} disabled={!canSave}>
+                  写入 {readyRows.length} 条
                 </Button>
               </div>
             </div>

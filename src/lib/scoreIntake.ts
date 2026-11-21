@@ -44,11 +44,14 @@ const toHalf = (s: string) => s.replace(FULLWIDTH, (ch) => String.fromCharCode(c
 
 /** 归一化：半角化、去零宽字符、全角空格，保留中文与数字 */
 export function normalizeText(input: string): string {
+  return normalizeCells(input).trim();
+}
+
+function normalizeCells(input: string): string {
   return toHalf(String(input || ''))
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\u3000/g, ' ')
-    .replace(/[：:]/g, ':')
-    .trim();
+    .replace(/：/g, ':');
 }
 
 /** 姓名归一化：去掉空格、括号说明、常见后缀标注 */
@@ -122,66 +125,58 @@ export function matchStudentName(
   }).sort((a, b) => b.score - a.score);
 
   const best = scored[0];
-  if (!best || best.score < 0.6) {
+  if (!best || best.score < 0.6 || best.score === scored[1]?.score) {
     return { name: '', confidence: best?.score || 0, candidates: scored.slice(0, 3).map(s => s.name) };
   }
   return { name: best.name, confidence: Number(best.score.toFixed(2)), candidates: scored.slice(0, 3).map(s => s.name) };
 }
 
 const NUM = /-?\d+(?:\.\d+)?/g;
+const SCORE_PAIR = /(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)/;
+const RANK_LABELED = /(?:班级排名|班内排名|年级排名|班排|班名|名次|排名)\s*:?\s*第?\s*(-?\d+)(?:\s*\/\s*(-?\d+))?\s*名?/;
+const SCORE_LABELED = /得分\s*:?\s*(-?\d+(?:\.\d+)?)(?:\s*\/\s*(-?\d+(?:\.\d+)?))?/;
+const RANK_ORDINAL = /第\s*(-?\d+)\s*名/;
 
-/** 从一行里取「得分/满分」：支持 85/100、85 分、得分 85 满分 100 等写法 */
-export function parseScorePair(line: string, fallbackTotal = 100): { score?: number; totalScore?: number } {
-  const text = normalizeText(line);
+function looksLikeRank(a: number, b: number): boolean {
+  return Number.isInteger(a) && Number.isInteger(b) && a > 0 && a <= 10 && b >= 20 && a / b < 0.35;
+}
 
-  // 显式「满分 x 得分 y」或「得分 y 满分 x」
-  const totalLabeled = /满分\s*:?\s*(\d+(?:\.\d+)?)/.exec(text);
-  const scoreLabeled = /得分\s*:?\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (totalLabeled || scoreLabeled) {
+/** 无表头时保留「3/45」的名次推断，明确的名次标签优先于分数推断。 */
+export function parseScorePair(line: string, fallbackTotal = 100, allowBareNumber = true): { score?: number; totalScore?: number } {
+  const text = normalizeText(line).replace(RANK_LABELED, '').replace(RANK_ORDINAL, '');
+  const totalLabeled = /满分\s*:?\s*(-?\d+(?:\.\d+)?)/.exec(text);
+  const scoreLabeled = SCORE_LABELED.exec(text);
+  if (scoreLabeled) {
     return {
-      score: scoreLabeled ? Number(scoreLabeled[1]) : undefined,
-      totalScore: totalLabeled ? Number(totalLabeled[1]) : fallbackTotal,
+      score: Number(scoreLabeled[1]),
+      totalScore: Number(totalLabeled?.[1] ?? scoreLabeled[2] ?? fallbackTotal),
     };
   }
 
-  // a/b 形式
-  const pair = /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (pair) {
-    const a = Number(pair[1]);
-    const b = Number(pair[2]);
-    // a/b 有歧义：「126/150」是得分/满分，「3/45」是名次/人数。
-    // 分母达到 20 且分子很小、占比不足三成时按名次处理，避免把名次写成 3 分。
-    if (b > a && b >= 20) {
-      if (a <= 10 && a / b < 0.35) return {};
-      return { score: a, totalScore: b };
-    }
+  const pair = SCORE_PAIR.exec(text);
+  if (pair && !looksLikeRank(Number(pair[1]), Number(pair[2]))) {
+    return { score: Number(pair[1]), totalScore: Number(totalLabeled?.[1] ?? pair[2]) };
   }
+  if (totalLabeled) return { totalScore: Number(totalLabeled[1]) };
+  if (pair || !allowBareNumber) return {};
 
-  const nums = text.match(NUM);
-  if (nums && nums.length === 1) {
-    const v = Number(nums[0]);
-    if (v >= 0 && v <= 1000) return { score: v, totalScore: fallbackTotal };
-  }
-  return {};
+  const numbers = text.match(NUM);
+  return numbers?.length === 1 ? { score: Number(numbers[0]), totalScore: fallbackTotal } : {};
 }
 
-/** 从一行里取名次：支持「班排 3」「第 3 名」「3/45」 */
+/** 明确标签下支持末位与单人班。没有标签的分数对不重复推断成名次。 */
 export function parseRank(line: string): { classRank?: number; classSize?: number } {
   const text = normalizeText(line);
-  const slash = /(\d+)\s*\/\s*(\d+)/.exec(text);
-  if (slash) {
-    const rank = Number(slash[1]);
-    const size = Number(slash[2]);
-    if (rank > 0 && size > rank) return { classRank: rank, classSize: size };
+  const labeled = RANK_LABELED.exec(text) ?? RANK_ORDINAL.exec(text);
+  if (labeled) {
+    return { classRank: Number(labeled[1]), classSize: labeled[2] !== undefined ? Number(labeled[2]) : undefined };
   }
-  const labeled = /(?:班排|班名|班级排名|年级排名|排名)\s*:?\s*第?\s*(\d+)/.exec(text);
-  if (labeled) return { classRank: Number(labeled[1]) };
-  const ordinal = /第\s*(\d+)\s*名/.exec(text);
-  if (ordinal) return { classRank: Number(ordinal[1]) };
+  const pair = SCORE_PAIR.exec(text.replace(SCORE_LABELED, ''));
+  if (pair && looksLikeRank(Number(pair[1]), Number(pair[2]))) {
+    return { classRank: Number(pair[1]), classSize: Number(pair[2]) };
+  }
   return {};
 }
-
-const HEADER_HINT = /姓名|学生|学员|得分|分数|满分|总分|班排|排名|学校|科目/;
 
 /** 表头列名归一化到语义键 */
 function headerKey(cell: string): 'name' | 'score' | 'total' | 'rank' | 'size' | 'school' | 'subject' | null {
@@ -198,9 +193,19 @@ function headerKey(cell: string): 'name' | 'score' | 'total' | 'rank' | 'size' |
 
 /** 把一行拆成单元格：优先制表符，其次 2 个以上空格，最后单空格 */
 function splitCells(line: string): string[] {
-  if (line.includes('\t')) return line.split('\t').map(s => s.trim()).filter(Boolean);
+  if (line.includes('\t')) return line.split('\t').map(s => s.trim());
   if (/\s{2,}/.test(line)) return line.split(/\s{2,}/).map(s => s.trim()).filter(Boolean);
   return line.trim().split(/\s+/).map(s => s.trim()).filter(Boolean);
+}
+
+function tableHeader(cells: string[]): Record<string, number> | null {
+  const map: Record<string, number> = {};
+  cells.forEach((cell, index) => {
+    if (/[:\d]/.test(cell)) return;
+    const key = headerKey(cell);
+    if (key && map[key] === undefined) map[key] = index;
+  });
+  return map.name !== undefined && (map.score !== undefined || map.total !== undefined || map.rank !== undefined) ? map : null;
 }
 
 /**
@@ -217,11 +222,10 @@ export function parseSingleSheet(text: string, ctx: IntakeContext): ScoreDraft |
   const isForm = /学员姓名|学生姓名|在读学校|调研/.test(joined);
   if (!isForm) return null;
 
-  const fallback = { score: undefined as number | undefined, totalScore: 100 };
   const nameMatch = /(?:学员姓名|学生姓名|姓名)\s*:?\s*([^\s:：]{1,12})/.exec(joined);
   const schoolMatch = /(?:在读学校|学校)\s*:?\s*([^\s:：]{1,20})/.exec(joined);
 
-  const pair = pickScoreFromText(joined, fallback.totalScore);
+  const pair = parseScorePair(joined, 100, false);
   const rank = parseRank(joined);
   const rawName = nameMatch ? nameMatch[1] : '';
   const matched = rawName ? matchStudentName(rawName, ctx.students, ctx.nicknames) : { name: '', confidence: 0, candidates: [] };
@@ -236,20 +240,8 @@ export function parseSingleSheet(text: string, ctx: IntakeContext): ScoreDraft |
     totalScore: pair.totalScore ?? 100,
     classRank: rank.classRank,
     classSize: rank.classSize,
-    subject: ctx.subject,
     problem: pair.score === undefined ? '未识别到得分，请手动填写' : undefined,
   };
-}
-
-/** 从整段文本里挑一个最像「得分」的数字（用于单表模式，避免把满分当得分） */
-function pickScoreFromText(text: string, fallbackTotal: number): { score?: number; totalScore: number } {
-  const totalLabeled = /满分\s*:?\s*(\d+(?:\.\d+)?)/.exec(text);
-  const total = totalLabeled ? Number(totalLabeled[1]) : fallbackTotal;
-  const scoreLabeled = /得分\s*:?\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (scoreLabeled) return { score: Number(scoreLabeled[1]), totalScore: total };
-  const pair = /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (pair && Number(pair[2]) > Number(pair[1])) return { score: Number(pair[1]), totalScore: Number(pair[2]) };
-  return { score: undefined, totalScore: total };
 }
 
 /**
@@ -257,7 +249,7 @@ function pickScoreFromText(text: string, fallbackTotal: number): { score?: numbe
  * 有表头时按表头语义定位列；没有表头则按「姓名 + 数字」的常见顺序兜底。
  */
 export function parseScoreTable(text: string, ctx: IntakeContext): ScoreDraft[] {
-  const lines = normalizeText(text).split(/\n+/).map(s => s.replace(/\r/g, '').trim()).filter(Boolean);
+  const lines = normalizeCells(text).split(/\r?\n/).filter(line => line.trim());
   const drafts: ScoreDraft[] = [];
 
   let header: Record<string, number> | null = null;
@@ -266,15 +258,8 @@ export function parseScoreTable(text: string, ctx: IntakeContext): ScoreDraft[] 
     const cells = splitCells(line);
     if (!cells.length) continue;
 
-    // 表头行：命中 2 个以上语义列，记为列映射并跳过
-    if (HEADER_HINT.test(line) && !/\d{2,}/.test(line)) {
-      const map: Record<string, number> = {};
-      cells.forEach((cell, index) => {
-        const key = headerKey(cell);
-        if (key && map[key] === undefined) map[key] = index;
-      });
-      if (Object.keys(map).length >= 2) { header = map; continue; }
-    }
+    const detected = tableHeader(cells);
+    if (detected) { header = detected; continue; }
 
     // 纯标题/说明行
     if (!/\d/.test(line) && cells.length === 1) continue;
@@ -298,32 +283,30 @@ function buildDraftFromCells(
   let classRank: number | undefined;
   let classSize: number | undefined;
   let school = '';
+  let subject: string | undefined;
 
   if (header) {
     rawName = cells[header.name] || '';
     const scoreCell = cells[header.score] || '';
     const totalCell = header.total !== undefined ? cells[header.total] || '' : '';
-    score = scoreCell ? Number((scoreCell.match(NUM) || [])[0]) : undefined;
-    if (totalCell) {
-      const t = Number((totalCell.match(NUM) || [])[0]);
-      if (Number.isFinite(t) && t > 0) totalScore = t;
-    }
-    if (header.rank !== undefined) {
-      const r = Number((cells[header.rank] || '').match(NUM)?.[0]);
-      if (Number.isFinite(r) && r > 0) classRank = r;
-    }
-    if (header.size !== undefined) {
-      const s = Number((cells[header.size] || '').match(NUM)?.[0]);
-      if (Number.isFinite(s) && s > 0) classSize = s;
-    }
-    school = header.school !== undefined ? cells[header.school] || '' : '';
+    const scorePair = SCORE_PAIR.exec(scoreCell);
+    score = scorePair ? Number(scorePair[1]) : readNumber(scoreCell);
+    totalScore = readNumber(totalCell) ?? (scorePair ? Number(scorePair[2]) : 100);
+    const rankCell = cells[header.rank] || '';
+    const rank = rankCell.match(SCORE_PAIR)
+      ? parseRank('班排 ' + rankCell)
+      : { classRank: readNumber(rankCell), classSize: undefined };
+    classRank = rank.classRank;
+    classSize = readNumber(cells[header.size] || '') ?? rank.classSize;
+    school = cells[header.school] || '';
+    subject = cells[header.subject] || undefined;
   } else {
     // 无表头：第一个非纯数字单元格当姓名，其余按「a/b」「名次」规则解析
     const nameCell = cells.find(c => !/^\d+(\.\d+)?$/.test(c));
     rawName = nameCell || '';
     const pair = parseScorePair(line, totalScore);
     score = pair.score;
-    if (pair.totalScore) totalScore = pair.totalScore;
+    if (pair.totalScore !== undefined) totalScore = pair.totalScore;
     const rank = parseRank(line);
     classRank = rank.classRank;
     classSize = rank.classSize;
@@ -348,10 +331,15 @@ function buildDraftFromCells(
     totalScore,
     classRank,
     classSize,
-    subject: ctx.subject,
+    subject,
     problem: score === undefined ? '未识别到得分' : undefined,
   };
   return draft;
+}
+
+function readNumber(cell: string): number | undefined {
+  const value = cell.match(NUM)?.[0];
+  return value !== undefined ? Number(value) : undefined;
 }
 
 export interface IntakeResult {
@@ -361,6 +349,9 @@ export interface IntakeResult {
 
 /** 总入口：先试单表模式，再退回表格模式 */
 export function parseIntake(text: string, ctx: IntakeContext): IntakeResult {
+  const lines = normalizeCells(text).split(/\r?\n/);
+  const headerIndex = lines.findIndex(line => tableHeader(splitCells(line)));
+  if (headerIndex !== -1) return { drafts: parseScoreTable(lines.slice(headerIndex).join('\n'), ctx), mode: 'table' };
   const sheet = parseSingleSheet(text, ctx);
   if (sheet) return { drafts: [sheet], mode: 'sheet' };
   return { drafts: parseScoreTable(text, ctx), mode: 'table' };
@@ -385,7 +376,30 @@ export function draftToSchoolScore(draft: ScoreDraft, ctx: IntakeContext, id: st
   };
 }
 
-/** 去重键：同学生 + 同考试 + 同日期 + 同分数 + 同总分 */
-export function scoreDedupKey(score: Pick<SchoolScore, 'studentName' | 'examName' | 'date' | 'score' | 'totalScore'>): string {
-  return [score.studentName, score.examName, score.date, score.score, score.totalScore].join('|');
+export function schoolScoreIssue({ score, totalScore, classRank, classSize, gradeRank }: Partial<SchoolScore>): string | undefined {
+  if (score === undefined || totalScore === undefined || !Number.isFinite(score) || !Number.isFinite(totalScore) ||
+      totalScore <= 0 || score < 0 || score > totalScore) return '得分须在 0 和满分之间，满分需大于 0';
+  if (classRank !== undefined && (!Number.isInteger(classRank) || classRank < 1)) return '班排须为正整数';
+  if (classSize !== undefined && (!Number.isInteger(classSize) || classSize < 1 ||
+      (classRank !== undefined && classRank > classSize))) return '班级人数须为正整数且不小于班排';
+  if (gradeRank !== undefined && (!Number.isInteger(gradeRank) || gradeRank < 1)) return '年级排名须为正整数';
+}
+
+export function schoolScoreDate(date = new Date()): string {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+}
+
+type SchoolExam = Pick<SchoolScore, 'examName' | 'date' | 'subject'>;
+
+// 兼容未填写科目的旧英语成绩。
+export function schoolScoreSubject(score: Pick<SchoolScore, 'subject'>): string {
+  return score.subject?.trim() || '英语';
+}
+
+export function schoolExamKey(score: SchoolExam): string {
+  return JSON.stringify([score.examName.trim(), score.date, schoolScoreSubject(score)]);
+}
+
+export function scoreDedupKey(score: Pick<SchoolScore, 'studentName' | 'examName' | 'date' | 'score' | 'totalScore' | 'subject'>): string {
+  return JSON.stringify([score.studentName, schoolExamKey(score), score.score, score.totalScore]);
 }

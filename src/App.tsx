@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Toaster, toast } from 'sonner';
-import { AlertTriangle, BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, PawPrint, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Cloud, Download, FileText, History, LogOut, Moon, PawPrint, PencilLine, Send, ShieldCheck, Sun, Trophy, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClassData, DEFAULT_CLASS_PERFORMANCE_OPTIONS, DEFAULT_HOMEWORK_OPTIONS, DEFAULT_LISTENING_OPTIONS } from '@/hooks/useClassData';
@@ -32,6 +32,7 @@ import { PraiseGenerator } from '@/components/PraiseGenerator';
 import { PraiseTemplateEditor } from '@/components/PraiseTemplateEditor';
 import { StudentImportModal } from '@/components/StudentImportModal';
 import { GenerateSettingsDialog } from '@/components/GenerateSettingsDialog';
+const EssayReviewPanel = lazy(() => import('@/components/EssayReviewPanel'));
 const Leaderboard = lazy(() => import('@/components/Leaderboard').then(m => ({ default: m.Leaderboard })));
 
 // 以下三个模块依赖 recharts（图表库）/ xlsx（Excel）/ html2canvas（截图），
@@ -140,6 +141,11 @@ function App() {
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('records');
+  const [essayClassIds, setEssayClassIds] = useState<(string | null)[]>([]);
+  useEffect(() => {
+    if (activeTab !== 'essay') return;
+    setEssayClassIds(ids => ids.includes(currentClassId) ? ids : [...ids, currentClassId]);
+  }, [activeTab, currentClassId]);
   // 伴学萌宠：独立快照（localStorage `petData`），与学情主数据互不覆盖
   const [petSnapshot, setPetSnapshot] = useState<PetSnapshot>(() => loadPetSnapshot());
   // 2026-10-24：校内成绩并入「学情报告」、反馈素材并入「反馈生成」，用二级切换保持独立视图
@@ -924,7 +930,7 @@ function App() {
     if (!cls) return;
     const rec = cls.records.find(r => r.studentName === studentName && r.lessonNumber === currentLessonNumber);
     if (!rec) { toast.error('该生本课暂无记录，无法生成反馈'); return; }
-    const stats = calculateClassStats(cls.records.filter(r => r.lessonNumber === currentLessonNumber), currentLessonConfig.questionTypes);
+    const stats = calculateClassStats(cls.records.filter(r => r.lessonNumber === currentLessonNumber), currentLessonConfig.questionTypes, currentLessonConfig.customFields);
     const nick = getStudentNickname(studentName, currentClassId || undefined);
     const text = generatePersonalFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {});
     const ok = await copyToClipboard(text);
@@ -1045,9 +1051,37 @@ function App() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="!block space-y-0">
-      {/* 班级选择栏：外层加 class-band —— 让背景色整宽延伸，卡片不再"悬在半空"；
-          主 Tab 行并入这一行右侧（2026-10-24），整体只占一屏高度 */}
-      <div className="class-band max-w-[1600px] mx-auto px-4 py-4 sm:px-6 sm:py-5">
+      <div className="realm-workspace-top max-w-[1600px] mx-auto px-4 sm:px-6">
+        <TabsList className="ios-tabs-list realm-primary-nav" aria-label="工作台功能">
+          <TabsTrigger value="records" className="ios-tab-trigger realm-primary-tab">
+            <BookOpen className="w-5 h-5" />
+            学情记录
+          </TabsTrigger>
+          <TabsTrigger value="feedback" className="ios-tab-trigger realm-primary-tab">
+            <FileText className="w-5 h-5" />
+            反馈生成
+          </TabsTrigger>
+          <TabsTrigger value="essay" className="ios-tab-trigger realm-primary-tab">
+            <PencilLine className="w-5 h-5" />
+            作文批改
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="ios-tab-trigger realm-primary-tab">
+            <Trophy className="w-5 h-5" />
+            表扬榜
+          </TabsTrigger>
+          <TabsTrigger value="pet" className="ios-tab-trigger realm-primary-tab">
+            <PawPrint className="w-5 h-5" />
+            伴学萌宠
+          </TabsTrigger>
+          <TabsTrigger value="report" className="ios-tab-trigger realm-primary-tab">
+            <BarChart3 className="w-5 h-5" />
+            学情报告
+          </TabsTrigger>
+          <TabsTrigger value="cloud" className="ios-tab-trigger realm-primary-tab">
+            <Cloud className="w-5 h-5" />
+            同步中心
+          </TabsTrigger>
+        </TabsList>
         <ClassSelector
           classes={classes}
           currentClassId={currentClassId}
@@ -1056,67 +1090,19 @@ function App() {
           onUpdateClass={updateClass}
           onDeleteClass={deleteClass}
           onAddStudents={addStudents}
-          rightSlot={(
-        <TabsList className="ios-tabs-list shrink-0">
-          <TabsTrigger value="records" className="ios-tab-trigger">
-            <BookOpen className="w-5 h-5" />
-            学情记录
-          </TabsTrigger>
-          <TabsTrigger value="feedback" className="ios-tab-trigger">
-            <FileText className="w-5 h-5" />
-            反馈生成
-          </TabsTrigger>
-          <TabsTrigger value="leaderboard" className="ios-tab-trigger">
-            <Trophy className="w-5 h-5" />
-            表扬榜
-          </TabsTrigger>
-          <TabsTrigger value="pet" className="ios-tab-trigger">
-            <PawPrint className="w-5 h-5" />
-            伴学萌宠
-          </TabsTrigger>
-          <TabsTrigger value="report" className="ios-tab-trigger">
-            <BarChart3 className="w-5 h-5" />
-            学情报告
-          </TabsTrigger>
-          <TabsTrigger value="cloud" className="ios-tab-trigger">
-            <Cloud className="w-5 h-5" />
-            同步中心
-          </TabsTrigger>
-        </TabsList>
-          )}
         />
       </div>
 
       {/* 主内容区 */}
-      <div className="max-w-[1600px] mx-auto px-4 pt-5 pb-10 sm:px-6 sm:pb-12">
-        {/* 云端不可达时的全局提示（与同步状态横幅独立，避免误以为系统坏了） */}
-        <div className="mb-5">
-          <BackendOfflineBanner
-            // 注意：这里必须是"对账"，不能直接 pull ——
-            // 断网期间的本地改动用 pull 会被云端旧快照整包覆盖且不提示（历史缺陷）
-            onRetry={() => { refreshMembership(); void cloudSync.reconcileNow(); }}
-          />
-        </div>
-
+      <div className="realm-workspace-content max-w-[1600px] mx-auto px-4 pb-10 sm:px-6 sm:pb-12">
+        <BackendOfflineBanner
+          onRetry={() => { refreshMembership(); void cloudSync.reconcileNow(); }}
+        />
 
           {/* 学情记录 Tab */}
           <TabsContent value="records" className="main-tab-panel space-y-6">
             <ErrorBoundary label="学情记录">
             <div className="flex flex-col xl:flex-row gap-6">
-              {/* 左侧边栏 */}
-              <div className="w-full xl:w-72 flex-shrink-0 space-y-4">
-                <ClassInfoCard
-                  classData={currentClass}
-                  onManageStudents={() => setIsImportModalOpen(true)}
-                  onTransferStudent={() => setIsTransferModalOpen(true)}
-                  transferredOut={transferredOutStudents}
-                  onRestoreStudent={handleRestoreTransferred}
-                  onViewStudent={handleViewStudentAnalysis}
-                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
-                  lessonNumber={currentLessonNumber}
-                />
-              </div>
-
               {/* 右侧主内容：min-w-0 是关键 —— 缺它时表格的 min-content 宽度（约 1440px）
                   会把 flex 行整个撑宽，页面出现横向滚动；横向滑动时上方班级卡比表格窄，
                   就成了用户反复反馈的"上短下长"。加上后表格在自己容器内滚动，三块宽度对齐。 */}
@@ -1165,6 +1151,19 @@ function App() {
                   onOpenConfig={() => setShowGenerateSettings(true)}
                 />
               </div>
+              {/* 左侧边栏 */}
+              <div className="w-full xl:order-first xl:w-72 flex-shrink-0 space-y-4">
+                <ClassInfoCard
+                  classData={currentClass}
+                  onManageStudents={() => setIsImportModalOpen(true)}
+                  onTransferStudent={() => setIsTransferModalOpen(true)}
+                  transferredOut={transferredOutStudents}
+                  onRestoreStudent={handleRestoreTransferred}
+                  onViewStudent={handleViewStudentAnalysis}
+                  getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
+                  lessonNumber={currentLessonNumber}
+                />
+              </div>
             </div>
           </ErrorBoundary>
           </TabsContent>
@@ -1204,6 +1203,22 @@ function App() {
           
             </Suspense>
           </TabsContent>
+
+          {(activeTab === 'essay' || essayClassIds.length > 0) && (
+            <TabsContent value="essay" forceMount className="main-tab-panel data-[state=inactive]:hidden">
+              <ErrorBoundary label="作文批改">
+                <Suspense fallback={<ModuleLoading label="作文批改" />}>
+                  {[...new Set(activeTab === 'essay' ? [...essayClassIds, currentClassId] : essayClassIds)].map(id => {
+                    const cls = id ? classes[id] : undefined;
+                    if (id && !cls) return null;
+                    return <div key={id ?? 'unassigned'} hidden={id !== currentClassId}>
+                      <EssayReviewPanel className={cls?.name ?? ''} students={cls?.students ?? []} />
+                    </div>;
+                  })}
+                </Suspense>
+              </ErrorBoundary>
+            </TabsContent>
+          )}
 
           {/* 反馈生成 Tab */}
           <TabsContent value="feedback" className="main-tab-panel">
@@ -1292,6 +1307,7 @@ function App() {
             <ErrorBoundary label="校内成绩">
               <Suspense fallback={<ModuleLoading label="校内成绩" />}>
                 <SchoolScorePanel
+                  key={currentClassId}
                   students={currentClass?.students || []}
                   scores={currentClass ? currentClass.students.flatMap(s => schoolScores[s] || []) : []}
                   onAddScore={addSchoolScore}
@@ -1366,7 +1382,7 @@ function App() {
           </TabsContent>
 
           {/* 同步中心 Tab */}
-          <TabsContent value="cloud" className="main-tab-panel">
+          <TabsContent value="cloud" className="main-tab-panel realm-sync-panel">
             <ErrorBoundary label="同步中心">
             <div className="main-module-shell space-y-5">
               <SyncStatusBanner
@@ -1489,7 +1505,8 @@ function App() {
                 : [];
             })()}
             schoolScores={getStudentSchoolScores(analysisStudent)}
-            classRecords={currentClass?.records || []}
+            initialClassId={currentClass.id}
+            recordsByClass={Object.fromEntries(Object.values(classes).map(cls => [cls.id, cls.records]))}
             getLessonConfig={getLessonConfig}
           />
         </Suspense>

@@ -106,3 +106,11 @@ GitHub Pages（uriahchen.github.io/Realm）仍是旧架构（Supabase）。本�
 - 当前入口脚本为 `index-QgXU8BSf.js`，样式为 `index-Ylej-vrq.css`；入口指纹和 384 个穿戴文件 SHA256 均已与本地 `dist-deploy` 对齐，`/api/health` 通过。
 - 本地 192 种组合浏览器检查、380 项 selfcheck、lint、`build:deploy` 通过。
 - 通过 CLI 的 `fn code update` 仅更新代码；发布副本沿用刚下载的线上服务端文件，保留函数配置。线上更新前完整副本保存在 `/tmp/realm-before-costumes-20261104-final`，发布副本为 `/tmp/realm-release-costumes-20261104`。
+
+## 作文批改
+
+「作文批改」随 CloudBase 前端一同发布。本次还新增了云函数路由，构建前端后需要将仓库的 `cloudfunctions/realm-api/server.mjs` 复制到发布副本的 `function/server.mjs`，沿用发布副本中的其他文件及回滚备份。
+
+站内识别和批改由 OpenAI Responses API 提供。需在云函数环境中配置 `REALM_ESSAY_OPENAI_KEY` 及 `REALM_ESSAY_MODEL`（支持图片输入与 JSON 输出）。如团队码经过自定义，还应设置 `REALM_ESSAY_SCOPE`，默认 `main`。模型密钥应留在云函数环境里。配置前可使用「复制 AI 批改任务 → 导入 AI 批改结果」或手工填写。网站和旧站均能使用导入、复核和 PNG 导出，站内模型按钮只在 CloudBase 同源且已配置时显示。
+
+验证可使用虚构题目与作文。切换至「作文批改」，导入参考结果，核对原文和四项分数，然后生成评价卡并下载 PNG。站内模型配置后，再使用虚构材料分别检验文本批改和图片转录。请求只在教师主动提交时发往 OpenAI，名字和班级不会由页面单独送给模型。照片与评价草稿留在当前页面，学情同步快照的数据结构保持原样。

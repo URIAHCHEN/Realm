@@ -10,7 +10,7 @@ import {
   CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
-import { isAbsentRecord, isQuizAssessed } from '@/lib/attendance';
+import { isAbsentRecord, isQuizAssessed, isRecordedQuiz } from '@/lib/attendance';
 import { exportTeacherElfXlsx, planTeacherElfColumns, type TeacherElfTextSlot } from '@/lib/teacherElfExport';
 import { longTermWeakCategories } from '@/lib/longTermWeak';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
@@ -43,7 +43,7 @@ interface FeedbackGeneratorProps {
   lessonNumber: number;
   getNickname: (name: string) => string;
   /** 共用 ClassStats 而非内联结构：新增字段（registeredCounts）时不必逐个组件改 */
-  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[]) => ClassStats;
+  calculateClassStats: (records: StudentRecord[], questionTypes: QuestionType[], customFields?: LessonConfig['customFields']) => ClassStats;
   /** 口语等附加项的档位判定配置（用于【口语评价】模板参数）；缺省用默认档位 */
   oralRating?: OralRatingConfig;
   /** 班级课次配置表：学习建议要跨课次聚合（与个人报告同口径） */
@@ -122,8 +122,8 @@ export function FeedbackGenerator({
   );
 
   const stats = useMemo(() =>
-    calculateClassStats(lessonRecords, lessonConfig.questionTypes),
-    [lessonRecords, lessonConfig.questionTypes, calculateClassStats]
+    calculateClassStats(lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields),
+    [lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields, calculateClassStats]
   );
 
   // 切换课次时重置批量状态
@@ -165,7 +165,7 @@ export function FeedbackGenerator({
     if (!record) return null;
     if (feedbackMode === 'fourInOne') {
       if (detailLevel === 'detailed') {
-        const d = buildDetailedFeedback(record, lessonConfig, stats, getNickname(name), variant, lessonRecords.filter(r => isQuizAssessed(r, lessonConfig)).length);
+        const d = buildDetailedFeedback(record, lessonConfig, stats, getNickname(name), variant, lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig)).length);
         return `${d.text1}\n\n${d.text2}`;
       }
       return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' }, weakOf(name));
@@ -378,7 +378,7 @@ export function FeedbackGenerator({
     fourInOnePart2: '四个一·文本2',
     advice: '学习建议',
   };
-  const assessedCount = lessonRecords.filter(r => isQuizAssessed(r, lessonConfig)).length;
+  const assessedCount = lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig)).length;
   const buildElfText = (name: string, kind: 'private' | 'fourInOne' | 'advice'): string => {
     if (kind === 'advice') return adviceMap[name] || '';
     const rec = recordOf(name);

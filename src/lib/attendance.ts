@@ -2,6 +2,8 @@
 // 说明：使用「关键词包含」匹配而非全等，兼容自定义考勤选项与附带 emoji 的选项（如"准时👍"、"缺勤😷"）
 import type { StudentRecord, LessonConfig } from '@/types';
 
+export type QuizConfig = Pick<LessonConfig, 'questionTypes' | 'customFields'>;
+
 export type AttendanceKind = 'onTime' | 'late' | 'absent' | 'leave' | 'transfer' | 'unknown';
 
 /** 去掉 emoji / 符号 / 空白，仅保留中英文与数字后再做关键词判断 */
@@ -73,7 +75,7 @@ export function hasQuizScores(scores: { [key: string]: unknown } | undefined | n
 export function hasLessonQuizInput(
   scores: StudentRecord['scores'] | undefined,
   customValues: StudentRecord['customValues'] | undefined,
-  config?: LessonConfig,
+  config?: QuizConfig,
 ): boolean {
   const questionTypes = config?.questionTypes?.filter(qt => !qt.excludeFromTotal);
   const hasQuestionScore = questionTypes
@@ -91,7 +93,7 @@ export function hasLessonQuizInput(
 }
 
 /** 调课细分：调入（有小测数据）→ 正常参与统计；否则为调出 */
-export function isTransferIn(r: StudentRecord, config?: LessonConfig): boolean {
+export function isTransferIn(r: StudentRecord, config?: QuizConfig): boolean {
   return attendanceKind(r.attendance) === 'transfer' && hasLessonQuizInput(r.scores, r.customValues, config);
 }
 
@@ -109,8 +111,13 @@ export function transferDisplayLabel(r: StudentRecord): string {
  * 注意：作业（课堂练习/课后任务）与口头（口语得分等附加项）不受此限制 ——
  * 调课学生这些照常记录，也要进对应统计（由各调用点按需选择）。
  */
-export function isQuizAssessed(r: StudentRecord, config?: LessonConfig): boolean {
+export function isQuizAssessed(r: StudentRecord, config?: QuizConfig): boolean {
   if (isAbsentRecord(r)) return false;
   if (isTransferRecord(r)) return isTransferIn(r, config);
   return true;
+}
+
+/** 已录入计分项才进入小测统计，明确登记的 0 分有效。 */
+export function isRecordedQuiz(record: StudentRecord, config?: QuizConfig): boolean {
+  return isQuizAssessed(record, config) && hasLessonQuizInput(record.scores, record.customValues, config);
 }

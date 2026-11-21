@@ -9,7 +9,8 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
-import { matchStudentName, parseIntake, parseRank, parseScorePair, scoreDedupKey } from '@/lib/scoreIntake';
+import { matchStudentName, parseIntake, parseRank, parseScorePair, schoolExamKey, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
+import { blankEssayReview, defaultEssayRubric, essayTotals, essayWordCount, parseEssayReview } from '@/lib/essayReview';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
@@ -81,6 +82,20 @@ check(formatRank(3, 4) === '3/4', '排名文本格式「个人/人数」= 3/4');
 check(formatRank(0, 0) === '—', '无数据时排名文本为 —');
 
 // 并列后移（competition ranking）：后一名 = 位置序号（跳过并列占用的名额）
+const recordedPool = classSnapshotOfLesson([
+  rec({ id: 'empty', scores: {}, correctRate: 0 }),
+  rec({ id: 'zero', scores: { q: 0 }, correctRate: 0 }),
+  rec({ id: 'oral-only', scores: { oral: 80 }, correctRate: 0 }),
+  rec({ id: 'present', scores: { q: 9 }, correctRate: 90 }),
+  rec({ id: 'leave', scores: { q: 8 }, correctRate: 80, attendance: '请假' }),
+], 1, { questionTypes: [
+  { id: 'q', name: '小测', fullScore: 10, order: 1 },
+  { id: 'oral', name: '口语', fullScore: 100, order: 2, excludeFromTotal: true },
+] });
+check(recordedPool.size === 2 && recordedPool.rankById.get('zero') === 2 && !recordedPool.rankById.has('empty') &&
+  !recordedPool.rankById.has('oral-only') && recordedPool.avgRate === 45,
+  '排名与班均只统计已录小测，排除纯考勤和附加项，保留 0 分');
+
 const tieRanks = classSnapshotOfLesson([
   rec({ id: 't1', studentName: 'T1', correctRate: 100 }),
   rec({ id: 't2', studentName: 'T2', correctRate: 100 }),
@@ -1101,11 +1116,54 @@ group('校内成绩智能录入 · 解析与学员匹配（2026-11-15）');
   check(parseRank('3/45').classRank === 3 && parseRank('3/45').classSize === 45, '「3/45」解析为班排/班人数');
   check(parseRank('第 7 名').classRank === 7, '「第 7 名」可解析');
 
+  const titledTable = parseIntake('2026 月考成绩\n学员姓名\t在读学校\t得分\t班排\t科目\n陈志佳\t\t0/20\t45/45\t数学', ctx);
+  const scored = titledTable.drafts[0];
+  check(titledTable.mode === 'table' && titledTable.drafts.length === 1 && scored.score === 0 && scored.totalScore === 20,
+    '带标题与空学校列的表格列位正确，明确的 0/20 为有效分数');
+  check(scored.classRank === 45 && scored.classSize === 45 && scored.subject === '数学', '末位排名、分母和科目完整保留');
+  check(parseScorePair('陈志佳 20/20').score === 20 && parseRank('20/20').classRank === undefined, '无表头满分正常解析，不重复解释为班排');
+  check(parseScorePair('班排 3/45').score === undefined && parseRank('得分 3/45').classRank === undefined, '明确的标签优先，不把名次当分数或把分数当名次');
+  check(schoolScoreIssue({ score: 21, totalScore: 20 }) !== undefined && schoolScoreIssue({ score: 0, totalScore: 20 }) === undefined,
+    '拦截超满分输入，接受真实 0 分');
+  check(schoolScoreIssue({ score: 0, totalScore: 20, classRank: 46, classSize: 45 }) !== undefined, '拦截班排大于班级人数');
+  check(!matchStudentName('王雨', ['王雨桐', '王雨甜']).name, '姓名候选并列时留给教师确认');
+  const session = { examName: '月考', date: '2026-11-15', subject: '英语' };
+  check(schoolExamKey(session) !== schoolExamKey({ ...session, subject: '数学' }) &&
+    schoolExamKey(session) !== schoolExamKey({ ...session, date: '2026-10-15' }) &&
+    schoolExamKey(session) === schoolExamKey({ ...session, subject: undefined }),
+    '同名考试按日期和科目分组，兼容未填科目的旧英语记录');
+
   // 去重键：同学生同考试同分数视为重复
   const k1 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });
   const k2 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });
   const k3 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 120, totalScore: 150 });
   check(k1 === k2 && k1 !== k3, '同学生同考试同分数判重，分数不同不判重');
+}
+
+group('作文批改 · 结果与给分口径');
+{
+  const raw = {
+    ...blankEssayReview,
+    original: "I don't mind [辨认不清] after-school activities.",
+    scores: {
+      ...blankEssayReview.scores,
+      content: { score: 6.5, reason: '覆盖主要写作要点' },
+      language: { score: 0, reason: '测试真实零分' },
+      structure: { score: 3, reason: '结构完整' },
+    },
+  };
+  const serialized = JSON.stringify(raw);
+  const parsed = parseEssayReview('```json\n' + serialized + '\n```', defaultEssayRubric);
+  const totals = essayTotals(parsed, defaultEssayRubric);
+  check(parsed.original === raw.original && essayWordCount(parsed.original) === 5, '支持粘贴带 Markdown 围栏的 JSON，保留原文和模糊标记');
+  check(totals.earned === 9.5 && totals.gradedMax === 18 && totals.full === 20, '真实 0 分计入已评满分，待评书写项不按 0 分处理');
+  let rejected = false;
+  try {
+    parseEssayReview(serialized, { ...defaultEssayRubric, content: 6 });
+  } catch {
+    rejected = true;
+  }
+  check(rejected, '导入分数不得超过教师设置的维度上限');
 }
 
 group('题型归并 · 同名跨课次溯源');

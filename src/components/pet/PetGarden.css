@@ -1,23 +1,17 @@
 .pet-garden { max-width: 1460px; }
 
-.pet-garden .learning-hero { min-height: 174px; }
+.pet-garden .learning-workspace-header { min-height: 108px; }
 .pet-hero-art {
-  position: absolute;
-  inset: 0 12px 0 auto;
-  width: 340px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  align-self: stretch;
+  margin-block: -16px;
+  padding-inline: 13px 8px;
   pointer-events: none;
 }
-.pet-hero-halo {
-  position: absolute;
-  inset: auto 3% 0;
-  height: 93%;
-  border-radius: 55% 55% 0 0;
-  background: radial-gradient(ellipse at 50% 94%, rgb(199 231 255 / .4), transparent 72%);
-}
-.pet-hero-moss, .pet-hero-fox { position: absolute; display: grid; place-items: center; }
-.pet-hero-moss { right: 127px; bottom: -4px; transform: rotate(-4deg); z-index: 1; }
-.pet-hero-fox { right: 16px; bottom: -2px; transform: rotate(3deg); }
-.pet-garden .learning-hero-copy { max-width: calc(100% - 305px); }
+.pet-hero-moss { position: relative; z-index: 1; transform: rotate(-4deg); }
+.pet-hero-fox { margin-inline-start: -14px; transform: rotate(3deg); }
 
 .pet-metrics {
   display: grid;
@@ -45,28 +39,8 @@
 .dark .pet-metric-icon[data-tone="violet"] { color: #dcc8ff; background: #393457; }
 
 .pet-operations { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 7px; }
-.pet-navigation { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.pet-navigation button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 40px;
-  padding: 6px 13px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--workspace-muted);
-  font-size: .875rem;
-  font-weight: 620;
-  white-space: nowrap;
-}
-.pet-navigation button:hover { background: var(--workspace-soft); color: var(--workspace-text); }
-.pet-navigation button[aria-pressed="true"] {
-  background: var(--workspace-blue-soft);
-  border-color: var(--workspace-line);
-  color: var(--workspace-action);
-  font-weight: 760;
-}
+.pet-navigation { display: flex; min-width: 0; }
+.pet-navigation button { min-height: 36px; padding-inline: 12px; }
 .pet-settings { display: flex; align-items: center; gap: 10px; margin-inline-start: auto; }
 .pet-scope { display: flex; align-items: center; gap: 7px; padding-inline-end: 4px; color: var(--workspace-muted); font-size: .8125rem; white-space: nowrap; }
 .pet-garden [data-slot="switch"][data-state="checked"], .pet-dialog [data-slot="switch"][data-state="checked"] { background: var(--brand); }
@@ -246,10 +220,9 @@
   .pet-students { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {
-  .pet-garden .learning-hero { min-height: 140px; }
-  .pet-garden .learning-hero-copy { max-width: calc(100% - 92px); }
-  .pet-hero-art { right: 0; width: 137px; }
-  .pet-hero-moss { right: -23px; bottom: -33px; transform: scale(.64); }
+  .pet-garden .learning-workspace-header { gap: 6px; }
+  .pet-hero-art { width: 69px; margin-block: 0; padding-inline: 0; }
+  .pet-hero-moss { transform: scale(.69) rotate(-4deg); transform-origin: left center; }
   .pet-hero-fox { display: none; }
   .pet-metrics > div { gap: 7px; padding: 9px 7px; flex-direction: column; align-items: start; }
   .pet-metric-icon { width: 30px; height: 30px; border-radius: 8px; }
@@ -282,9 +255,8 @@
   color: var(--workspace-action);
   font-size: .8125rem;
 }
-.pet-shop-modes { display: flex; gap: 5px; width: fit-content; padding: 3px; border: 1px solid var(--workspace-line); border-radius: 9px; background: var(--workspace-soft); }
-.pet-shop-modes button { padding: 6px 13px; border-radius: 6px; color: var(--workspace-muted); font-size: .8125rem; }
-.pet-shop-modes button[aria-pressed="true"] { background: var(--workspace-surface); color: var(--workspace-action); font-weight: 730; box-shadow: var(--workspace-shadow); }
+.pet-shop-modes { display: flex; width: fit-content; }
+.pet-shop-modes button { padding-inline: 12px; }
 
 .pet-expedition-heading,
 .pet-expedition-progress > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; }

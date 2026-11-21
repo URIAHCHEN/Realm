@@ -243,7 +243,7 @@ export default function EssayReviewPanel({ className, students }: { className: s
         description="保留学生原文，核对评分与订正，生成可分享的评价卡。"
         icon={PencilLine}
       >
-        <ol className="essay-steps" aria-label="批改进度">
+        <ol className="essay-steps workspace-segments" aria-label="批改进度">
           {[
             { label: '准备材料', icon: FileText },
             { label: '教师复核', icon: ClipboardCheck },

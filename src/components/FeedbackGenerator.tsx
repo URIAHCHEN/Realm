@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { LearningWorkspaceHeading } from '@/components/LearningWorkspaceHeader';
 import {
   BookOpen, FileText, Copy, Check, Wand2, Users, ClipboardList,
   CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
@@ -537,16 +538,11 @@ export function FeedbackGenerator({
       <Card className="ios-glass-card border-0">
         <CardContent className="feedback-workbench-content pt-5 pb-4">
           <div className="feedback-workbench-header">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center shadow-sm"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-[color:var(--ink)]">私发反馈工作台 · 第{lessonNumber}课</h2>
-                <p className="text-xs text-[color:var(--ink-4)]">一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，或直接导出教师精灵模板（请假 / 缺勤 / 调课调出自动排除）</p>
-              </div>
-            </div>
+            <LearningWorkspaceHeading
+              title={`私发反馈工作台 · 第${lessonNumber}课`}
+              description="一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，或直接导出教师精灵模板（请假 / 缺勤 / 调课调出自动排除）"
+              icon={FileText}
+            />
             <div className="feedback-workbench-controls">
               <div className="feedback-workbench-actions">
                 <div className="feedback-workbench-batch">

@@ -221,9 +221,8 @@ export function PetGarden({
         icon={PawPrint}
       >
         <div className="pet-hero-art" aria-hidden="true">
-          <span className="pet-hero-halo" />
-          <div className="pet-hero-moss"><PetAvatar petId="moss" level={1} size={176} /></div>
-          <div className="pet-hero-fox"><PetAvatar petId="ember" level={1} size={146} /></div>
+          <div className="pet-hero-moss"><PetAvatar petId="moss" level={1} size={104} /></div>
+          <div className="pet-hero-fox"><PetAvatar petId="ember" level={1} size={89} /></div>
         </div>
       </LearningWorkspaceHeader>
 
@@ -246,7 +245,7 @@ export function PetGarden({
 
       <div className="pet-operations learning-surface">
         {enabled && (
-          <nav className="pet-navigation" aria-label="萌宠视图">
+          <nav className="pet-navigation workspace-segments" aria-label="萌宠视图">
             {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
               <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}>
                 <item.icon size={17} aria-hidden="true" />{item.label}
@@ -544,7 +543,7 @@ export function PetGarden({
               )}
             </div>
 
-            <div className="pet-shop-modes" aria-label="小铺分类">
+            <div className="pet-shop-modes workspace-segments" aria-label="小铺分类">
               {([['skin', '装扮'], ['interact', '互动']] as const).map(([key, label]) => (
                 <button
                   key={key}

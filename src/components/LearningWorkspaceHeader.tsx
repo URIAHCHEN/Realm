@@ -2,23 +2,30 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './LearningWorkspace.css';
 
-export function LearningWorkspaceHeader({ title, context, description, icon: Icon, children }: {
+interface WorkspaceHeadingProps {
   title: string;
   context?: string;
   description: string;
   icon: LucideIcon;
-  children?: ReactNode;
-}) {
+}
+
+export function LearningWorkspaceHeading({ title, context, description, icon: Icon }: WorkspaceHeadingProps) {
   return (
-    <header className="learning-hero">
-      <div className="learning-hero-copy">
-        {context && <p className="learning-hero-context">{context}</p>}
-        <div className="learning-hero-heading">
-          <span><Icon size={24} aria-hidden="true" /></span>
-          <h2>{title}</h2>
-        </div>
-        <p className="learning-hero-description">{description}</p>
+    <div className="learning-workspace-heading">
+      <span className="learning-workspace-mark"><Icon size={20} aria-hidden="true" /></span>
+      <div className="learning-workspace-copy">
+        {context && <p className="learning-workspace-context">{context}</p>}
+        <h2>{title}</h2>
+        <p className="learning-workspace-description">{description}</p>
       </div>
+    </div>
+  );
+}
+
+export function LearningWorkspaceHeader({ children, ...heading }: WorkspaceHeadingProps & { children?: ReactNode }) {
+  return (
+    <header className="learning-workspace-header ios-glass-card">
+      <LearningWorkspaceHeading {...heading} />
       {children}
     </header>
   );

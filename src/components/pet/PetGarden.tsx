@@ -2,7 +2,8 @@
 // 约束：只读既有 Class 数据；所有写操作通过回调交给上层（App）落库，组件本身无副作用。
 
 import { useMemo, useState } from 'react';
-import { Leaf, Sparkles, ShoppingBag, Compass, Search, Settings2, ArrowUpRight, Heart } from 'lucide-react';
+import { ArrowUpRight, CalendarCheck, Check, Compass, Leaf, PawPrint, Search, Settings2, ShoppingBag, TrendingUp, Users } from 'lucide-react';
+import { LearningWorkspaceHeader } from '@/components/LearningWorkspaceHeader';
 import './PetGarden.css';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -212,96 +213,112 @@ export function PetGarden({
     : [];
 
   return (
-    <div className="pet-garden space-y-6" data-view={view}>
-      <div className="pet-topbar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="pet-wordmark"><Leaf size={19} />伴学萌宠<span>把每一点努力，养成光</span></h2>
-
+    <div className="learning-workspace pet-garden" data-view={view}>
+      <LearningWorkspaceHeader
+        title="伴学萌宠"
+        context={cls.name}
+        description="把课堂表现、作业和课后任务的积分，记进伙伴的成长。"
+        icon={PawPrint}
+      >
+        <div className="pet-hero-art" aria-hidden="true">
+          <span className="pet-hero-halo" />
+          <div className="pet-hero-moss"><PetAvatar petId="moss" level={1} size={176} /></div>
+          <div className="pet-hero-fox"><PetAvatar petId="ember" level={1} size={146} /></div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="outline" className="h-8" onClick={() => setSettingsOpen(true)}><Settings2 size={14} className="mr-1.5" />计分设置</Button>
-          <span className="text-sm text-muted-foreground">本班启用</span>
-          <Switch
-            checked={enabled}
-            onCheckedChange={checked => onSettings({ enabled: checked, classScope: checked ? [cls.id] : [] })}
-            aria-label="为本班启用伴学萌宠"
-          />
+      </LearningWorkspaceHeader>
+
+      {enabled && (
+        <dl className="pet-metrics learning-surface" aria-label="班级成长概览">
+          <div>
+            <span className="pet-metric-icon" data-tone="blue"><Users size={19} aria-hidden="true" /></span>
+            <div><dt>已领养学员</dt><dd>{adoptedCount}<small> / {rows.length}</small></dd></div>
+          </div>
+          <div>
+            <span className="pet-metric-icon" data-tone="green"><TrendingUp size={19} aria-hidden="true" /></span>
+            <div><dt>已进阶伙伴</dt><dd>{ranking.filter(row => stageOf(row.pet!.level) > 0).length}<small> 只</small></dd></div>
+          </div>
+          <div>
+            <span className="pet-metric-icon" data-tone="violet"><CalendarCheck size={19} aria-hidden="true" /></span>
+            <div><dt>最近结算课次</dt><dd>{classData.lastAutoLesson ? <>第 {classData.lastAutoLesson}<small> 课</small></> : '—'}</dd></div>
+          </div>
+        </dl>
+      )}
+
+      <div className="pet-operations learning-surface">
+        {enabled && (
+          <nav className="pet-navigation" aria-label="萌宠视图">
+            {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
+              <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}>
+                <item.icon size={17} aria-hidden="true" />{item.label}
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="pet-settings">
+          <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 size={16} />计分设置</Button>
+          <label className="pet-scope">
+            本班启用
+            <Switch
+              checked={enabled}
+              onCheckedChange={checked => onSettings({ enabled: checked, classScope: checked ? [cls.id] : [] })}
+              aria-label="为本班启用伴学萌宠"
+            />
+          </label>
         </div>
       </div>
 
-      <section className="pet-hero" aria-label="班级成长概览">
-        <div className="pet-hero-copy">
-          <span className="pet-eyebrow"><span />{cls.name} · 成长进行时</span>
-          <h3>每一份小努力，<br />都在悄悄长大。</h3>
-          <p>完成作业、认真练习，让陪伴你的伙伴一起成长。</p>
-          <div className="pet-hero-stats">
-            <div><strong>{adoptedCount}<small> / {rows.length}</small></strong><span>伙伴已相遇</span></div>
-            <div><strong>{ranking.filter(row => stageOf(row.pet!.level) >= 2).length}</strong><span>伙伴已进阶</span></div>
-            <div><strong>{classData.lastAutoLesson ?? 0}<small> 课</small></strong><span>努力已记录</span></div>
-          </div>
-        </div>
-        <div className="pet-hero-art" aria-hidden="true">
-          <span className="pet-orbit pet-orbit-one" /><span className="pet-orbit pet-orbit-two" />
-          <span className="pet-hero-note"><Sparkles size={14} />一起成长的日子</span>
-          <div className="pet-hero-moss"><PetAvatar petId="moss" level={1} size={220} /></div>
-          <div className="pet-hero-fox"><PetAvatar petId="ember" level={1} size={185} /></div>
-          <Leaf className="pet-hero-leaf" size={35} strokeWidth={1} />
-        </div>
-      </section>
-      {enabled && <nav className="pet-navigation" aria-label="萌宠视图">
-        {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
-          <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}><item.icon size={17} />{item.label}{view === item.id && <span className="pet-nav-dot" />}</button>
-        ))}
-      </nav>}
-
       {!enabled ? (
-        <Card className="pet-panel pet-empty flex flex-col items-center justify-center gap-3 p-10 text-center">
-          <div className="text-sm font-medium">这个班还没开启伴学萌宠</div>
-          <p className="max-w-md text-sm text-muted-foreground">
-            开启后，积分会按计分设置折算为成长经验。可以先查看历史记录范围，再为本班开启。
-          </p>
+        <Card className="learning-surface pet-panel pet-empty pet-disabled">
+          <span className="pet-metric-icon" data-tone="blue"><PawPrint size={22} aria-hidden="true" /></span>
+          <div>
+            <h3>这个班还没开启伴学萌宠</h3>
+            <p>开启前可在计分设置中确认历史记录的结算范围。</p>
+          </div>
           <Button onClick={() => onSettings({ enabled: true, classScope: [cls.id] })}>开启本班</Button>
         </Card>
       ) : (
         <>
           <div className="pet-section pet-garden-toolbar" data-section="garden">
-            <div><span className="pet-eyebrow">OUR LITTLE GARDEN</span><h3>我们的成长园地 <span>{rows.length} 位同学</span></h3><p>作业 +{snapshot.settings.rules.homeworkDone} · 课后任务 +{snapshot.settings.rules.listeningDone} · 满分额外 +{snapshot.settings.rules.fullScoreBonus}</p></div>
-            <label className="pet-search"><Search size={16} /><input aria-label="搜索学生" placeholder="寻找一位同学…" value={search} onChange={e => setSearch(e.target.value)} /></label>
+            <div>
+              <h3>班级成长园地 <span>{rows.length} 位学员</span></h3>
+              <p>作业 +{snapshot.settings.rules.homeworkDone} · 课后任务 +{snapshot.settings.rules.listeningDone} · 满分额外 +{snapshot.settings.rules.fullScoreBonus}</p>
+            </div>
+            <label className="pet-search"><Search size={17} aria-hidden="true" /><input aria-label="搜索学生" placeholder="搜索学员" value={search} onChange={e => setSearch(e.target.value)} /></label>
           </div>
           <div className="pet-section pet-students" data-section="garden">
             {rows.length === 0 && <div className="pet-panel pet-empty">班级还没有学生，添加名单后就能一起领养伙伴。</div>}
             {rows.length > 0 && !rows.some(row => row.name.includes(search.trim())) && <div className="pet-panel pet-empty" role="status">没有找到这位同学，试试其他名字。</div>}
             {rows.filter(row => row.name.includes(search.trim())).map(({ name, pet, progress }) => (
-              <Card key={name} className="pet-student" style={{ '--pet-hue': pet ? petDefOf(pet.petId).hue : '155 20% 45%' } as React.CSSProperties}>
+              <Card key={name} className="learning-surface pet-student" style={{ '--pet-hue': pet ? petDefOf(pet.petId).hue : '155 20% 45%' } as React.CSSProperties}>
                 <button
                   type="button"
                   className="pet-student-open" aria-label={`${pet ? '查看' : '为'}${name}${pet ? '的宠物' : '领养宠物'}`}
                   onClick={() => { setFace('happy'); if (pet) setDetailStudent(name); else setAdoptStudent(name); }}
                 >
-                  <div className="pet-habitat"><span className="pet-card-level">{pet ? `Lv.${pet.level}` : '待相遇'}</span>
+                  <div className="pet-habitat"><span className="pet-card-level">{pet ? `Lv.${pet.level}` : '未领养'}</span>
                   {pet?.route === 'building' ? (
                     <CommunityAvatar level={pet.level} size={140} />
                   ) : pet ? (
                     <PetAvatar petId={pet.petId} level={pet.level} skin={pet.skin} size={144} />
                   ) : (
-                    <div className="pet-adopt-placeholder"><Heart size={34} strokeWidth={1} /><span>等待一场相遇</span></div>
+                    <div className="pet-adopt-placeholder"><PawPrint size={30} strokeWidth={1.45} /></div>
                   )}
                   </div>
                   <div className="pet-student-info">
                     <div className="pet-student-name">{name}<ArrowUpRight size={15} /></div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <div className="pet-student-subtitle">
                       {pet
                         ? pet.route === 'building'
                           ? `班级社区 · 第 ${Math.max(1, Math.ceil(pet.level / 3))} 期`
                           : `${petDefOf(pet.petId).name} · ${petDefOf(pet.petId).stages[stageOf(pet.level)]}`
                         : '选择一只宠物'}
                     </div>
-                    {pet && <div className="mt-1 text-[11px] text-muted-foreground">徽章 {badgeBalance(pet)}</div>}
+                    {pet && <div className="pet-student-meta">徽章 {badgeBalance(pet)}</div>}
                     {pet && (() => {
                       const status = petStatusOf(pet, lastEventByStudent.get(name));
                       const label = status === 'egg' ? '蛋形态' : status === 'sick' ? '生病中' : status === 'hungry' ? '饥饿中' : '';
                       if (!label) return null;
-                      return <div className="mt-1 text-[11px] text-muted-foreground">{label}</div>;
+                      return <div className="pet-student-meta">{label}</div>;
                     })()}
                     {pet && progress && (
                       <>
@@ -355,35 +372,30 @@ export function PetGarden({
             ))}
           </div>
 
-          <Card className="pet-section pet-panel pet-expedition p-5" data-section="adventure">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold">班级共建 · 海底两万里</h3>
-              <span className="text-xs text-muted-foreground">全班净积分 {build.total} 分</span>
+          <Card className="pet-section learning-surface pet-panel pet-expedition p-5" data-section="adventure">
+            <div className="pet-expedition-heading">
+              <h3 className="pet-section-title"><Compass size={19} aria-hidden="true" />班级共建 · 海底两万里</h3>
+              <span>全班净积分 <strong>{build.total}</strong></span>
             </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>第 {build.stageIndex + 1} 站 · {build.stageName}</span>
-              <span>{build.isFinal ? '已到终点站' : `下一站 ${BUILD_STAGES[build.stageIndex + 1]}`}</span>
+            <div className="pet-expedition-progress">
+              <div><strong>第 {build.stageIndex + 1} 站 · {build.stageName}</strong><span>{build.isFinal ? '已到终点站' : `距下一站还差 ${Math.max(0, build.stageNeed - build.stageScore)} 分`}</span></div>
+              <div className="pet-exp-track" role="progressbar" aria-label="本站共建进度"
+                aria-valuemin={0} aria-valuemax={build.stageNeed} aria-valuenow={Math.min(build.stageNeed, build.stageScore)}>
+                <div style={{ width: `${Math.min(100, build.stageScore / build.stageNeed * 100)}%` }} />
+              </div>
             </div>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-300" style={{ width: `${Math.min(100, (build.stageScore / build.stageNeed) * 100)}%` }} />
-            </div>
-            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-              <span>{build.stageScore} / {build.stageNeed} 分</span>
-              <span>共 {BUILD_STAGES.length} 站</span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <ol className="pet-stations" aria-label="班级共建路线">
               {BUILD_STAGES.map((stage, index) => (
-                <span
-                  key={stage}
-                  className={`rounded-full border px-2 py-0.5 text-[11px] ${index < build.stageIndex ? 'border-border bg-muted text-muted-foreground' : index === build.stageIndex ? 'border-foreground/30 bg-muted text-foreground' : 'border-dashed border-border text-muted-foreground'}`}
-                >
-                  {stage}
-                </span>
+                <li key={stage}
+                  data-position={index < build.stageIndex ? 'complete' : index === build.stageIndex ? 'current' : 'pending'}
+                  aria-current={index === build.stageIndex ? 'step' : undefined}>
+                  <span>{index < build.stageIndex ? <Check size={13} aria-hidden="true" /> : index + 1}</span>{stage}
+                </li>
               ))}
-            </div>
+            </ol>
           </Card>
 
-          <Card className="pet-section pet-panel p-5" data-section="adventure">
+          <Card className="pet-section learning-surface pet-panel p-5" data-section="adventure">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">小组 PK</h3>
@@ -511,14 +523,14 @@ export function PetGarden({
             )}
           </Card>
 
-          <Card className="pet-section pet-panel pet-shop p-5" data-section="shop">
+          <Card className="pet-section learning-surface pet-panel pet-shop p-5" data-section="shop">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="pet-section-title"><ShoppingBag size={19} />给伙伴一点小惊喜</h3>
+                <h3 className="pet-section-title"><ShoppingBag size={19} aria-hidden="true" />装扮与互动</h3>
                 <p className="mt-1 text-xs text-muted-foreground">徽章是升级奖励（每级 5 枚），买装扮或投喂宠物都会花掉它。</p>
               </div>
               {adoptedRows.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="pet-shop-account">
                   <select
                     className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
                     value={activeShopStudent ?? ''}
@@ -527,18 +539,18 @@ export function PetGarden({
                   >
                     {adoptedRows.map(row => <option key={row.name} value={row.name}>{row.name}</option>)}
                   </select>
-                  <span className="text-xs text-muted-foreground">徽章 {shopPet ? badgeBalance(shopPet) : 0}</span>
+                  <span>徽章 <strong>{shopPet ? badgeBalance(shopPet) : 0}</strong></span>
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex gap-1.5">
+            <div className="pet-shop-modes" aria-label="小铺分类">
               {([['skin', '装扮'], ['interact', '互动']] as const).map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setShopTab(key)}
-                  className={`rounded-full border px-3 py-1 text-xs ${shopTab === key ? 'border-foreground/40 bg-muted text-foreground' : 'border-border text-muted-foreground'}`}
+                  aria-pressed={shopTab === key}
                 >
                   {label}
                 </button>
@@ -603,7 +615,7 @@ export function PetGarden({
           </Card>
 
           <div className="pet-section grid gap-6 lg:grid-cols-[1.2fr_1fr]" data-section="garden">
-            <Card className="pet-panel p-5">
+            <Card className="learning-surface pet-panel p-5">
               <div className="flex items-baseline justify-between">
                 <h3 className="text-sm font-semibold">成长榜</h3>
                 <span className="text-xs text-muted-foreground">按等级、经验排序</span>
@@ -622,7 +634,7 @@ export function PetGarden({
               </div>
             </Card>
 
-            <Card className="pet-panel p-5">
+            <Card className="learning-surface pet-panel p-5">
               <h3 className="text-sm font-semibold">徽章口径</h3>
               <div className="mt-3 space-y-2">
                 {PET_BADGES.map(badge => (

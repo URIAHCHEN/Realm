@@ -1,370 +1,349 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileSpreadsheet, ImagePlus, Loader2, ScanText, Trash2, Wand2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { FileSpreadsheet, ImagePlus, Loader2, ScanText, Trash2, Upload, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SchoolScore } from '@/types';
-import { draftToSchoolScore, parseIntake, parseSchoolScoreWorkbook, schoolScoreDate, schoolScoreEntryKey, schoolScoreIssue, scoreDedupKey, type ScoreDraft } from '@/lib/scoreIntake';
+import {
+  draftToSchoolScore, matchSchoolScoreRosters, parseIntake, parseSchoolScoreWorkbook, sameSchoolScoreEntry,
+  schoolScoreDate, schoolScoreIssue, scoreDedupKey,
+  type ScoreDraft, type SchoolScoreRoster, type SchoolScoreTarget,
+} from '@/lib/scoreIntake';
+import './ScoreIntakeDialog.css';
 
 interface ScoreIntakeDialogProps {
   mode: 'text' | 'excel';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   students: string[];
-  nicknames?: { [studentName: string]: string };
-  existingScores: SchoolScore[];
+  currentClassId?: string;
+  rosters: SchoolScoreRoster[];
+  nicknames?: Record<string, string>;
+  schoolScores: Record<string, SchoolScore[]>;
   onSave: (rows: Omit<SchoolScore, 'id'>[]) => void;
-  getNickname: (name: string) => string;
-  defaultSubject?: string;
+  getNickname: (name: string, classId?: string) => string;
 }
 
+interface IntakeRow {
+  id: number;
+  draft: ScoreDraft;
+  target?: SchoolScoreTarget;
+  candidates?: SchoolScoreTarget[];
+  reason?: string;
+}
+
+const targetKey = ({ classId, studentName }: SchoolScoreTarget) => JSON.stringify([classId, studentName]);
+function parseTarget(value: string): SchoolScoreTarget | undefined {
+  if (!value) return;
+  const [classId, studentName] = JSON.parse(value) as [string, string];
+  return { classId, studentName };
+}
+const rosterLabel = (roster: SchoolScoreRoster) => [roster.name, roster.batchCode, roster.term].filter(Boolean).join(' · ');
+const rankText = (rank?: number, size?: number) => rank === undefined ? '—' : size ? `${rank}/${size}` : String(rank);
+const scoreFields = [
+  ['score', '得分'], ['totalScore', '满分'], ['classRank', '班排'], ['classSize', '班级人数'],
+  ['gradeRank', '级排'], ['gradeSize', '年级人数'],
+] as const;
+const allClasses = '__all__';
+const needsMatch = '__unmatched__';
+
 export function ScoreIntakeDialog({
-  mode,
-  open,
-  onOpenChange,
-  students,
-  nicknames,
-  existingScores,
-  onSave,
-  getNickname,
-  defaultSubject = '英语',
+  mode, open, onOpenChange, students, currentClassId, rosters, nicknames, schoolScores, onSave, getNickname,
 }: ScoreIntakeDialogProps) {
   const isExcel = mode === 'excel';
   const [examName, setExamName] = useState(isExcel ? '' : '校内考试');
   const [date, setDate] = useState(() => isExcel ? '' : schoolScoreDate());
-  const [subject, setSubject] = useState(defaultSubject);
+  const [subject, setSubject] = useState('英语');
   const [text, setText] = useState('');
-  const [drafts, setDrafts] = useState<ScoreDraft[] | null>(null);
-  const [ocrBusy, setOcrBusy] = useState(false);
-  const [workbook, setWorkbook] = useState<{ sheet: string; unmatched: string[] } | null>(null);
-  const [excelBusy, setExcelBusy] = useState(false);
+  const [rows, setRows] = useState<IntakeRow[] | null>(null);
+  const [editing, setEditing] = useState<number>();
+  const [filter, setFilter] = useState(allClasses);
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [workbook, setWorkbook] = useState<{ name: string; sheet: string }>();
+  const [busy, setBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  /** 桌面客户端注入了本地 OCR 才显示选图入口；浏览器里没有可用的离线 OCR */
-  const desktop = typeof window !== 'undefined'
-    ? (window as unknown as { realmDesktop?: { ocr?: (path: string) => Promise<string>; pickImage?: () => Promise<string | null> } }).realmDesktop
-    : undefined;
+  const desktop = (window as Window & {
+    realmDesktop?: { ocr?: (path: string) => Promise<string>; pickImage?: () => Promise<string | null> };
+  }).realmDesktop;
   const canOcr = typeof desktop?.ocr === 'function';
+  const eligibleRosters = useMemo(() => isExcel ? rosters : rosters.filter(roster => roster.id === currentClassId), [isExcel, rosters, currentClassId]);
+  const ctx = { students, nicknames, examName, date, subject };
 
-  const ctx = useMemo(() => ({ students, nicknames, examName, date, subject }), [students, nicknames, examName, date, subject]);
+  const resetPreview = () => {
+    setRows(null);
+    setEditing(undefined);
+    setFilter(allClasses);
+    setReviewOnly(false);
+  };
 
-  const existingKeys = useMemo(() => new Set(existingScores.map(scoreDedupKey)), [existingScores]);
-  const existingEntries = useMemo(() => new Set(existingScores.map(schoolScoreEntryKey)), [existingScores]);
-
-  const parse = useCallback(() => {
-    if (!text.trim()) {
-      toast.error('先把要录入的内容粘贴进来');
+  const parseText = () => {
+    const { drafts } = parseIntake(text, ctx);
+    if (!drafts.length) {
+      toast.error('没解析出成绩行，请检查姓名和得分');
       return;
     }
-    const result = parseIntake(text, ctx);
-    if (!result.drafts.length) {
-      toast.error('没解析出成绩行，检查一下是否包含姓名与分数');
-      return;
-    }
-    setDrafts(result.drafts);
-    toast.success(`已解析 ${result.drafts.length} 条${result.mode === 'sheet' ? '（识别为单张调研表）' : ''}`);
-  }, [text, ctx]);
+    resetPreview();
+    setRows(drafts.map((draft, id) => ({
+      id, draft,
+      target: currentClassId && draft.studentName ? { classId: currentClassId, studentName: draft.studentName } : undefined,
+    })));
+  };
 
   const loadWorkbook = async (file: File) => {
-    setExcelBusy(true);
-    setWorkbook(null);
-    setDrafts(null);
+    setBusy(true);
+    setWorkbook(undefined);
+    resetPreview();
     try {
-      const { sheet, drafts: parsed } = await parseSchoolScoreWorkbook(file, ctx);
-      setWorkbook({ sheet, unmatched: parsed.filter(draft => !draft.studentName).map(draft => draft.sourceName || '') });
-      setDrafts(parsed.filter(draft => draft.studentName));
+      // Excel 的归班以完整名册为准，解析阶段只需保留源姓名和字段。
+      const { sheet, drafts } = await parseSchoolScoreWorkbook(file, { ...ctx, students: [] });
+      const matches = matchSchoolScoreRosters(drafts, eligibleRosters);
+      setWorkbook({ name: file.name, sheet });
+      setRows(drafts.map((draft, id) => ({ id, draft, ...matches[id] })));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      setExcelBusy(false);
+      setBusy(false);
     }
   };
 
-  const pickImage = useCallback(async () => {
-    if (!canOcr || !desktop) return;
-    setOcrBusy(true);
+  const pickImage = async () => {
+    if (!desktop?.ocr || !desktop.pickImage) return;
+    setBusy(true);
     try {
-      const path = await desktop.pickImage?.();
+      const path = await desktop.pickImage();
       if (!path) return;
-      const recognized = await desktop.ocr!(path);
-      setText(prev => (prev.trim() ? `${prev}\n${recognized}` : recognized));
-      setDrafts(null);
-      toast.success('图片已识别，内容已填入下方文本框，请核对后解析');
-    } catch (e) {
-      toast.error(`识别失败：${e instanceof Error ? e.message : String(e)}`);
+      const recognized = await desktop.ocr(path);
+      setText(previous => previous.trim() ? `${previous}\n${recognized}` : recognized);
+      resetPreview();
+    } catch (error) {
+      toast.error(`识别失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setOcrBusy(false);
+      setBusy(false);
     }
-  }, [canOcr, desktop]);
-
-  const updateDraft = (index: number, patch: Partial<ScoreDraft>) => {
-    setDrafts(prev => (prev ? prev.map((d, i) => (i === index ? { ...d, ...patch } : d)) : prev));
   };
 
-  const removeDraft = (index: number) => {
-    setDrafts(prev => (prev ? prev.filter((_, i) => i !== index) : prev));
+  const updateRow = (id: number, change: (row: IntakeRow) => IntakeRow) => {
+    setRows(current => current?.map(row => row.id === id ? change(row) : row) ?? null);
+  };
+  const updateDraft = (id: number, patch: Partial<ScoreDraft>) => {
+    updateRow(id, row => ({ ...row, draft: { ...row.draft, ...patch } }));
   };
 
-  const seenKeys = new Set(existingKeys);
-  const seenEntries = new Set(existingEntries);
-  const reviewedRows = (drafts || []).map(draft => {
-    const row = draftToSchoolScore(draft, ctx);
-    const issue = !students.includes(row.studentName) ? '请指定学员' : draft.problem || schoolScoreIssue(row);
-    const key = scoreDedupKey(row);
-    const duplicate = !issue && seenKeys.has(key);
-    const entry = schoolScoreEntryKey(row);
-    const conflict = !issue && !duplicate && seenEntries.has(entry);
-    if (!issue) {
-      seenKeys.add(key);
-      seenEntries.add(entry);
-    }
-    return { row, issue, duplicate, conflict };
+  const planned = new Map<string, Omit<SchoolScore, 'id'>[]>();
+  const reviewed = (rows || []).map(item => {
+    const { draft, target } = item;
+    const roster = eligibleRosters.find(entry => entry.id === target?.classId);
+    const active = target && roster?.students.includes(target.studentName) ? target : undefined;
+    const row = { ...draftToSchoolScore(draft, ctx), studentName: active?.studentName || '', classId: active?.classId };
+    const issue = active ? draft.problem || schoolScoreIssue(row) : item.reason || '请指定学员';
+    const qualified = planned.get(row.studentName) || [];
+    const related = [...(schoolScores[row.studentName] || []), ...qualified].filter(existing => sameSchoolScoreEntry(existing, row));
+    const duplicate = !issue && related.some(existing => scoreDedupKey(existing) === scoreDedupKey(row));
+    const conflict = !issue && !duplicate && related.length > 0;
+    if (!issue && !duplicate && !conflict) planned.set(row.studentName, [...qualified, row]);
+    return { ...item, row, active, issue, duplicate, conflict };
   });
-  const readyRows = reviewedRows.filter(item => !item.issue && !item.duplicate && !item.conflict);
-  const issueCount = reviewedRows.filter(item => item.issue).length;
-  const duplicateCount = reviewedRows.filter(item => item.duplicate).length;
-  const conflictCount = reviewedRows.filter(item => item.conflict).length;
-  const canSave = !!examName.trim() && !!date && issueCount === 0 && readyRows.length > 0 && !ocrBusy && !excelBusy;
+  const ready = Array.from(planned.values()).flat();
+  const readyClasses = new Set(ready.map(row => row.classId)).size;
+  const issueCount = reviewed.filter(item => item.issue).length;
+  const existingCount = reviewed.filter(item => item.duplicate || item.conflict).length;
+  const canSave = !!examName.trim() && !!date && !!ready.length && !busy && (isExcel || issueCount === 0);
+  const groups = new Map<string, typeof reviewed>();
+  for (const row of reviewed) {
+    const key = row.active?.classId || needsMatch;
+    const group = groups.get(key) || [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  const activeFilter = groups.has(filter) ? filter : allClasses;
+  const visibleGroups = Array.from(groups).filter(([key]) => activeFilter === allClasses || key === activeFilter)
+    .sort(([a], [b]) => Number(a === needsMatch) - Number(b === needsMatch));
 
   const save = () => {
     if (!canSave) return;
-    onSave(readyRows.map(item => item.row));
-    toast.success(`已写入 ${readyRows.length} 条成绩`);
-    setDrafts(null);
+    onSave(ready);
+    toast.success(isExcel ? `已写入 ${readyClasses} 个班级，共 ${ready.length} 条成绩` : `已写入 ${ready.length} 条成绩`);
+    resetPreview();
+    setWorkbook(undefined);
     setText('');
-    setWorkbook(null);
     onOpenChange(false);
   };
 
+  const Icon = isExcel ? FileSpreadsheet : ScanText;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isExcel ? <FileSpreadsheet className="w-5 h-5 text-[color:var(--brand)]" /> : <ScanText className="w-5 h-5 text-[color:var(--brand)]" />}
-            {isExcel ? '导入 Excel 校内成绩' : '智能录入校内成绩'}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="score-intake-dialog">
+        <header className="score-intake-heading">
+          <span className="learning-workspace-mark"><Icon size={20} aria-hidden="true" /></span>
+          <div>
+            <DialogTitle>{isExcel ? '导入 Excel 校内成绩' : '智能录入校内成绩'}</DialogTitle>
+            <DialogDescription>{isExcel ? '一次上传，匹配全部班级的在读学员' : '按当前班级名单核对粘贴或识别的成绩'}</DialogDescription>
+          </div>
+        </header>
 
-        <div className="space-y-4 mt-2">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1.5">
-              <span className="text-xs text-[color:var(--ink-4)]">考试名称</span>
-              <Input className="rounded-xl ios-input" value={examName} onChange={e => setExamName(e.target.value)} placeholder="如期中考试" />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs text-[color:var(--ink-4)]">考试日期</span>
-              <Input className="rounded-xl ios-input" type="date" value={date} onChange={e => setDate(e.target.value)} />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs text-[color:var(--ink-4)]">科目</span>
-              <Input className="rounded-xl ios-input" value={subject} onChange={e => setSubject(e.target.value)} />
-            </label>
+        <div className="score-intake-body">
+          <div className="score-intake-exam">
+            <label>考试名称<Input value={examName} onChange={e => setExamName(e.target.value)} placeholder="如 26 秋期中考试" required /></label>
+            <label>考试日期<Input type="date" value={date} onChange={e => setDate(e.target.value)} required /></label>
+            <label>科目<Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="英语" /></label>
           </div>
 
           {isExcel ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[color:var(--ink-4)]">自动优先读取「全量明细」，按当前班级名单匹配。请填写实际考试名称和日期。</p>
-              <Input
-                aria-label="成绩 Excel 文件"
-                type="file"
-                accept=".xlsx,.xls"
-                disabled={excelBusy}
-                onChange={event => {
+            <div className="score-intake-file">
+              <span className="score-intake-file-icon"><Upload size={18} aria-hidden="true" /></span>
+              <div className="score-intake-file-info">
+                <strong>{workbook?.name || '上传成绩工作簿'}</strong>
+                <p role="status">{busy ? '正在读取工作簿…' : workbook ? `工作表「${workbook.sheet}」` : '支持 .xlsx、.xls，优先读取「全量明细」'}</p>
+              </div>
+              <input ref={fileInput} type="file" className="sr-only" tabIndex={-1} aria-label="成绩 Excel 文件"
+                accept=".xlsx,.xls" disabled={busy} onChange={event => {
                   const file = event.currentTarget.files?.[0];
                   event.currentTarget.value = '';
                   if (file) void loadWorkbook(file);
-                }}
-              />
-              {excelBusy && <p role="status" className="text-sm">正在解析工作簿…</p>}
-              {workbook && (
-                <div className="space-y-1 text-sm">
-                  <p>工作表「{workbook.sheet}」 · 本班 {drafts?.length || 0} 条 · 未匹配 {workbook.unmatched.length} 条</p>
-                  {workbook.unmatched.length > 0 && (
-                    <details>
-                      <summary className="cursor-pointer text-[color:var(--brand)]">查看未匹配姓名（本次跳过）</summary>
-                      <p className="max-h-28 overflow-auto text-xs text-[color:var(--ink-4)]">{workbook.unmatched.join('、')}</p>
-                    </details>
-                  )}
-                  {!drafts?.length && <p>当前班级没有匹配成绩，请核对班级和学员名单。</p>}
-                </div>
-              )}
+                }} />
+              <Button variant={workbook ? 'outline' : 'default'} size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
+                {busy && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
+                {workbook ? '更换文件' : '选择文件'}
+              </Button>
             </div>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-[color:var(--ink-4)]">
-                  粘贴表格文本（每行一个学生，支持「姓名 学校 满分 得分 班排」或「张三 126/150」）
-                </span>
-                <div className="flex gap-2">
-                  {canOcr && (
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={pickImage} disabled={ocrBusy}>
-                      {ocrBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
-                      选图识别
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => { setText(''); setDrafts(null); }}>
-                    <Trash2 className="w-3.5 h-3.5" />清空
-                  </Button>
+            <div className="score-intake-text">
+              <textarea aria-label="成绩原文" rows={5} value={text} placeholder={'姓名\t得分\t满分\t班排\t级排\n示例学员\t126.5\t150\t3/45\t9/120'}
+                onChange={event => { setText(event.target.value); resetPreview(); }} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={parseText} disabled={busy || !text.trim()}><Wand2 size={15} aria-hidden="true" />解析</Button>
+                {canOcr && <Button variant="outline" size="sm" onClick={pickImage} disabled={busy}><ImagePlus size={15} aria-hidden="true" />选图识别</Button>}
+                {text && <Button variant="ghost" size="sm" onClick={() => { setText(''); resetPreview(); }}>清空</Button>}
+              </div>
+            </div>
+          )}
+
+          {rows && (
+            <section aria-label="匹配预览" className="score-intake-preview">
+              <div className="score-intake-summary">
+                <div>
+                  <h3>匹配预览</h3>
+                  <p>共 {reviewed.length} 条 · {readyClasses} 个班级可写入</p>
+                </div>
+                <div className="score-intake-counts" aria-live="polite">
+                  <span data-tone="ready">可写入 {ready.length}</span>
+                  {issueCount > 0 && <span data-tone="review">待核对 {issueCount}</span>}
+                  {existingCount > 0 && <span>已有记录 {existingCount}</span>}
                 </div>
               </div>
-              <textarea
-                className="min-h-[130px] w-full resize-y rounded-xl border border-black/10 bg-white p-3 font-mono text-[13px] leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--brand)]"
-                placeholder={'陈志佳\t四中\t150\t126\t5\n陈梓铭\t七中\t150\t118\t12\n\n或单张调研表：\n学员姓名：胡怡萱  在读学校：四中逸园\n满分：150 得分：138 班排：3'}
-                value={text}
-                aria-label="成绩原文"
-                onChange={e => { setText(e.target.value); setDrafts(null); }}
-              />
-              <div className="flex items-center gap-2">
-                <Button size="sm" className="gap-1.5" onClick={parse} disabled={ocrBusy}>
-                  <Wand2 className="w-3.5 h-3.5" />解析
-                </Button>
-                {!canOcr && (
-                  <p className="text-[11px] leading-relaxed text-[color:var(--ink-4)]">
-                    浏览器里没有离线 OCR：请从手机/微信把表格照片转成文字后粘贴；桌面客户端可直接选图识别。
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
 
-          {drafts && drafts.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="secondary">共 {reviewedRows.length} 条</Badge>
-                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">可写入 {readyRows.length}</Badge>
-                {issueCount > 0 && <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">待核对 {issueCount}</Badge>}
-                {duplicateCount > 0 && <Badge variant="outline">重复 {duplicateCount}</Badge>}
-                {conflictCount > 0 && <Badge variant="outline">已有不同成绩 {conflictCount}</Badge>}
-                <span className="text-[color:var(--ink-4)]">修正或移除待核对的行。已存在的成绩会跳过。</span>
-              </div>
+              {isExcel && reviewed.length > 0 && (
+                <div className="score-intake-filters">
+                  <select aria-label="筛选预览班级" value={activeFilter} onChange={e => setFilter(e.target.value)}>
+                    <option value={allClasses}>全部班级</option>
+                    {eligibleRosters.filter(roster => groups.has(roster.id)).map(roster => (
+                      <option key={roster.id} value={roster.id}>{rosterLabel(roster)}（{groups.get(roster.id)?.length}）</option>
+                    ))}
+                    {groups.has(needsMatch) && <option value={needsMatch}>未归班（{groups.get(needsMatch)?.length}）</option>}
+                  </select>
+                  <Button variant="outline" size="sm" aria-pressed={reviewOnly} onClick={() => setReviewOnly(value => !value)}>仅看待核对</Button>
+                </div>
+              )}
 
-              <div className="overflow-x-auto rounded-xl border border-black/5">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[24%]">学员</TableHead>
-                      <TableHead className="w-[18%]">学校</TableHead>
-                      <TableHead className="w-[14%]">得分</TableHead>
-                      <TableHead className="w-[14%]">满分</TableHead>
-                      <TableHead>班排</TableHead>
-                      <TableHead>班级人数</TableHead>
-                      <TableHead>级排</TableHead>
-                      <TableHead>年级人数</TableHead>
-                      <TableHead>排名来源</TableHead>
-                      <TableHead>科目</TableHead>
-                      <TableHead>状态</TableHead>
-                      <TableHead className="w-[6%]" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {drafts.map((draft, index) => {
-                      const { issue, duplicate, conflict } = reviewedRows[index];
+              {visibleGroups.map(([key, group]) => {
+                const visible = reviewOnly ? group.filter(item => item.issue) : group;
+                if (!visible.length) return null;
+                const roster = eligibleRosters.find(item => item.id === key);
+                return (
+                  <section key={key} className="score-intake-group">
+                    <h4>{roster?.name || '待确认学员'}<span>{[roster?.batchCode, roster?.term, `${visible.length} 条`].filter(Boolean).join(' · ')}</span></h4>
+                    {visible.map(({ id, draft, row, active, issue, duplicate, conflict, candidates }) => {
+                      const name = active ? getNickname(active.studentName, active.classId) : draft.sourceName || '未识别姓名';
+                      const status = issue || (duplicate ? '重复记录' : conflict ? '同场已有成绩' : '可写入');
+                      const expanded = editing === id;
                       return (
-                        <TableRow key={index} className={issue ? 'bg-rose-50/50' : ''}>
-                          <TableCell>
-                            <Select
-                              value={draft.studentName || '__none__'}
-                              onValueChange={(v) => updateDraft(index, { studentName: v === '__none__' ? '' : v, confidence: 1 })}
-                            >
-                              <SelectTrigger className="h-8 w-full min-w-24 text-xs" aria-label={`第 ${index + 1} 行学员`}>
-                                <SelectValue placeholder="指定学员" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">（未匹配）</SelectItem>
-                                {students.map(s => (
-                                  <SelectItem key={s} value={s}>{getNickname(s)}（{s}）</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {!draft.studentName && draft.raw && (
-                              <p className="mt-1 truncate text-[10px] text-[color:var(--ink-4)]" title={draft.raw}>
-                                识别为「{draft.raw.slice(0, 18)}」
-                              </p>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              className="h-8 text-xs" value={draft.school || ''}
-                              onChange={e => updateDraft(index, { school: e.target.value })}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.problem ? '' : draft.score} min={0} max={draft.totalScore} step="any"
-                              aria-label={`第 ${index + 1} 行得分`}
-                              onChange={e => {
-                                const score = e.target.valueAsNumber;
-                                updateDraft(index, { score: Number.isFinite(score) ? score : 0, problem: Number.isFinite(score) ? undefined : '请填写得分' });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.totalScore} min={0} step="any"
-                              aria-label={`第 ${index + 1} 行满分`}
-                              onChange={e => updateDraft(index, { totalScore: Number(e.target.value) })}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              className="h-8 w-16 text-xs" type="number" value={draft.classRank ?? ''} min={1} step={1}
-                              aria-label={`第 ${index + 1} 行班排`}
-                              placeholder="—"
-                              onChange={e => updateDraft(index, { classRank: e.target.value ? Number(e.target.value) : undefined })}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input className="h-8 w-16 text-xs" type="number" value={draft.classSize ?? ''} min={1} step={1}
-                              aria-label={`第 ${index + 1} 行班级人数`} placeholder="—"
-                              onChange={e => updateDraft(index, { classSize: e.target.value ? Number(e.target.value) : undefined })} />
-                          </TableCell>
-                          <TableCell>
-                            <Input className="h-8 w-16 text-xs" type="number" value={draft.gradeRank ?? ''} min={1} step={1}
-                              aria-label={`第 ${index + 1} 行级排`} placeholder="—"
-                              onChange={e => updateDraft(index, { gradeRank: e.target.value ? Number(e.target.value) : undefined })} />
-                          </TableCell>
-                          <TableCell>
-                            <Input className="h-8 w-16 text-xs" type="number" value={draft.gradeSize ?? ''} min={1} step={1}
-                              aria-label={`第 ${index + 1} 行年级人数`} placeholder="—"
-                              onChange={e => updateDraft(index, { gradeSize: e.target.value ? Number(e.target.value) : undefined })} />
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">{draft.fields?.survey?.rankSource || '—'}</TableCell>
-                          <TableCell>
-                            <Input className="h-8 w-16 text-xs" value={draft.subject || ''}
-                              aria-label={`第 ${index + 1} 行科目`} placeholder={subject || '—'}
-                              onChange={e => updateDraft(index, { subject: e.target.value })} />
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {issue ? <span className="whitespace-normal text-rose-700">{issue}</span>
-                              : duplicate ? <span className="text-amber-700">重复</span>
-                              : conflict ? <span className="text-amber-700">同场已有成绩</span>
-                              : <span className="text-emerald-700">可写入</span>}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeDraft(index)} aria-label={`移除第 ${index + 1} 行`}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                        <div key={id} className="score-intake-record">
+                          <div className="score-intake-record-grid">
+                            <div className="score-intake-person">
+                              <strong>{name}</strong>
+                              <span>{[active && name !== active.studentName ? active.studentName : undefined, row.school].filter(Boolean).join(' · ')}</span>
+                            </div>
+                            <div><small>得分</small><b>{draft.problem ? '—' : `${row.score}/${row.totalScore || '—'}`}</b></div>
+                            <div><small>班排</small><b>{rankText(row.classRank, row.classSize)}</b></div>
+                            <div><small>级排</small><b>{rankText(row.gradeRank, row.gradeSize)}</b></div>
+                            <span className="score-intake-status" data-tone={issue ? 'review' : duplicate || conflict ? 'existing' : 'ready'}>{status}</span>
+                            <Button variant="ghost" size="sm" className="score-intake-edit" aria-expanded={expanded} aria-label={`编辑 ${name}`}
+                              onClick={() => setEditing(expanded ? undefined : id)}>{expanded ? '收起' : '编辑'}</Button>
+                          </div>
+                          {expanded && (
+                            <div className="score-intake-editor">
+                              {candidates && candidates.length > 1 && !active && <p>同名候选班级：{candidates.map(candidate => eligibleRosters.find(item => item.id === candidate.classId)?.name).join('、')}</p>}
+                              <div className="score-intake-editor-grid">
+                                <label className="score-intake-editor-student">匹配学员
+                                  <select value={active ? targetKey(active) : ''} onChange={event => {
+                                    const target = parseTarget(event.target.value);
+                                    updateRow(id, item => ({ ...item, target, reason: target ? undefined : '请指定学员' }));
+                                    // 手动归班后仍展示被编辑的行。
+                                    if (filter !== allClasses && filter !== target?.classId) setFilter(allClasses);
+                                  }}>
+                                    <option value="">请选择学员</option>
+                                    {eligibleRosters.map(roster => (
+                                      <optgroup key={roster.id} label={rosterLabel(roster)}>
+                                        {Array.from(new Set(roster.students)).map(student => (
+                                          <option key={student} value={targetKey({ classId: roster.id, studentName: student })}>{student}</option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="score-intake-editor-school">就读学校<Input value={draft.school || ''} onChange={event => updateDraft(id, { school: event.target.value })} /></label>
+                                {scoreFields.map(([field, label]) => {
+                                  const isScore = field === 'score';
+                                  const numericRank = field !== 'score' && field !== 'totalScore';
+                                  return (
+                                    <label key={field}>{label}
+                                      <Input type="number" min={numericRank ? 1 : 0} step={numericRank ? 1 : 'any'}
+                                        value={(isScore && draft.problem ? '' : draft[field]) ?? ''}
+                                        onChange={event => {
+                                          const value = event.target.value === '' ? undefined : event.target.valueAsNumber;
+                                          updateDraft(id, {
+                                            [field]: value ?? (numericRank ? undefined : 0),
+                                            ...(isScore ? { problem: value === undefined ? '请填写得分' : undefined } : {}),
+                                          });
+                                        }} />
+                                    </label>
+                                  );
+                                })}
+                                <label>科目<Input value={draft.subject || ''} placeholder={subject || '英语'} onChange={event => updateDraft(id, { subject: event.target.value })} /></label>
+                              </div>
+                              <div className="score-intake-editor-actions">
+                                {row.survey?.rankSource && <span>排名来源 · {row.survey.rankSource}</span>}
+                                <Button variant="ghost" size="sm" onClick={() => setRows(previous => previous?.filter(item => item.id !== id) ?? null)}>
+                                  <Trash2 size={14} aria-hidden="true" />移除此行
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                {!isExcel && <Button variant="outline" size="sm" onClick={() => setDrafts(null)}>返回修改文本</Button>}
-                <Button size="sm" onClick={save} disabled={!canSave}>
-                  写入 {readyRows.length} 条
-                </Button>
-              </div>
-            </div>
+                  </section>
+                );
+              })}
+              {reviewed.length === 0 && <p className="score-intake-empty">没有可预览的成绩行。</p>}
+              {reviewed.length > 0 && reviewOnly && visibleGroups.every(([, group]) => group.every(row => !row.issue)) && <p className="score-intake-empty">当前筛选下没有待核对的成绩。</p>}
+            </section>
           )}
         </div>
+
+        <footer className="score-intake-footer">
+          <p>{rows
+            ? isExcel
+              ? [`写入 ${readyClasses} 个班级`, issueCount ? `待核对 ${issueCount} 条将跳过` : '', existingCount ? `已有 ${existingCount} 条将跳过` : ''].filter(Boolean).join(' · ')
+              : issueCount ? '请修正或移除待核对项' : '确认后写入本班'
+            : '请填写考试名称、日期并预览成绩'}</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+            <Button size="sm" onClick={save} disabled={!canSave}>写入 {ready.length} 条</Button>
+          </div>
+        </footer>
       </DialogContent>
     </Dialog>
   );

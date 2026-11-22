@@ -201,6 +201,7 @@ export interface AppConfig {
 }
 
 export interface SchoolScoreSurvey {
+  batchCode?: string;
   group?: string;
   reportedRate?: string;
   rankSource?: string;
@@ -215,6 +216,8 @@ export interface SchoolScoreSurvey {
 // 校内成绩
 export interface SchoolScore {
   id: string;
+  /** 所属名册；旧成绩没有此字段，沿用原来的姓名索引。 */
+  classId?: string;
   studentName: string;
   studentCode?: string;
   examName: string;

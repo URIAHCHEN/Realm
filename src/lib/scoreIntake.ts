@@ -1,5 +1,5 @@
 // Excel、粘贴表格和 OCR 共用草稿、人工确认和写入流程。
-import type { SchoolScore, SchoolScoreSurvey } from '@/types';
+import type { Class, SchoolScore, SchoolScoreSurvey } from '@/types';
 
 export interface IntakeContext {
   students: string[];
@@ -206,7 +206,8 @@ const columnAliases = {
   gradeLevel: ['等级', '年级档位', '档位', '年级排名等级'],
   enrollmentPercent: ['升学比例', '升学率', '录取率', '录取比例'],
   note: ['备注'],
-  group: ['班', '班号', '来源班组', '班组'],
+  group: ['班', '班号', '来源班组', '班组', '班级'],
+  batchCode: ['班级编号', '班级批次', '批次编号', '教学班编号'],
   reportedRate: ['得分率', '得分率%'],
   rankSource: ['排名来源', '名次来源'],
   classSelection: ['调研表勾选', '调研班级类型'],
@@ -351,7 +352,7 @@ function buildDraftFromCells(
     subject = cell('subject') || undefined;
     const detailColumns = ['studentCode', 'campus', 'grade', 'classType', 'teacherName', 'teacherEmail',
       'fiscalYear', 'quarter', 'improvementType', 'auditResult', 'gradeLevel', 'note'] as const;
-    const surveyColumns = ['group', 'reportedRate', 'rankSource', 'classSelection', 'keyClass',
+    const surveyColumns = ['batchCode', 'group', 'reportedRate', 'rankSource', 'classSelection', 'keyClass',
       'progress', 'weakness', 'targetScore', 'targetRank'] as const;
     const survey: SchoolScoreSurvey = Object.fromEntries(surveyColumns.flatMap(key => cell(key) ? [[key, cell(key)]] : []));
     fields = {
@@ -409,6 +410,45 @@ function exactRosterMatch(input: string, students: string[]): MatchResult {
   const candidates = students.filter(name => normalizeText(name).replace(/\s/g, '') === raw);
   const name = students.includes(input) ? input : candidates.length === 1 ? candidates[0] : '';
   return { name, confidence: name ? 1 : 0, candidates };
+}
+
+export type SchoolScoreRoster = Pick<Class, 'id' | 'name' | 'term' | 'batchCode' | 'students'>;
+export type SchoolScoreTarget = { classId: string; studentName: string };
+
+const rosterKey = (value = '') => normalizeText(value).replace(/\s/g, '').toLowerCase();
+
+export function matchSchoolScoreRosters(drafts: ScoreDraft[], rosters: SchoolScoreRoster[]) {
+  const names = new Map<string, SchoolScoreTarget[]>();
+  const labels = new Map<string, Set<string>>();
+  for (const roster of rosters) {
+    for (const name of new Set(roster.students)) {
+      const key = rosterKey(name);
+      const entries = names.get(key) || [];
+      entries.push({ classId: roster.id, studentName: name });
+      names.set(key, entries);
+    }
+    for (const label of [roster.batchCode, roster.name]) {
+      const key = rosterKey(label);
+      if (!key) continue;
+      const ids = labels.get(key) || new Set<string>();
+      ids.add(roster.id);
+      labels.set(key, ids);
+    }
+  }
+
+  return drafts.map(draft => {
+    const matches = names.get(rosterKey(draft.sourceName)) || [];
+    const survey = draft.fields?.survey;
+    // 短班号可能无法对应系统班名。只有精确命中的班号或班名才作为归班依据。
+    const hintedClasses = [survey?.batchCode, survey?.group, draft.fields?.classType]
+      .map(label => labels.get(rosterKey(label))).filter(ids => ids !== undefined);
+    const candidates = matches.filter(match => hintedClasses.every(ids => ids.has(match.classId)));
+    return {
+      target: candidates.length === 1 ? candidates[0] : undefined,
+      candidates: candidates.length ? candidates : matches,
+      reason: candidates.length > 1 ? '同名待确认' : matches.length && !candidates.length ? '班级信息待确认' : '未匹配学员',
+    };
+  });
 }
 
 function readRankCell(cell: string): { rank?: number; size?: number } {
@@ -508,6 +548,16 @@ export function scoreDedupKey(score: Pick<SchoolScore, 'studentName' | 'examName
 
 export function schoolScoreEntryKey(score: SchoolExam & Pick<SchoolScore, 'studentName'>): string {
   return JSON.stringify([score.studentName, schoolExamKey(score)]);
+}
+
+type SchoolScoreEntry = SchoolExam & Pick<SchoolScore, 'studentName' | 'classId'>;
+
+export function sameSchoolScoreEntry(a: SchoolScoreEntry, b: SchoolScoreEntry): boolean {
+  return schoolScoreEntryKey(a) === schoolScoreEntryKey(b) && (!a.classId || !b.classId || a.classId === b.classId);
+}
+
+export function schoolScoreInClass(score: SchoolScore, classId: string): boolean {
+  return !score.classId || score.classId === classId;
 }
 
 export type SchoolRankScope = 'class' | 'grade';

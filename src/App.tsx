@@ -139,6 +139,7 @@ function App() {
 } = useClassData();
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [schoolImportResult, setSchoolImportResult] = useState<Record<string, number> | null>(null);
   const [activeTab, setActiveTab] = useState('records');
   const [essayClassIds, setEssayClassIds] = useState<(string | null)[]>([]);
   useEffect(() => {
@@ -352,6 +353,7 @@ function App() {
   // 登出处理：清除 Supabase 会话
   const handleLogout = () => {
     signOut();
+    setSchoolImportResult(null);
     setIsAuthenticated(false);
     setMembership({ member: false, admin: false });
     toast.success('已登出');
@@ -1292,7 +1294,14 @@ function App() {
                 <SchoolScorePanel
                   key={currentClassId}
                   students={currentClass?.students || []}
-                  scores={currentClass ? currentClass.students.flatMap(s => schoolScores[s] || []) : []}
+                  scores={currentClass ? currentClass.students.flatMap(name => getStudentSchoolScores(name, currentClass.id)) : []}
+                  currentClassId={currentClass?.id}
+                  rosters={Object.values(classes)}
+                  schoolScores={schoolScores}
+                  getRosterNickname={getStudentNickname}
+                  importResult={schoolImportResult}
+                  onImportResult={setSchoolImportResult}
+                  onSelectClass={setCurrentClassId}
                   onAddScore={addSchoolScore}
                   onAddScores={addSchoolScores}
                   nicknames={nicknames[currentClassId || ''] || {}}
@@ -1320,7 +1329,7 @@ function App() {
                 qtCategoryOverrides={effectiveQtCategories}
                 students={currentClass?.students || []}
                 records={currentClass?.records || []}
-                schoolScores={schoolScores}
+                schoolScores={currentClass ? Object.fromEntries(currentClass.students.map(name => [name, getStudentSchoolScores(name, currentClass.id)])) : {}}
                 lessonConfigs={currentClass?.lessonConfigs || {}}
                 getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                 currentClassName={currentClass?.name || ''}

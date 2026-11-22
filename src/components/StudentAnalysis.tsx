@@ -1,4 +1,4 @@
-import { schoolRankLabel } from '@/lib/scoreIntake';
+import { schoolRankLabel, schoolScoreInClass } from '@/lib/scoreIntake';
 // 学员学情分析弹窗 —— 现代化管理后台风格：KPI 总览 + 多维图表 + 课次时间线 + 校内成绩
 import { useState, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -364,8 +364,9 @@ export function StudentAnalysis({
   }, [records, currentClassData, classRecords, getLessonConfig]);
 
   // 校内成绩
+  const analysisClassId = currentClassData?.classId ?? initialClassId;
   const schoolData = useMemo(() =>
-    [...schoolScores]
+    schoolScores.filter(score => schoolScoreInClass(score, analysisClassId))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .map(s => ({
         name: s.date.slice(5),
@@ -376,7 +377,7 @@ export function StudentAnalysis({
         classRank: schoolRankLabel(s, 'class'),
         gradeRank: schoolRankLabel(s, 'grade'),
       })),
-    [schoolScores]
+    [schoolScores, analysisClassId]
   );
 
   if (records.length === 0) {

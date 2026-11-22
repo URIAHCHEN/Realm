@@ -1,4 +1,4 @@
-import { schoolExamKey, schoolRank, schoolRankChange, schoolScoreDate, schoolScoreIssue, schoolScoreSubject, type SchoolRankScope } from '@/lib/scoreIntake';
+import { schoolExamKey, schoolRank, schoolRankChange, schoolScoreDate, schoolScoreIssue, schoolScoreSubject, type SchoolRankScope, type SchoolScoreRoster } from '@/lib/scoreIntake';
 import { useState, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,17 +12,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceDot, ReferenceLine } from 'recharts';
 import { TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE, LEGEND_STYLE_SM, CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES } from '@/lib/chartTheme';
+import { LearningWorkspaceHeader } from '@/components/LearningWorkspaceHeader';
 import { ScoreIntakeDialog } from '@/components/ScoreIntakeDialog';
 import {
-  Plus, Trash2, TrendingUp, Award, Upload, FileSpreadsheet,
-  ClipboardList, Users, Target, CalendarDays, ArrowRight,
-  BarChart3, ChevronUp, Image as ImageIcon, Sparkles, LineChart as LineChartIcon
+  Plus, Trash2, TrendingUp, Upload, FileSpreadsheet,
+  ClipboardList, Users, Target, ArrowRight,
+  BarChart3, Check, ChevronUp, Image as ImageIcon, Sparkles, LineChart as LineChartIcon, X
 } from 'lucide-react';
 import type { SchoolScore } from '@/types';
+import './SchoolScorePanel.css';
 
 interface SchoolScorePanelProps {
   students: string[];
   scores: SchoolScore[];
+  currentClassId?: string;
+  rosters: SchoolScoreRoster[];
+  schoolScores: Record<string, SchoolScore[]>;
+  getRosterNickname: (name: string, classId?: string) => string;
+  importResult: Record<string, number> | null;
+  onImportResult: (result: Record<string, number> | null) => void;
+  onSelectClass: (classId: string) => void;
   onAddScore: (score: Omit<SchoolScore, 'id'>) => void;
   /** 批量写入（智能录入一次落整批，避免逐条触发推送） */
   onAddScores?: (rows: Omit<SchoolScore, 'id'>[]) => void;
@@ -36,22 +45,6 @@ function scoreRate(score?: SchoolScore): number | undefined {
   if (!score || schoolScoreIssue({ score: score.score, totalScore: score.totalScore })) return;
   return score.score / score.totalScore * 100;
 }
-
-const rateTone = (r: number): string => {
-  if (r >= 90) return 'bg-emerald-100 text-emerald-700';
-  if (r >= 80) return 'bg-green-100 text-green-700';
-  if (r >= 70) return 'bg-amber-100 text-amber-700';
-  if (r >= 60) return 'bg-orange-100 text-orange-700';
-  return 'bg-rose-100 text-rose-700';
-};
-
-const rankTone = (rank?: number): { icon?: string; className: string } => {
-  if (!rank) return { className: 'text-[color:var(--ink-4)]' };
-  if (rank === 1) return { icon: '🥇', className: 'font-semibold text-amber-600' };
-  if (rank === 2) return { icon: '🥈', className: 'font-semibold text-[color:var(--ink-4)]' };
-  if (rank === 3) return { icon: '🥉', className: 'font-semibold text-orange-600' };
-  return { className: 'text-[color:var(--ink-2)]' };
-};
 
 function ScoreRankChange({ a, b, scope }: { a?: SchoolScore; b?: SchoolScore; scope: SchoolRankScope }) {
   const { from, to, delta, scopeChanged } = schoolRankChange(a, b, scope);
@@ -75,7 +68,7 @@ function ScoreRankChange({ a, b, scope }: { a?: SchoolScore; b?: SchoolScore; sc
 function ScoreSourceDetails({ score }: { score: SchoolScore }) {
   const survey = score.survey;
   const fields = [
-    ['就读学校', score.school], ['来源班组', survey?.group], ['年级', score.grade], ['班型', score.classType],
+    ['就读学校', score.school], ['源班级编号', survey?.batchCode], ['来源班组', survey?.group], ['年级', score.grade], ['班型', score.classType],
     ['原表得分率', survey?.reportedRate], ['排名来源', survey?.rankSource], ['调研表勾选', survey?.classSelection],
     ['是否重点班', survey?.keyClass], ['在读进步点', survey?.progress], ['在读弱项', survey?.weakness],
     ['期末得分目标', survey?.targetScore], ['期末排名目标', survey?.targetRank], ['备注', score.note],
@@ -98,6 +91,13 @@ function ScoreSourceDetails({ score }: { score: SchoolScore }) {
 export function SchoolScorePanel({
   students,
   scores,
+  currentClassId,
+  rosters,
+  schoolScores,
+  getRosterNickname,
+  importResult,
+  onImportResult,
+  onSelectClass,
   onAddScore,
   onAddScores,
   nicknames,
@@ -137,7 +137,7 @@ export function SchoolScorePanel({
       return;
     }
 
-    onAddScore({ ...newScore, examName: newScore.examName.trim() } as Omit<SchoolScore, 'id'>);
+    onAddScore({ ...newScore, classId: currentClassId, examName: newScore.examName.trim() } as Omit<SchoolScore, 'id'>);
     toast.success(`已添加 ${getNickname(newScore.studentName)} 的「${newScore.examName}」成绩`);
     setIsDialogOpen(false);
     setNewScore({
@@ -222,6 +222,7 @@ export function SchoolScorePanel({
   const progressStars = useMemo(() => {
     const studentScores = new Map<string, SchoolScore[]>();
     groupedScores.forEach(list => list.forEach(score => {
+      if (scoreRate(score) === undefined) return;
       const key = JSON.stringify([score.studentName, schoolScoreSubject(score)]);
       const group = studentScores.get(key);
       if (group) {
@@ -312,28 +313,21 @@ export function SchoolScorePanel({
   ];
 
   return (
-    <div className="space-y-6">
-      {/* 头部 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
-            <TrendingUp className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <p className="font-semibold text-[color:var(--ink)]">校内成绩管理</p>
-            <p className="text-xs text-[color:var(--ink-4)]">按考试归组追踪班级校内成绩、得分率与排名变化</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="school-score-panel">
+      <LearningWorkspaceHeader
+        title="校内成绩"
+        description="查看本班校内考试的得分和排名变化"
+        icon={TrendingUp}
+      >
+        <div className="school-score-actions">
           <Button
-            variant="outline" aria-label="导入 Excel" title="导入 Excel"
-            disabled={!students.length || !onAddScores}
+            aria-label="导入 Excel" title="批量导入到所有班级"
+            disabled={!rosters.some(roster => roster.students.length) || !onAddScores}
             onClick={() => setIntakeMode('excel')}
             className="rounded-[var(--r-md)] gap-2"
           >
             <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">导入Excel</span>
+            <span>导入 Excel</span>
           </Button>
           <Button
             variant="outline" aria-label="智能录入" title="粘贴文本或识别图片，批量录入成绩"
@@ -359,7 +353,7 @@ export function SchoolScorePanel({
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="ios-button gap-2" aria-label="添加成绩" title="添加成绩">
+              <Button variant="outline" className="rounded-[var(--r-md)] gap-2" aria-label="添加成绩" title="添加成绩">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">添加成绩</span>
               </Button>
@@ -494,27 +488,35 @@ export function SchoolScorePanel({
             </DialogContent>
           </Dialog>
         </div>
-      </div>
+      </LearningWorkspaceHeader>
 
-      {/* KPI 瓷贴 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(k => {
-          const Icon = k.icon;
-          return (
-            <Card key={k.label} className="ios-glass-card border-0">
-              <CardContent className="pt-4 pb-3.5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[rgb(var(--brand-rgb)/0.1)]">
-                  <Icon className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-[color:var(--ink)] leading-tight">{k.value}</p>
-                  <p className="text-xs text-[color:var(--ink-4)]">{k.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {importResult && (
+        <section className="school-score-import-result ios-glass-card" aria-label="本次导入结果">
+          <div className="school-score-result-heading">
+            <span className="school-score-icon"><Check size={18} aria-hidden="true" /></span>
+            <h3>已写入 {Object.values(importResult).reduce((total, count) => total + count, 0)} 条成绩
+              <small> · {Object.keys(importResult).length} 个班级</small>
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => onImportResult(null)} aria-label="关闭导入结果"><X size={16} /></Button>
+          </div>
+          <div className="school-score-result-classes">
+            {rosters.filter(roster => importResult[roster.id]).map(roster => (
+              <button type="button" key={roster.id} aria-pressed={roster.id === currentClassId} onClick={() => onSelectClass(roster.id)}>
+                <span>{roster.name}</span><small>{importResult[roster.id]} 条</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <dl className="school-score-metrics ios-glass-card" aria-label="本班校内成绩概览">
+        {kpis.map(({ icon: Icon, label, value }) => (
+          <div key={label}>
+            <span className="school-score-icon"><Icon size={18} aria-hidden="true" /></span>
+            <div><dt>{label}</dt><dd>{value}</dd></div>
+          </div>
+        ))}
+      </dl>
 
       {/* 视图切换 */}
       {examEntries.length > 0 && (
@@ -536,33 +538,21 @@ export function SchoolScorePanel({
 
           <TabsContent value="list" className="space-y-4">
             {examEntries.map(({ examId, examName, date, subject, list, avgRate }) => (
-              <Card key={examId} className="ios-glass-card border-0 overflow-hidden">
-                <div className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2"
-                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.75))' }}>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-white">
-                    <Award className="w-5 h-5" />
-                    <span className="font-semibold">{examName}</span>
-                    {date && (
-                      <Badge className="bg-white/20 text-white border-0 rounded-full gap-1">
-                        <CalendarDays className="w-3 h-3" />
-                        {date}
-                      </Badge>
-                    )}
-                    <span className="text-xs text-white/90">{subject}</span>
+              <Card key={examId} className="ios-glass-card school-score-card">
+                <header className="school-score-exam-header">
+                  <span className="school-score-icon"><FileSpreadsheet size={18} aria-hidden="true" /></span>
+                  <div>
+                    <h3>{examName}</h3>
+                    <p>{[date, subject, `${list.length} 名学员`].filter(Boolean).join(' · ')}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-white/90 text-xs">
-                    <span>{list.length} 名学生</span>
-                    <span className="w-px h-3.5 bg-white/30" />
-                    <span>班均得分率 <span className="font-bold text-white">{avgRate}%</span></span>
-                  </div>
-                </div>
-                <CardContent className="pt-2">
-                  <Table>
-                    <TableHeader>
+                  <p className="school-score-exam-average">班均得分率 <strong>{avgRate}%</strong></p>
+                </header>
+                <CardContent className="school-score-card-content">
+                  <Table role="table" className="school-score-table school-score-list-table">
+                  <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead>姓名</TableHead>
                         <TableHead>得分</TableHead>
-                        <TableHead>总分</TableHead>
                         <TableHead>得分率</TableHead>
                         <TableHead>班排</TableHead>
                         <TableHead>级排</TableHead>
@@ -572,55 +562,36 @@ export function SchoolScorePanel({
                     </TableHeader>
                     <TableBody>
                       {list.map(score => {
-                        const correctRate = score.totalScore > 0
-                          ? Math.round((score.score / score.totalScore) * 100 * 10) / 10
-                          : 0;
-                        const ct = rankTone(score.classRank);
-                        const gt = rankTone(score.gradeRank);
+                        const rate = scoreRate(score);
+                        const displayRate = rate === undefined ? '待核对' : `${Math.round(rate * 10) / 10}%`;
                         const classRanking = schoolRank(score, 'class');
                         const gradeRanking = schoolRank(score, 'grade');
                         return (
-                          <TableRow key={score.id} className="hover:bg-black/[0.03]">
-                            <TableCell>
-                              <span className="flex items-center gap-2">
-                                <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-                                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.7))' }}>
-                                  {getNickname(score.studentName).slice(0, 1)}
-                                </span>
-                                <span className="font-medium text-[color:var(--ink)]">{getNickname(score.studentName)}</span>
-                              </span>
+                          <TableRow key={score.id} role="row">
+                            <TableCell role="cell" className="school-score-person">
+                              <strong>{getNickname(score.studentName)}</strong>
+                              {score.school && <small>{score.school}</small>}
                             </TableCell>
-                            <TableCell>
-                              <span className="font-bold text-[color:var(--ink)]">{score.score}</span>
-                              <span className="text-[color:var(--ink-4)] text-xs"> 分</span>
+                            <TableCell role="cell" data-label="得分">
+                              <strong className="school-score-number">{score.score}</strong>
+                              <span className="school-score-secondary"> / {score.totalScore}</span>
                             </TableCell>
-                            <TableCell className="text-[color:var(--ink-4)]">{score.totalScore}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Badge className={`${rateTone(correctRate)} border-0 rounded-full font-semibold`}>
-                                  {correctRate}%
-                                </Badge>
-                                <div className="w-16 h-1.5 rounded-full bg-black/[0.05] overflow-hidden hidden md:block">
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{
-                                      width: `${Math.min(100, correctRate)}%`,
-                                      background: correctRate >= 80 ? '#10b981' : correctRate >= 60 ? '#f59e0b' : '#f43f5e'
-                                    }}
-                                  />
-                                </div>
+                            <TableCell role="cell" data-label="得分率">
+                              <div className="school-score-rate">
+                                <strong className="school-score-number">{displayRate}</strong>
+                                {rate !== undefined && <span aria-hidden="true"><i style={{ width: `${rate}%` }} /></span>}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <span className={ct.className}>{ct.icon && <span className="mr-0.5">{ct.icon}</span>}{classRanking?.label || '—'}</span>
-                              {classRanking?.method && <small className="block text-[color:var(--ink-4)]">{classRanking.method}</small>}
+                            <TableCell role="cell" data-label="班排">
+                              <strong className="school-score-number">{classRanking?.label || '—'}</strong>
+                              {classRanking?.method && <small className="school-score-secondary">{classRanking.method}</small>}
                             </TableCell>
-                            <TableCell>
-                              <span className={gt.className}>{gt.icon && <span className="mr-0.5">{gt.icon}</span>}{gradeRanking?.label || '—'}</span>
-                              {gradeRanking?.method && <small className="block text-[color:var(--ink-4)]">{gradeRanking.method}</small>}
+                            <TableCell role="cell" data-label="级排">
+                              <strong className="school-score-number">{gradeRanking?.label || '—'}</strong>
+                              {gradeRanking?.method && <small className="school-score-secondary">{gradeRanking.method}</small>}
                             </TableCell>
-                            <TableCell><ScoreSourceDetails score={score} /></TableCell>
-                            <TableCell className="text-right">
+                            <TableCell role="cell"><ScoreSourceDetails score={score} /></TableCell>
+                            <TableCell role="cell" className="school-score-delete">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -644,33 +615,24 @@ export function SchoolScorePanel({
           </TabsContent>
 
           <TabsContent value="progress">
-            <Card className="ios-glass-card border-0">
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center gap-2 mb-4">
+            <Card className="ios-glass-card school-score-card">
+              <CardContent className="school-score-section-content">
+                <div className="school-score-section-heading">
                   <TrendingUp className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                   <h3 className="font-semibold text-[color:var(--ink)]">进步之星</h3>
                   <span className="text-xs text-[color:var(--ink-4)]">按同一学员、同一科目的得分率提升幅度排序</span>
                 </div>
                 {progressStars.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="school-score-progress-list">
                     {progressStars.map((s, i) => (
-                      <div key={s.key} className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-white/60 border border-black/[0.06]">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
-                          style={{
-                            background: i === 0 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' :
-                              i === 1 ? 'linear-gradient(135deg, #e5e7eb, #9ca3af)' :
-                                i === 2 ? 'linear-gradient(135deg, #fdba74, #ea580c)' :
-                                  'linear-gradient(135deg, #f1f5f9, #cbd5e1)',
-                            color: i < 3 ? 'white' : '#64748b'
-                          }}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                        </div>
+                      <div key={s.key} className="school-score-progress-row">
+                        <span className="school-score-position">{i + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-[color:var(--ink)]">{s.nickname}</span>
                             <span className="text-xs text-[color:var(--ink-4)]">{s.subject} · 共{s.examCount}次考试</span>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-[color:var(--ink-4)]">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ink-4)]">
                             <span>{s.firstExam} {s.firstScore}分</span>
                             <ArrowRight className="w-3 h-3" />
                             <span>{s.lastExam} {s.lastScore}分</span>
@@ -679,7 +641,7 @@ export function SchoolScorePanel({
                         <div className="text-right">
                           <div className="flex items-center gap-1 text-emerald-600 font-bold">
                             <ChevronUp className="w-4 h-4" />
-                            +{s.rateImprovement.toFixed(1)}%
+                            +{s.rateImprovement.toFixed(1)} 个百分点
                           </div>
                           <div className="text-xs text-[color:var(--ink-4)]">
                             {[s.scoreImprovement !== undefined ? `${s.scoreImprovement >= 0 ? '+' : ''}${s.scoreImprovement}分` : '',
@@ -701,14 +663,14 @@ export function SchoolScorePanel({
           </TabsContent>
 
           <TabsContent value="compare">
-            <Card className="ios-glass-card border-0">
-              <CardContent className="pt-5 pb-4">
-                <div className="flex flex-wrap items-center gap-4 mb-4">
+            <Card className="ios-glass-card school-score-card">
+              <CardContent className="school-score-section-content">
+                <div className="school-score-section-heading">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5" style={{ color: 'var(--brand)' }} />
                     <h3 className="font-semibold text-[color:var(--ink)]">阶段对比</h3>
                   </div>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <div className="school-score-compare-controls">
                     <Select value={firstExam?.examId ?? ''} onValueChange={setCompareExamA}>
                       <SelectTrigger className="w-full min-w-0 rounded-xl sm:w-60" aria-label="对比基准考试">
                         <SelectValue placeholder="同科目没有其他考试" />
@@ -732,14 +694,14 @@ export function SchoolScorePanel({
                   </div>
                 </div>
 
-                <p className="mb-3 text-xs text-[color:var(--ink-4)]">同科目跨期对比。满分不同时看得分率百分点，排名并列展示名次和人数。<span className="sm:hidden"> 横向滑动可查看排名。</span></p>
+                <p className="mb-3 text-xs text-[color:var(--ink-4)]">同科目跨期对比。满分不同时看得分率百分点，排名并列展示名次和人数。</p>
                 {compareData.length > 0 ? (
-                  <Table>
+                  <Table role="table" className="school-score-table school-score-compare-table">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead>姓名</TableHead>
-                        <TableHead>{firstExam?.label}</TableHead>
-                        <TableHead>{lastExam?.label}</TableHead>
+                        <TableHead>基准成绩</TableHead>
+                        <TableHead>目标成绩</TableHead>
                         <TableHead>分数变化</TableHead>
                         <TableHead>得分率变化</TableHead>
                         <TableHead>班排变化</TableHead>
@@ -748,12 +710,12 @@ export function SchoolScorePanel({
                     </TableHeader>
                     <TableBody>
                       {compareData.map(item => (
-                        <TableRow key={item.name} className="hover:bg-black/[0.03]">
-                          <TableCell className="whitespace-nowrap font-medium text-[color:var(--ink)]">
+                        <TableRow key={item.name} role="row">
+                          <TableCell role="cell" className="school-score-person">
                             {item.nickname}
                             {item.hasMultiple && <small className="block text-amber-700">有多条成绩待核对</small>}
                           </TableCell>
-                          <TableCell>
+                          <TableCell role="cell" data-label="基准成绩">
                             {item.a ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.a.score}/{item.a.totalScore} 分</span>
@@ -763,7 +725,7 @@ export function SchoolScorePanel({
                               <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
-                          <TableCell>
+                          <TableCell role="cell" data-label="目标成绩">
                             {item.b ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.b.score}/{item.b.totalScore} 分</span>
@@ -773,7 +735,7 @@ export function SchoolScorePanel({
                               <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
-                          <TableCell>
+                          <TableCell role="cell" data-label="分数变化">
                             {item.scoreDiff !== undefined ? (
                               <span className={`font-semibold ${item.scoreDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {item.scoreDiff >= 0 ? '+' : ''}{item.scoreDiff}分
@@ -782,7 +744,7 @@ export function SchoolScorePanel({
                               <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
-                          <TableCell>
+                          <TableCell role="cell" data-label="得分率变化">
                             {item.rateDiff !== undefined ? (
                               <span className={`font-semibold ${item.rateDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {item.rateDiff >= 0 ? '+' : ''}{item.rateDiff.toFixed(1)} 个百分点
@@ -791,8 +753,8 @@ export function SchoolScorePanel({
                               <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
-                          <TableCell><ScoreRankChange a={item.a} b={item.b} scope="class" /></TableCell>
-                          <TableCell><ScoreRankChange a={item.a} b={item.b} scope="grade" /></TableCell>
+                          <TableCell role="cell" data-label="班排变化"><ScoreRankChange a={item.a} b={item.b} scope="class" /></TableCell>
+                          <TableCell role="cell" data-label="级排变化"><ScoreRankChange a={item.a} b={item.b} scope="grade" /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -817,8 +779,7 @@ export function SchoolScorePanel({
               <span className="empty-ico"><FileSpreadsheet className="w-6 h-6" /></span>
               <div className="empty-t">暂无校内成绩记录</div>
               <div className="empty-d">
-                导入 Excel 或粘贴表格，确认考试名称、日期和本班成绩后写入。
-                也可点右上角「添加成绩」手工录入。
+                上传 Excel 可匹配所有班级。也可粘贴本班成绩或手工添加。
               </div>
             </div>
           </CardContent>
@@ -865,10 +826,21 @@ export function SchoolScorePanel({
           open={intakeMode === mode}
           onOpenChange={open => setIntakeMode(open ? mode : null)}
           students={students}
+          currentClassId={currentClassId}
+          rosters={rosters}
           nicknames={nicknames}
-          existingScores={scores}
-          onSave={onAddScores}
-          getNickname={getNickname}
+          schoolScores={schoolScores}
+          onSave={rows => {
+            onAddScores(rows);
+            if (mode !== 'excel') return;
+            const counts: Record<string, number> = {};
+            for (const { classId } of rows) {
+              if (classId) counts[classId] = (counts[classId] || 0) + 1;
+            }
+            setActiveView('list');
+            onImportResult(counts);
+          }}
+          getNickname={getRosterNickname}
         />
       ))}
     </div>

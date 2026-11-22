@@ -9,7 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
-import { draftToSchoolScore, matchStudentName, parseIntake, parseRank, parseScorePair, schoolExamKey, schoolRankChange, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
+import { draftToSchoolScore, matchSchoolScoreRosters, matchStudentName, parseIntake, parseRank, parseScorePair, sameSchoolScoreEntry, schoolExamKey, schoolRankChange, schoolScoreInClass, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
 import { blankEssayReview, defaultEssayRubric, essayTotals, essayWordCount, parseEssayReview } from '@/lib/essayReview';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
@@ -1145,6 +1145,27 @@ group('校内成绩智能录入 · 解析与学员匹配（2026-11-15）');
   check(surveyScore.school === '示例中学' && surveyScore.grade === '初一' && surveyScore.survey?.reportedRate === '84.6' &&
     surveyScore.survey?.classSelection === '重点' && surveyScore.survey?.targetRank === '前五',
     '调研字段随草稿写入校内成绩');
+  const rosterDraft = surveyRows.drafts[0];
+  const rosters = [
+    { id: 'a', name: '甲班', batchCode: 'L1', students: ['陈志佳'] },
+    { id: 'b', name: '乙班', batchCode: 'L2', students: ['陈志佳', '示例乙'] },
+  ];
+  const matched = matchSchoolScoreRosters([
+    rosterDraft,
+    { ...rosterDraft, fields: undefined },
+    { ...rosterDraft, sourceName: '示例乙', fields: undefined },
+    { ...rosterDraft, sourceName: '外部名单', fields: undefined },
+  ], rosters);
+  check(matched[0].target?.classId === 'a' && matched[1].target === undefined && matched[1].candidates.length === 2,
+    '跨班同名按已知班号归班，线索缺失时留待确认');
+  check(matched[2].target?.classId === 'b' && !matched[3].target, '跨班名单精确匹配，未匹配行不写入');
+  const classA = { ...surveyScore, classId: 'a' };
+  const classB = { ...surveyScore, classId: 'b' };
+  check(!sameSchoolScoreEntry(classA, classB) && sameSchoolScoreEntry(classA, surveyScore),
+    '同名学员按目标班级去重，旧成绩仍参与查重');
+  check(!schoolScoreInClass(classA, 'b') && schoolScoreInClass(surveyScore, 'b'),
+    '已归班记录隔离，未归班的历史记录保留原可见性');
+
   const next = { ...surveyScore, classRank: 3, gradeRank: 8 };
   check(schoolRankChange(surveyScore, next, 'class').delta === 2 && schoolRankChange(surveyScore, next, 'grade').delta === 3,
     '部分问卷的班排、级排按各自排名口径比较');

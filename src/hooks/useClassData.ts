@@ -1,4 +1,4 @@
-import { schoolScoreEntryKey } from '@/lib/scoreIntake';
+import { sameSchoolScoreEntry, schoolScoreInClass } from '@/lib/scoreIntake';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   Class,
@@ -1529,8 +1529,9 @@ export function useClassData() {
   }, [classes]);
 
   // 获取学生的校内成绩
-  const getStudentSchoolScores = useCallback((studentName: string): SchoolScore[] => {
-    return schoolScores[studentName] || [];
+  const getStudentSchoolScores = useCallback((studentName: string, classId?: string): SchoolScore[] => {
+    const scores = schoolScores[studentName] || [];
+    return classId ? scores.filter(score => schoolScoreInClass(score, classId)) : scores;
   }, [schoolScores]);
 
   // 添加校内成绩
@@ -1548,12 +1549,9 @@ export function useClassData() {
     const rows = list.map(score => ({ ...score, id: generateId() }) as SchoolScore);
     setSchoolScores(prev => {
       const next = { ...prev };
-      const seen = new Set<string>();
       for (const row of rows) {
-        const key = schoolScoreEntryKey(row);
         const current = next[row.studentName] || [];
-        if (seen.has(key) || current.some(existing => schoolScoreEntryKey(existing) === key)) continue;
-        seen.add(key);
+        if (current.some(existing => sameSchoolScoreEntry(existing, row))) continue;
         next[row.studentName] = [...current, row];
       }
       return next;

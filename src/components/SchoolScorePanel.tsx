@@ -32,6 +32,11 @@ interface SchoolScorePanelProps {
   getNickname: (name: string) => string;
 }
 
+function scoreRate(score?: SchoolScore): number | undefined {
+  if (!score || schoolScoreIssue({ score: score.score, totalScore: score.totalScore })) return;
+  return score.score / score.totalScore * 100;
+}
+
 const rateTone = (r: number): string => {
   if (r >= 90) return 'bg-emerald-100 text-emerald-700';
   if (r >= 80) return 'bg-green-100 text-green-700';
@@ -274,10 +279,11 @@ export function SchoolScorePanel({
     return Array.from(allStudents).map(name => {
       const a = aMap.get(name) ?? undefined;
       const b = bMap.get(name) ?? undefined;
-      const aRate = a && a.totalScore > 0 ? (a.score / a.totalScore) * 100 : 0;
-      const bRate = b && b.totalScore > 0 ? (b.score / b.totalScore) * 100 : 0;
-      const scoreDiff = a && b && a.totalScore === b.totalScore ? Math.round((b.score - a.score) * 100) / 100 : undefined;
-      const rateDiff = a && b ? Math.round((bRate - aRate) * 10) / 10 : undefined;
+      const aRate = scoreRate(a);
+      const bRate = scoreRate(b);
+      const rateDiff = aRate !== undefined && bRate !== undefined ? Math.round((bRate - aRate) * 10) / 10 : undefined;
+      const scoreDiff = rateDiff !== undefined && a && b && a.totalScore === b.totalScore
+        ? Math.round((b.score - a.score) * 100) / 100 : undefined;
 
       return {
         name,
@@ -751,7 +757,7 @@ export function SchoolScorePanel({
                             {item.a ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.a.score}/{item.a.totalScore} 分</span>
-                                <span className="text-xs text-[color:var(--ink-4)]">{item.aRate.toFixed(1)}%</span>
+                                <span className="text-xs text-[color:var(--ink-4)]">{item.aRate === undefined ? '得分待核对' : `${item.aRate.toFixed(1)}%`}</span>
                               </div>
                             ) : (
                               <span className="text-[color:var(--ink-4)]">-</span>
@@ -761,7 +767,7 @@ export function SchoolScorePanel({
                             {item.b ? (
                               <div className="flex flex-col">
                                 <span className="font-semibold">{item.b.score}/{item.b.totalScore} 分</span>
-                                <span className="text-xs text-[color:var(--ink-4)]">{item.bRate.toFixed(1)}%</span>
+                                <span className="text-xs text-[color:var(--ink-4)]">{item.bRate === undefined ? '得分待核对' : `${item.bRate.toFixed(1)}%`}</span>
                               </div>
                             ) : (
                               <span className="text-[color:var(--ink-4)]">-</span>

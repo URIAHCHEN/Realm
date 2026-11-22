@@ -1,15 +1,10 @@
 .school-score-panel {
-  --score-line: rgb(var(--brand-rgb) / .15);
-  --score-soft: rgb(var(--brand-rgb) / .045);
-  --score-blue: color-mix(in srgb, var(--brand) 72%, var(--ink));
+  --score-line: var(--realm-panel-line);
+  --score-soft: var(--realm-panel-soft);
+  --score-blue: var(--realm-accent);
   display: grid;
   gap: clamp(13px, 1.6vw, 22px);
   min-width: 0;
-}
-.dark .school-score-panel {
-  --score-line: rgb(150 185 226 / .19);
-  --score-soft: rgb(var(--brand-rgb) / .09);
-  --score-blue: #a9d2ff;
 }
 .school-score-panel > .learning-workspace-header { flex-wrap: wrap; }
 .school-score-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
@@ -35,7 +30,7 @@
 }
 .school-score-metrics dt, .school-score-secondary { color: var(--ink-4); font-size: var(--text-xs); }
 .school-score-metrics dd, .school-score-number, .school-score-exam-average strong {
-  font-family: 'Outfit', system-ui, sans-serif;
+  font-family: var(--realm-number-font);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: var(--ink);

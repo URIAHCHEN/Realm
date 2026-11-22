@@ -226,49 +226,51 @@ export function PetGarden({
         </div>
       </LearningWorkspaceHeader>
 
-      {enabled && (
-        <dl className="pet-metrics learning-surface" aria-label="班级成长概览">
-          <div>
-            <span className="pet-metric-icon" data-tone="blue"><Users size={19} aria-hidden="true" /></span>
-            <div><dt>已领养学员</dt><dd>{adoptedCount}<small> / {rows.length}</small></dd></div>
-          </div>
-          <div>
-            <span className="pet-metric-icon" data-tone="green"><TrendingUp size={19} aria-hidden="true" /></span>
-            <div><dt>已进阶伙伴</dt><dd>{ranking.filter(row => stageOf(row.pet!.level) > 0).length}<small> 只</small></dd></div>
-          </div>
-          <div>
-            <span className="pet-metric-icon" data-tone="violet"><CalendarCheck size={19} aria-hidden="true" /></span>
-            <div><dt>最近结算课次</dt><dd>{classData.lastAutoLesson ? <>第 {classData.lastAutoLesson}<small> 课</small></> : '—'}</dd></div>
-          </div>
-        </dl>
-      )}
-
-      <div className="pet-operations learning-surface">
+      <div className="pet-board-controls learning-surface">
         {enabled && (
-          <nav className="pet-navigation workspace-segments" aria-label="萌宠视图">
-            {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
-              <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}>
-                <item.icon size={17} aria-hidden="true" />{item.label}
-              </button>
-            ))}
-          </nav>
+          <dl className="pet-metrics" aria-label="班级成长概览">
+            <div>
+              <span className="pet-metric-icon"><Users size={19} aria-hidden="true" /></span>
+              <div><dt>已领养学员</dt><dd>{adoptedCount}<small> / {rows.length}</small></dd></div>
+            </div>
+            <div>
+              <span className="pet-metric-icon"><TrendingUp size={19} aria-hidden="true" /></span>
+              <div><dt>已进阶伙伴</dt><dd>{ranking.filter(row => stageOf(row.pet!.level) > 0).length}<small> 只</small></dd></div>
+            </div>
+            <div>
+              <span className="pet-metric-icon"><CalendarCheck size={19} aria-hidden="true" /></span>
+              <div><dt>最近结算课次</dt><dd>{classData.lastAutoLesson ? <>第 {classData.lastAutoLesson}<small> 课</small></> : '—'}</dd></div>
+            </div>
+          </dl>
         )}
-        <div className="pet-settings">
-          <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 size={16} />计分设置</Button>
-          <label className="pet-scope">
-            本班启用
-            <Switch
-              checked={enabled}
-              onCheckedChange={checked => onSettings({ enabled: checked, classScope: checked ? [cls.id] : [] })}
-              aria-label="为本班启用伴学萌宠"
-            />
-          </label>
+
+        <div className="pet-operations">
+          {enabled && (
+            <nav className="pet-navigation workspace-segments" aria-label="萌宠视图">
+              {([{ id: 'garden', label: '我的园地', icon: Leaf }, { id: 'shop', label: '装扮小铺', icon: ShoppingBag }, { id: 'adventure', label: '班级冒险', icon: Compass }] as const).map(item => (
+                <button key={item.id} type="button" aria-pressed={view === item.id} onClick={() => setView(item.id)}>
+                  <item.icon size={17} aria-hidden="true" />{item.label}
+                </button>
+              ))}
+            </nav>
+          )}
+          <div className="pet-settings">
+            <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 size={16} />计分设置</Button>
+            <label className="pet-scope">
+              本班启用
+              <Switch
+                checked={enabled}
+                onCheckedChange={checked => onSettings({ enabled: checked, classScope: checked ? [cls.id] : [] })}
+                aria-label="为本班启用伴学萌宠"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
       {!enabled ? (
         <Card className="learning-surface pet-panel pet-empty pet-disabled">
-          <span className="pet-metric-icon" data-tone="blue"><PawPrint size={22} aria-hidden="true" /></span>
+          <span className="pet-metric-icon"><PawPrint size={22} aria-hidden="true" /></span>
           <div>
             <h3>这个班还没开启伴学萌宠</h3>
             <p>开启前可在计分设置中确认历史记录的结算范围。</p>
@@ -347,7 +349,7 @@ export function PetGarden({
                   </div>
                 )}
 
-                <div className="pet-quick-scores mt-auto flex flex-wrap gap-1.5">
+                <div className="pet-quick-scores mt-auto">
                   {pet ? (
                     QUICK_SCORES.map(item => (
                       <Button

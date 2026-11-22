@@ -5,9 +5,9 @@
   --workspace-blue-soft: #eaf3ff;
   --workspace-text: #162b48;
   --workspace-muted: #536783;
-  --workspace-line: #d9e4f1;
-  --workspace-action: #1857af;
-  --workspace-shadow: 0 4px 18px rgb(36 73 126 / .06);
+  --workspace-line: var(--realm-panel-line);
+  --workspace-action: var(--realm-accent);
+  --workspace-shadow: var(--realm-panel-shadow);
   color: var(--workspace-text);
 }
 
@@ -18,9 +18,6 @@
   --workspace-blue-soft: #1d3654;
   --workspace-text: #eff6ff;
   --workspace-muted: #b5c8e0;
-  --workspace-line: #344961;
-  --workspace-action: #a9d4ff;
-  --workspace-shadow: none;
 }
 
 .learning-workspace {
@@ -73,8 +70,8 @@
 .learning-surface {
   min-width: 0;
   border: 1px solid var(--workspace-line);
-  border-radius: var(--r-lg);
-  background: var(--workspace-surface);
+  border-radius: var(--r-xl);
+  background: var(--realm-panel-bg);
   color: var(--workspace-text);
   box-shadow: var(--workspace-shadow);
 }
@@ -82,9 +79,9 @@
 .workspace-segments {
   gap: 4px;
   padding: 4px;
-  border: 1px solid rgb(var(--brand-rgb) / .12);
+  border: 1px solid var(--realm-panel-line);
   border-radius: var(--r-md);
-  background: rgb(var(--brand-rgb) / .045);
+  background: var(--realm-panel-soft);
 }
 
 .workspace-segments > :is(button, li) {
@@ -105,20 +102,16 @@
 .workspace-segments svg { flex: none; }
 .workspace-segments > button:hover { background: rgb(var(--brand-rgb) / .08); color: var(--workspace-text); }
 .workspace-segments > :is([aria-current="step"], [aria-pressed="true"]) {
-  border-color: rgb(var(--brand-rgb) / .17);
-  background: var(--workspace-surface);
-  color: var(--workspace-action);
-  box-shadow: var(--sh-sm);
+  border-color: var(--realm-panel-line);
+  background: var(--realm-selected);
+  color: var(--realm-accent);
+  box-shadow: var(--realm-selected-shadow);
   font-weight: 650;
 }
 
 .dark .learning-workspace-header {
   background: rgb(25 35 51 / .92);
   border-color: rgb(255 255 255 / .10);
-}
-.dark .workspace-segments { background: rgb(255 255 255 / .04); }
-.dark .workspace-segments > :is([aria-current="step"], [aria-pressed="true"]) {
-  background: rgb(var(--brand-rgb) / .19);
 }
 
 @media (max-width: 680px) {

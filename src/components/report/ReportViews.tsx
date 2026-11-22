@@ -174,7 +174,7 @@ export interface PersonalReportProps {
   studentRecords: StudentRecord[];
   /** 统计结果类型直接取自 lib/reportStats，避免视图再声明一份接口导致字段漂移 */
   studentStats: StudentReportStats | null;
-  examTableData: { examName: string; date: string; score: number; totalScore: number; rate: number; classRank?: number; gradeRank?: number; classSize?: number }[];
+  examTableData: { examName: string; date: string; score: number; totalScore: number; rate: number; classRank: string; gradeRank: string }[];
   // 2026-10-16：分布/趋势/成绩三图统一按大题型板块归类（pieData.full/rate = 板块合计与得分率）
   pieData: { name: string; value: number; color: string; full?: number; rate?: number }[];
   barData: Record<string, number | string>[];
@@ -890,8 +890,8 @@ export function PersonalReportView({
                         'bg-red-100 text-red-700'
                       }>{exam.rate}%</Badge>
                     </TableCell>
-                    <TableCell>{exam.classRank && exam.classSize ? `${exam.classRank} / ${exam.classSize}` : '—'}</TableCell>
-                    <TableCell>{exam.gradeRank || '-'}</TableCell>
+                    <TableCell>{exam.classRank}</TableCell>
+                    <TableCell>{exam.gradeRank}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

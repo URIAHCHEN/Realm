@@ -1,3 +1,4 @@
+import { schoolScoreEntryKey } from '@/lib/scoreIntake';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   Class,
@@ -518,9 +519,6 @@ export function useClassData() {
   const [schoolScores, setSchoolScores] = useState<{ [studentName: string]: SchoolScore[] }>(() => {
     return safeParse('schoolScores', {});
   });
-  // 校内成绩最新值镜像：导入需要同步读快照做查重（setState updater 不能同步读）
-  const schoolScoresRef = useRef(schoolScores);
-  useEffect(() => { schoolScoresRef.current = schoolScores; }, [schoolScores]);
 
   // 保存到 localStorage
   // 性能：录入分数时 classes 每次击键都变化，旧实现会即时全量 JSON.stringify
@@ -1550,141 +1548,17 @@ export function useClassData() {
     const rows = list.map(score => ({ ...score, id: generateId() }) as SchoolScore);
     setSchoolScores(prev => {
       const next = { ...prev };
-      rows.forEach(row => {
-        next[row.studentName] = [...(next[row.studentName] || []), row];
-      });
+      const seen = new Set<string>();
+      for (const row of rows) {
+        const key = schoolScoreEntryKey(row);
+        const current = next[row.studentName] || [];
+        if (seen.has(key) || current.some(existing => schoolScoreEntryKey(existing) === key)) continue;
+        seen.add(key);
+        next[row.studentName] = [...current, row];
+      }
       return next;
     });
     return rows.length;
-  }, []);
-
-  // 批量导入校内成绩（从Excel）
-  // xlsx 为大体积依赖，改为解析时动态加载，首屏不再携带 vendor-xlsx
-  const importSchoolScoresFromExcel = useCallback((file: File, classStudents?: string[]): Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped: number }> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('文件读取失败，请重试或换一个文件'));
-      reader.onload = async (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const XLSX = await import('xlsx');
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-
-          if (jsonData.length < 2) {
-            resolve({ success: 0, failed: 0, errors: ['文件格式不正确'], unmatched: [], skipped: 0 });
-            return;
-          }
-
-          const rows = jsonData.slice(1);
-
-          let success = 0;
-          let failed = 0;
-          let skipped = 0;
-          const errors: string[] = [];
-          const unmatchedSet = new Set<string>();
-          // 查重快照：同一份 Excel 导入两次不应让成绩翻倍（注释承诺过、实现曾缺失）
-          const scoreSnapshot: { [k: string]: SchoolScore[] } = { ...schoolScoresRef.current };
-
-          // 学生姓名匹配：精确匹配 -> 忽略空格匹配 -> 模糊匹配（包含关系）
-          const matchStudentName = (inputName: string): string | null => {
-            if (!classStudents || classStudents.length === 0) return inputName;
-            const trimmed = inputName.trim();
-            // 精确匹配
-            const exact = classStudents.find(s => s === trimmed);
-            if (exact) return exact;
-            // 忽略空格
-            const noSpace = classStudents.find(s => s.replace(/\s+/g, '') === trimmed.replace(/\s+/g, ''));
-            if (noSpace) return noSpace;
-            // 互相包含
-            const contains = classStudents.find(s => s.includes(trimmed) || trimmed.includes(s));
-            if (contains) return contains;
-            return null;
-          };
-
-          rows.forEach((row, index) => {
-            try {
-              const rawName = row[0]?.toString().trim();
-              const score = parseFloat(row[10]?.toString() || '0');
-              const totalScore = parseFloat(row[11]?.toString() || '0');
-
-              if (!rawName || isNaN(score)) {
-                failed++;
-                errors.push(`第${index + 2}行: 学生姓名或分数无效`);
-                return;
-              }
-
-              const matchedName = matchStudentName(rawName);
-              if (!matchedName) {
-                unmatchedSet.add(rawName);
-                failed++;
-                errors.push(`第${index + 2}行: 「${rawName}」未匹配到班级学生名单`);
-                return;
-              }
-
-              const newScore: SchoolScore = {
-                id: generateId(),
-                studentName: matchedName,
-                studentCode: row[1]?.toString(),
-                // 考试名固定为「校内考试」时，靠 (姓名+日期+分数) 去重，
-                // 否则同一份 Excel 导入两次会让成绩条数翻倍、污染平均分与进步对比
-                examName: '校内考试',
-                date: new Date().toISOString().split('T')[0],
-                campus: row[2]?.toString(),
-                grade: row[3]?.toString(),
-                subject: row[4]?.toString(),
-                classType: row[5]?.toString(),
-                teacherName: row[6]?.toString(),
-                teacherEmail: row[7]?.toString(),
-                fiscalYear: row[8]?.toString(),
-                quarter: row[9]?.toString(),
-                score,
-                totalScore,
-                convertedScore: parseFloat(row[12]?.toString() || '0'),
-                isRecorded: row[13]?.toString() === '是',
-                isImproved: row[14]?.toString() === '是',
-                improvementType: row[15]?.toString(),
-                auditResult: row[16]?.toString(),
-                classRank: parseInt(row[17]?.toString() || '0') || undefined,
-                gradeRank: parseInt(row[18]?.toString() || '0') || undefined,
-                classSize: parseInt(row[19]?.toString() || '0') || undefined,
-                gradeLevel: row[20]?.toString(),
-                enrollmentPercent: parseFloat(row[21]?.toString() || '0') || undefined,
-                school: row[22]?.toString()
-              };
-
-              // 去重：同学生 + 同考试名 + 同日期 + 同分数 + 同总分 + 同科目 → 视为重复导入，跳过
-              const dupKey = `${matchedName}|${newScore.examName}|${newScore.date}|${newScore.score}|${newScore.totalScore}|${newScore.subject || ''}`;
-              const existing = scoreSnapshot[matchedName] || [];
-              const isDup = existing.some(s =>
-                `${matchedName}|${s.examName}|${s.date}|${s.score}|${s.totalScore}|${s.subject || ''}` === dupKey
-              );
-              if (isDup) {
-                skipped++;
-                return;
-              }
-              scoreSnapshot[matchedName] = [...existing, newScore];
-              setSchoolScores(prev => ({
-                ...prev,
-                [matchedName]: [...(prev[matchedName] || []), newScore]
-              }));
-
-              success++;
-            } catch (err) {
-              failed++;
-              errors.push(`第${index + 2}行: ${err}`);
-            }
-          });
-
-          resolve({ success, failed, errors, unmatched: Array.from(unmatchedSet), skipped });
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    });
   }, []);
 
   // 删除校内成绩
@@ -1812,7 +1686,6 @@ export function useClassData() {
     getStudentAllRecords,
     getStudentSchoolScores,
     addSchoolScore,
-    importSchoolScoresFromExcel,
     addSchoolScores,
     deleteSchoolScore,
     restoreSchoolScore,

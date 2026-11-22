@@ -1,12 +1,3 @@
-// 校内成绩「智能录入」：把一段文本（或桌面客户端识别出的图片文字）解析成成绩草稿，
-// 匹配到班级学员，人工校正后一次性写入。
-//
-// 为什么需要它：原来的 Excel 导入写死了 23 列格式，换一份来源就错位；
-// 而纸质表格/照片没有结构化数据可用。这里统一成「文本 → 草稿 → 确认」一条通路。
-//
-// 识别结果永远只是草稿：手写中文的 OCR 准确率不足以直接入库（实测「练弈雅」→「练將産」），
-// 所以未匹配的行不会被静默丢弃，而是标红等人工指认。
-
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,12 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ImagePlus, Loader2, ScanText, Trash2, Wand2 } from 'lucide-react';
+import { FileSpreadsheet, ImagePlus, Loader2, ScanText, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SchoolScore } from '@/types';
-import { parseIntake, schoolScoreDate, schoolScoreIssue, scoreDedupKey, type ScoreDraft } from '@/lib/scoreIntake';
+import { draftToSchoolScore, parseIntake, parseSchoolScoreWorkbook, schoolScoreDate, schoolScoreEntryKey, schoolScoreIssue, scoreDedupKey, type ScoreDraft } from '@/lib/scoreIntake';
 
 interface ScoreIntakeDialogProps {
+  mode: 'text' | 'excel';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   students: string[];
@@ -31,6 +23,7 @@ interface ScoreIntakeDialogProps {
 }
 
 export function ScoreIntakeDialog({
+  mode,
   open,
   onOpenChange,
   students,
@@ -40,12 +33,15 @@ export function ScoreIntakeDialog({
   getNickname,
   defaultSubject = '英语',
 }: ScoreIntakeDialogProps) {
-  const [examName, setExamName] = useState('校内考试');
-  const [date, setDate] = useState(schoolScoreDate);
+  const isExcel = mode === 'excel';
+  const [examName, setExamName] = useState(isExcel ? '' : '校内考试');
+  const [date, setDate] = useState(() => isExcel ? '' : schoolScoreDate());
   const [subject, setSubject] = useState(defaultSubject);
   const [text, setText] = useState('');
   const [drafts, setDrafts] = useState<ScoreDraft[] | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [workbook, setWorkbook] = useState<{ sheet: string; unmatched: string[] } | null>(null);
+  const [excelBusy, setExcelBusy] = useState(false);
 
   /** 桌面客户端注入了本地 OCR 才显示选图入口；浏览器里没有可用的离线 OCR */
   const desktop = typeof window !== 'undefined'
@@ -56,6 +52,7 @@ export function ScoreIntakeDialog({
   const ctx = useMemo(() => ({ students, nicknames, examName, date, subject }), [students, nicknames, examName, date, subject]);
 
   const existingKeys = useMemo(() => new Set(existingScores.map(scoreDedupKey)), [existingScores]);
+  const existingEntries = useMemo(() => new Set(existingScores.map(schoolScoreEntryKey)), [existingScores]);
 
   const parse = useCallback(() => {
     if (!text.trim()) {
@@ -70,6 +67,21 @@ export function ScoreIntakeDialog({
     setDrafts(result.drafts);
     toast.success(`已解析 ${result.drafts.length} 条${result.mode === 'sheet' ? '（识别为单张调研表）' : ''}`);
   }, [text, ctx]);
+
+  const loadWorkbook = async (file: File) => {
+    setExcelBusy(true);
+    setWorkbook(null);
+    setDrafts(null);
+    try {
+      const { sheet, drafts: parsed } = await parseSchoolScoreWorkbook(file, ctx);
+      setWorkbook({ sheet, unmatched: parsed.filter(draft => !draft.studentName).map(draft => draft.sourceName || '') });
+      setDrafts(parsed.filter(draft => draft.studentName));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExcelBusy(false);
+    }
+  };
 
   const pickImage = useCallback(async () => {
     if (!canOcr || !desktop) return;
@@ -97,31 +109,25 @@ export function ScoreIntakeDialog({
   };
 
   const seenKeys = new Set(existingKeys);
+  const seenEntries = new Set(existingEntries);
   const reviewedRows = (drafts || []).map(draft => {
-    const row: Omit<SchoolScore, 'id'> = {
-      studentName: draft.studentName,
-      examName: examName.trim(),
-      date,
-      score: draft.score,
-      totalScore: draft.totalScore,
-      classRank: draft.classRank,
-      classSize: draft.classSize,
-      school: draft.school?.trim() || undefined,
-      subject: draft.subject?.trim() || subject.trim() || undefined,
-      note: draft.note,
-      isRecorded: true,
-      isImproved: false,
-    };
+    const row = draftToSchoolScore(draft, ctx);
     const issue = !students.includes(row.studentName) ? '请指定学员' : draft.problem || schoolScoreIssue(row);
     const key = scoreDedupKey(row);
     const duplicate = !issue && seenKeys.has(key);
-    if (!issue) seenKeys.add(key);
-    return { row, issue, duplicate };
+    const entry = schoolScoreEntryKey(row);
+    const conflict = !issue && !duplicate && seenEntries.has(entry);
+    if (!issue) {
+      seenKeys.add(key);
+      seenEntries.add(entry);
+    }
+    return { row, issue, duplicate, conflict };
   });
-  const readyRows = reviewedRows.filter(item => !item.issue && !item.duplicate);
+  const readyRows = reviewedRows.filter(item => !item.issue && !item.duplicate && !item.conflict);
   const issueCount = reviewedRows.filter(item => item.issue).length;
   const duplicateCount = reviewedRows.filter(item => item.duplicate).length;
-  const canSave = !!examName.trim() && !!date && issueCount === 0 && readyRows.length > 0 && !ocrBusy;
+  const conflictCount = reviewedRows.filter(item => item.conflict).length;
+  const canSave = !!examName.trim() && !!date && issueCount === 0 && readyRows.length > 0 && !ocrBusy && !excelBusy;
 
   const save = () => {
     if (!canSave) return;
@@ -129,6 +135,7 @@ export function ScoreIntakeDialog({
     toast.success(`已写入 ${readyRows.length} 条成绩`);
     setDrafts(null);
     setText('');
+    setWorkbook(null);
     onOpenChange(false);
   };
 
@@ -137,8 +144,8 @@ export function ScoreIntakeDialog({
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ScanText className="w-5 h-5 text-[color:var(--brand)]" />
-            智能录入校内成绩
+            {isExcel ? <FileSpreadsheet className="w-5 h-5 text-[color:var(--brand)]" /> : <ScanText className="w-5 h-5 text-[color:var(--brand)]" />}
+            {isExcel ? '导入 Excel 校内成绩' : '智能录入校内成绩'}
           </DialogTitle>
         </DialogHeader>
 
@@ -158,41 +165,71 @@ export function ScoreIntakeDialog({
             </label>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-[color:var(--ink-4)]">
-                粘贴表格文本（每行一个学生，支持「姓名 学校 满分 得分 班排」或「张三 126/150」）
-              </span>
-              <div className="flex gap-2">
-                {canOcr && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={pickImage} disabled={ocrBusy}>
-                    {ocrBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
-                    选图识别
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => { setText(''); setDrafts(null); }}>
-                  <Trash2 className="w-3.5 h-3.5" />清空
-                </Button>
-              </div>
-            </div>
-            <textarea
-              className="min-h-[130px] w-full resize-y rounded-xl border border-black/10 bg-white p-3 font-mono text-[13px] leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--brand)]"
-              placeholder={'陈志佳\t四中\t150\t126\t5\n陈梓铭\t七中\t150\t118\t12\n\n或单张调研表：\n学员姓名：胡怡萱  在读学校：四中逸园\n满分：150 得分：138 班排：3'}
-              value={text}
-              aria-label="成绩原文"
-              onChange={e => { setText(e.target.value); setDrafts(null); }}
-            />
-            <div className="flex items-center gap-2">
-              <Button size="sm" className="gap-1.5" onClick={parse} disabled={ocrBusy}>
-                <Wand2 className="w-3.5 h-3.5" />解析
-              </Button>
-              {!canOcr && (
-                <p className="text-[11px] leading-relaxed text-[color:var(--ink-4)]">
-                  浏览器里没有离线 OCR：请从手机/微信把表格照片转成文字后粘贴；桌面客户端可直接选图识别。
-                </p>
+          {isExcel ? (
+            <div className="space-y-2">
+              <p className="text-xs text-[color:var(--ink-4)]">自动优先读取「全量明细」，按当前班级名单匹配。请填写实际考试名称和日期。</p>
+              <Input
+                aria-label="成绩 Excel 文件"
+                type="file"
+                accept=".xlsx,.xls"
+                disabled={excelBusy}
+                onChange={event => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void loadWorkbook(file);
+                }}
+              />
+              {excelBusy && <p role="status" className="text-sm">正在解析工作簿…</p>}
+              {workbook && (
+                <div className="space-y-1 text-sm">
+                  <p>工作表「{workbook.sheet}」 · 本班 {drafts?.length || 0} 条 · 未匹配 {workbook.unmatched.length} 条</p>
+                  {workbook.unmatched.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-[color:var(--brand)]">查看未匹配姓名（本次跳过）</summary>
+                      <p className="max-h-28 overflow-auto text-xs text-[color:var(--ink-4)]">{workbook.unmatched.join('、')}</p>
+                    </details>
+                  )}
+                  {!drafts?.length && <p>当前班级没有匹配成绩，请核对班级和学员名单。</p>}
+                </div>
               )}
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-[color:var(--ink-4)]">
+                  粘贴表格文本（每行一个学生，支持「姓名 学校 满分 得分 班排」或「张三 126/150」）
+                </span>
+                <div className="flex gap-2">
+                  {canOcr && (
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={pickImage} disabled={ocrBusy}>
+                      {ocrBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                      选图识别
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => { setText(''); setDrafts(null); }}>
+                    <Trash2 className="w-3.5 h-3.5" />清空
+                  </Button>
+                </div>
+              </div>
+              <textarea
+                className="min-h-[130px] w-full resize-y rounded-xl border border-black/10 bg-white p-3 font-mono text-[13px] leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--brand)]"
+                placeholder={'陈志佳\t四中\t150\t126\t5\n陈梓铭\t七中\t150\t118\t12\n\n或单张调研表：\n学员姓名：胡怡萱  在读学校：四中逸园\n满分：150 得分：138 班排：3'}
+                value={text}
+                aria-label="成绩原文"
+                onChange={e => { setText(e.target.value); setDrafts(null); }}
+              />
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="gap-1.5" onClick={parse} disabled={ocrBusy}>
+                  <Wand2 className="w-3.5 h-3.5" />解析
+                </Button>
+                {!canOcr && (
+                  <p className="text-[11px] leading-relaxed text-[color:var(--ink-4)]">
+                    浏览器里没有离线 OCR：请从手机/微信把表格照片转成文字后粘贴；桌面客户端可直接选图识别。
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {drafts && drafts.length > 0 && (
             <div className="space-y-2">
@@ -201,7 +238,8 @@ export function ScoreIntakeDialog({
                 <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">可写入 {readyRows.length}</Badge>
                 {issueCount > 0 && <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">待核对 {issueCount}</Badge>}
                 {duplicateCount > 0 && <Badge variant="outline">重复 {duplicateCount}</Badge>}
-                <span className="text-[color:var(--ink-4)]">修正或移除待核对的行。重复成绩会跳过。</span>
+                {conflictCount > 0 && <Badge variant="outline">已有不同成绩 {conflictCount}</Badge>}
+                <span className="text-[color:var(--ink-4)]">修正或移除待核对的行。已存在的成绩会跳过。</span>
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-black/5">
@@ -214,6 +252,9 @@ export function ScoreIntakeDialog({
                       <TableHead className="w-[14%]">满分</TableHead>
                       <TableHead>班排</TableHead>
                       <TableHead>班级人数</TableHead>
+                      <TableHead>级排</TableHead>
+                      <TableHead>年级人数</TableHead>
+                      <TableHead>排名来源</TableHead>
                       <TableHead>科目</TableHead>
                       <TableHead>状态</TableHead>
                       <TableHead className="w-[6%]" />
@@ -221,7 +262,7 @@ export function ScoreIntakeDialog({
                   </TableHeader>
                   <TableBody>
                     {drafts.map((draft, index) => {
-                      const { issue, duplicate } = reviewedRows[index];
+                      const { issue, duplicate, conflict } = reviewedRows[index];
                       return (
                         <TableRow key={index} className={issue ? 'bg-rose-50/50' : ''}>
                           <TableCell>
@@ -282,6 +323,17 @@ export function ScoreIntakeDialog({
                               onChange={e => updateDraft(index, { classSize: e.target.value ? Number(e.target.value) : undefined })} />
                           </TableCell>
                           <TableCell>
+                            <Input className="h-8 w-16 text-xs" type="number" value={draft.gradeRank ?? ''} min={1} step={1}
+                              aria-label={`第 ${index + 1} 行级排`} placeholder="—"
+                              onChange={e => updateDraft(index, { gradeRank: e.target.value ? Number(e.target.value) : undefined })} />
+                          </TableCell>
+                          <TableCell>
+                            <Input className="h-8 w-16 text-xs" type="number" value={draft.gradeSize ?? ''} min={1} step={1}
+                              aria-label={`第 ${index + 1} 行年级人数`} placeholder="—"
+                              onChange={e => updateDraft(index, { gradeSize: e.target.value ? Number(e.target.value) : undefined })} />
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">{draft.fields?.survey?.rankSource || '—'}</TableCell>
+                          <TableCell>
                             <Input className="h-8 w-16 text-xs" value={draft.subject || ''}
                               aria-label={`第 ${index + 1} 行科目`} placeholder={subject || '—'}
                               onChange={e => updateDraft(index, { subject: e.target.value })} />
@@ -289,6 +341,7 @@ export function ScoreIntakeDialog({
                           <TableCell className="text-xs">
                             {issue ? <span className="whitespace-normal text-rose-700">{issue}</span>
                               : duplicate ? <span className="text-amber-700">重复</span>
+                              : conflict ? <span className="text-amber-700">同场已有成绩</span>
                               : <span className="text-emerald-700">可写入</span>}
                           </TableCell>
                           <TableCell>
@@ -304,7 +357,7 @@ export function ScoreIntakeDialog({
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-1">
-                <Button variant="outline" size="sm" onClick={() => { setDrafts(null); }}>返回修改文本</Button>
+                {!isExcel && <Button variant="outline" size="sm" onClick={() => setDrafts(null)}>返回修改文本</Button>}
                 <Button size="sm" onClick={save} disabled={!canSave}>
                   写入 {readyRows.length} 条
                 </Button>

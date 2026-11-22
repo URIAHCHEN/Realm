@@ -9,7 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
-import { matchStudentName, parseIntake, parseRank, parseScorePair, schoolExamKey, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
+import { draftToSchoolScore, matchStudentName, parseIntake, parseRank, parseScorePair, schoolExamKey, schoolRankChange, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
 import { blankEssayReview, defaultEssayRubric, essayTotals, essayWordCount, parseEssayReview } from '@/lib/essayReview';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
@@ -1132,6 +1132,26 @@ group('校内成绩智能录入 · 解析与学员匹配（2026-11-15）');
     schoolExamKey(session) !== schoolExamKey({ ...session, date: '2026-10-15' }) &&
     schoolExamKey(session) === schoolExamKey({ ...session, subject: undefined }),
     '同名考试按日期和科目分组，兼容未填科目的旧英语记录');
+
+  const surveyRows = parseIntake(
+    '班\t年级\t班型\t姓名\t得分\t满分\t得分率%\t班排\t级排\t排名来源\t调研表勾选\t是否重点班\t在读进步点\t在读弱项\t期末得分目标\t期末排名目标\t就读学校\n' +
+    'L1\t初一\t秋季S\t陈志佳\t101.5\t120\t84.6\t5/26\t11/61\t部分问卷\t重点\t是\t听力\t阅读\t110分\t前五\t示例中学',
+    ctx,
+  );
+  const surveyScore = { ...draftToSchoolScore(surveyRows.drafts[0], ctx), id: 'survey-fixture' };
+  check(surveyScore.score === 101.5 && surveyScore.totalScore === 120 && surveyScore.classRank === 5 &&
+    surveyScore.classSize === 26 && surveyScore.gradeRank === 11 && surveyScore.gradeSize === 61,
+    '调研表保留小数、班排、级排和两种排名分母');
+  check(surveyScore.school === '示例中学' && surveyScore.grade === '初一' && surveyScore.survey?.reportedRate === '84.6' &&
+    surveyScore.survey?.classSelection === '重点' && surveyScore.survey?.targetRank === '前五',
+    '调研字段随草稿写入校内成绩');
+  const next = { ...surveyScore, classRank: 3, gradeRank: 8 };
+  check(schoolRankChange(surveyScore, next, 'class').delta === 2 && schoolRankChange(surveyScore, next, 'grade').delta === 3,
+    '部分问卷的班排、级排按各自排名口径比较');
+  check(schoolRankChange(surveyScore, { ...next, gradeSize: 65 }, 'grade').scopeChanged &&
+    schoolRankChange(surveyScore, { ...next, survey: { ...next.survey, rankSource: '计算' } }, 'class').scopeChanged,
+    '样本人数变动或问卷与计算混用时，排名只并列展示');
+  check(!!schoolScoreIssue({ ...surveyScore, gradeRank: 62 }), '拦截级排超过年级人数');
 
   // 去重键：同学生同考试同分数视为重复
   const k1 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });

@@ -1,3 +1,4 @@
+import { schoolRankLabel } from '@/lib/scoreIntake';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import {Card, CardContent, } from '@/components/ui/card';
@@ -342,9 +343,8 @@ export function StudentReport({
       score: score.score,
       totalScore: score.totalScore,
       rate: score.totalScore > 0 ? Math.round((score.score / score.totalScore) * 100) : 0,
-      classRank: score.classRank,
-      gradeRank: score.gradeRank,
-      classSize: score.classSize
+      classRank: schoolRankLabel(score, 'class'),
+      gradeRank: schoolRankLabel(score, 'grade')
     }));
   }, [studentSchoolScores]);
 

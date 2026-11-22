@@ -130,7 +130,6 @@ function App() {
   getStudentSchoolScores,
   addSchoolScore,
   addSchoolScores,
-  importSchoolScoresFromExcel,
   deleteSchoolScore,
   restoreSchoolScore,
   exportData,
@@ -942,24 +941,6 @@ function App() {
     setAnalysisStudent(studentName);
   };
 
-  // 处理导入Excel
-  const handleImportExcel = async (file: File) => {
-    try {
-      const result = await importSchoolScoresFromExcel(file, currentClass?.students);
-      if (result.success > 0) {
-        toast.success(`成功导入${result.success}条成绩`);
-      }
-      if (result.unmatched && result.unmatched.length > 0) {
-        toast.warning(`${result.unmatched.length} 名学生未匹配，请检查名单`, {
-          description: result.unmatched.slice(0, 5).join('、') + (result.unmatched.length > 5 ? ` 等${result.unmatched.length}人` : '')
-        });
-      }
-      return result;
-    } catch (error) {
-      toast.error('导入失败：' + error);
-      return { success: 0, failed: 0, errors: [String(error)], unmatched: [] };
-    }
-  };
 
   return (
     <div className="min-h-screen ios-glass-bg">
@@ -1316,7 +1297,6 @@ function App() {
                   onAddScores={addSchoolScores}
                   nicknames={nicknames[currentClassId || ''] || {}}
                   onDeleteScore={handleDeleteScore}
-                  onImportExcel={handleImportExcel}
                   getNickname={(name) => getStudentNickname(name, currentClassId || undefined)}
                 />
               </Suspense>

@@ -1,4 +1,4 @@
-import { schoolExamKey, schoolScoreDate, schoolScoreIssue, schoolScoreSubject } from '@/lib/scoreIntake';
+import { schoolExamKey, schoolRank, schoolRankChange, schoolScoreDate, schoolScoreIssue, schoolScoreSubject, type SchoolRankScope } from '@/lib/scoreIntake';
 import { useState, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,8 @@ import { TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_S
 import { ScoreIntakeDialog } from '@/components/ScoreIntakeDialog';
 import {
   Plus, Trash2, TrendingUp, Award, Upload, FileSpreadsheet,
-  ClipboardList, Users, Target, CalendarDays, Medal, ArrowRight,
-  BarChart3, ChevronUp, ChevronDown, AlertCircle, Image as ImageIcon, Sparkles, LineChart as LineChartIcon
+  ClipboardList, Users, Target, CalendarDays, ArrowRight,
+  BarChart3, ChevronUp, Image as ImageIcon, Sparkles, LineChart as LineChartIcon
 } from 'lucide-react';
 import type { SchoolScore } from '@/types';
 
@@ -29,7 +29,6 @@ interface SchoolScorePanelProps {
   /** 班级昵称表：识别到的叫法也能匹配到学员 */
   nicknames?: { [studentName: string]: string };
   onDeleteScore: (studentName: string, scoreId: string) => void;
-  onImportExcel: (file: File) => Promise<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number }>;
   getNickname: (name: string) => string;
 }
 
@@ -49,6 +48,48 @@ const rankTone = (rank?: number): { icon?: string; className: string } => {
   return { className: 'text-[color:var(--ink-2)]' };
 };
 
+function ScoreRankChange({ a, b, scope }: { a?: SchoolScore; b?: SchoolScore; scope: SchoolRankScope }) {
+  const { from, to, delta, scopeChanged } = schoolRankChange(a, b, scope);
+  if (!from && !to) return <span className="text-[color:var(--ink-4)]">—</span>;
+  return (
+    <div className="space-y-0.5 whitespace-nowrap">
+      <div className="font-medium">
+        {from?.label || '—'} <span aria-label="到">→</span> {to?.label || '—'}
+      </div>
+      <div className="text-xs text-[color:var(--ink-4)]">
+        {scopeChanged ? `口径不同${from?.method && to?.method && from.method !== to.method ? `（${from.method} → ${to.method}）` : ''}`
+          : delta === undefined ? '缺一期排名'
+          : delta === 0 ? '持平'
+          : <span className={delta > 0 ? 'text-emerald-600' : 'text-rose-600'}>{delta > 0 ? '前进' : '后退'} {Math.abs(delta)} 名</span>}
+        {!scopeChanged && from?.method && to?.method === from.method && ` · ${from.method}`}
+      </div>
+    </div>
+  );
+}
+
+function ScoreSourceDetails({ score }: { score: SchoolScore }) {
+  const survey = score.survey;
+  const fields = [
+    ['就读学校', score.school], ['来源班组', survey?.group], ['年级', score.grade], ['班型', score.classType],
+    ['原表得分率', survey?.reportedRate], ['排名来源', survey?.rankSource], ['调研表勾选', survey?.classSelection],
+    ['是否重点班', survey?.keyClass], ['在读进步点', survey?.progress], ['在读弱项', survey?.weakness],
+    ['期末得分目标', survey?.targetScore], ['期末排名目标', survey?.targetRank], ['备注', score.note],
+  ].filter(([, value]) => value);
+  if (!fields.length) return null;
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer whitespace-nowrap text-[color:var(--brand)]">档案详情</summary>
+      <dl className="mt-2 grid min-w-40 max-w-64 gap-1.5 whitespace-normal">
+        {fields.map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[auto_1fr] gap-1.5">
+            <dt className="text-[color:var(--ink-4)]">{label}</dt><dd className="break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 export function SchoolScorePanel({
   students,
   scores,
@@ -56,14 +97,10 @@ export function SchoolScorePanel({
   onAddScores,
   nicknames,
   onDeleteScore,
-  onImportExcel,
   getNickname
 }: SchoolScorePanelProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; failed: number; errors: string[]; unmatched: string[]; skipped?: number } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [intakeMode, setIntakeMode] = useState<'text' | 'excel' | null>(null);
   const [activeView, setActiveView] = useState<'list' | 'progress' | 'compare'>('list');
   const [isTrendDialogOpen, setIsTrendDialogOpen] = useState(false);
   const [trendStudent, setTrendStudent] = useState<string>('');
@@ -106,24 +143,6 @@ export function SchoolScorePanel({
       isRecorded: true,
       isImproved: false
     });
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const result = await onImportExcel(file);
-      setImportResult(result);
-      setIsImportDialogOpen(true);
-    } catch (err) {
-      // 导入失败必须有提示，且文件输入要复位（否则重选同一个文件无反应）
-      toast.error('导入失败：' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
   };
 
   // 导出趋势图为图片
@@ -170,19 +189,18 @@ export function SchoolScorePanel({
     Array.from(groupedScores, ([examId, list]) => {
       const { examName, date } = list[0];
       const subject = schoolScoreSubject(list[0]);
-      const sorted = [...list].sort((a, b) => (a.classRank || Infinity) - (b.classRank || Infinity));
+      const sorted = [...list].sort((a, b) => b.score / (b.totalScore || Infinity) - a.score / (a.totalScore || Infinity));
       const rates = list.filter(s => !schoolScoreIssue({ score: s.score, totalScore: s.totalScore }))
         .map(s => s.score / s.totalScore * 100);
       const avgRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length * 10) / 10 : 0;
       return { examId, examName, date, subject, label: [examName, date, subject].filter(Boolean).join(' · '),
-        list: sorted, avgRate, top1: sorted.find(item => item.classRank === 1) };
+        list: sorted, avgRate };
     }).sort((a, b) => b.date.localeCompare(a.date)),
     [groupedScores]
   );
   const lastExam = examEntries.find(exam => exam.examId === compareExamB) ?? examEntries[0];
-  const earlierExams = lastExam ? examEntries.filter(exam => exam.examId !== lastExam.examId && exam.subject === lastExam.subject) : [];
-  const firstExam = earlierExams.find(exam => exam.examId === compareExamA) ??
-    earlierExams.find(exam => exam.date <= lastExam.date) ?? earlierExams[0];
+  const earlierExams = lastExam ? examEntries.filter(exam => exam.examId !== lastExam.examId && exam.subject === lastExam.subject && exam.date <= lastExam.date) : [];
+  const firstExam = earlierExams.find(exam => exam.examId === compareExamA) ?? earlierExams[0];
 
   const coveredStudents = useMemo(() =>
     new Set(scores.map(s => s.studentName)).size,
@@ -219,7 +237,7 @@ export function SchoolScorePanel({
         const rateImprovement = lastRate - firstRate;
         // 保留一位小数：浮点减法噪声（如 4.899999999999999）直接显示很扎眼
         const scoreImprovement = first.totalScore === last.totalScore ? Math.round((last.score - first.score) * 10) / 10 : undefined;
-        const rankImprovement = first.classRank && last.classRank ? first.classRank - last.classRank : undefined;
+        const rankImprovement = schoolRankChange(first, last, 'class').delta;
         return {
           key,
           name,
@@ -244,18 +262,23 @@ export function SchoolScorePanel({
   // 阶段对比数据
   const compareData = useMemo(() => {
     if (!firstExam || !lastExam) return [];
-    const aMap = new Map(firstExam.list.map(s => [s.studentName, s]));
-    const bMap = new Map(lastExam.list.map(s => [s.studentName, s]));
+    const index = (list: SchoolScore[]) => {
+      const map = new Map<string, SchoolScore | null>();
+      for (const score of list) map.set(score.studentName, map.has(score.studentName) ? null : score);
+      return map;
+    };
+    const aMap = index(firstExam.list);
+    const bMap = index(lastExam.list);
 
     const allStudents = new Set([...aMap.keys(), ...bMap.keys()]);
     return Array.from(allStudents).map(name => {
-      const a = aMap.get(name);
-      const b = bMap.get(name);
+      const a = aMap.get(name) ?? undefined;
+      const b = bMap.get(name) ?? undefined;
       const aRate = a && a.totalScore > 0 ? (a.score / a.totalScore) * 100 : 0;
       const bRate = b && b.totalScore > 0 ? (b.score / b.totalScore) * 100 : 0;
-      const scoreDiff = a && b && a.totalScore === b.totalScore ? b.score - a.score : undefined;
-      const rateDiff = a && b ? bRate - aRate : undefined;
-      const rankDiff = a?.classRank && b?.classRank ? a.classRank - b.classRank : undefined;
+      const scoreDiff = a && b && a.totalScore === b.totalScore ? Math.round((b.score - a.score) * 100) / 100 : undefined;
+      const rateDiff = a && b ? Math.round((bRate - aRate) * 10) / 10 : undefined;
+
       return {
         name,
         nickname: getNickname(name),
@@ -265,7 +288,7 @@ export function SchoolScorePanel({
         bRate,
         scoreDiff,
         rateDiff,
-        rankDiff
+        hasMultiple: aMap.get(name) === null || bMap.get(name) === null
       };
     }).sort((x, y) => {
       // 有两次成绩的优先，按提升率排序
@@ -278,7 +301,7 @@ export function SchoolScorePanel({
   const kpis = [
     { icon: ClipboardList, label: '考试场次', value: String(examEntries.length) },
     { icon: FileSpreadsheet, label: '成绩条数', value: String(scores.length) },
-    { icon: Target, label: '平均正确率', value: `${avgRateAll}%` },
+    { icon: Target, label: '平均得分率', value: `${avgRateAll}%` },
     { icon: Users, label: '已覆盖学生', value: `${coveredStudents}/${students.length}` },
   ];
 
@@ -293,20 +316,14 @@ export function SchoolScorePanel({
           </div>
           <div>
             <p className="font-semibold text-[color:var(--ink)]">校内成绩管理</p>
-            <p className="text-xs text-[color:var(--ink-4)]">按考试归组追踪班级校内成绩、正确率与排名变化</p>
+            <p className="text-xs text-[color:var(--ink-4)]">按考试归组追踪班级校内成绩、得分率与排名变化</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".xlsx,.xls"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
           <Button
             variant="outline" aria-label="导入 Excel" title="导入 Excel"
-            onClick={() => fileInputRef.current?.click()}
+            disabled={!students.length || !onAddScores}
+            onClick={() => setIntakeMode('excel')}
             className="rounded-[var(--r-md)] gap-2"
           >
             <Upload className="w-4 h-4" />
@@ -314,7 +331,7 @@ export function SchoolScorePanel({
           </Button>
           <Button
             variant="outline" aria-label="智能录入" title="粘贴文本或识别图片，批量录入成绩"
-            onClick={() => setIsIntakeOpen(true)}
+            onClick={() => setIntakeMode('text')}
             className="rounded-[var(--r-md)] gap-2"
           >
             <Sparkles className="w-4 h-4" />
@@ -432,6 +449,20 @@ export function SchoolScorePanel({
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  {([['classSize', '班级人数'], ['gradeSize', '年级人数']] as const).map(([key, label]) => (
+                    <label key={key} className="space-y-1.5 text-sm">
+                      <span>{label}</span>
+                      <Input
+                        type="number" min={1} step={1}
+                        value={newScore[key] ?? ''}
+                        onChange={event => setNewScore(prev => ({ ...prev, [key]: event.target.value ? Number(event.target.value) : undefined }))}
+                        className="rounded-xl ios-input"
+                      />
+                    </label>
+                  ))}
+                </div>
+
                 <div className="space-y-1.5">
                   <Label>在读学校</Label>
                   <Input
@@ -479,61 +510,10 @@ export function SchoolScorePanel({
         })}
       </div>
 
-      {/* 导入结果对话框 */}
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>导入结果</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            {importResult && (
-              <>
-                <div className="flex gap-4">
-                  <div className="flex-1 bg-emerald-50 p-4 rounded-xl text-center">
-                    <div className="text-2xl font-bold text-emerald-600">{importResult.success}</div>
-                    <div className="text-sm text-emerald-700">成功导入</div>
-                  </div>
-                  <div className="flex-1 bg-rose-50 p-4 rounded-xl text-center">
-                    <div className="text-2xl font-bold text-rose-600">{importResult.failed}</div>
-                    <div className="text-sm text-rose-700">导入失败</div>
-                  </div>
-                  {(importResult.skipped || 0) > 0 && (
-                    <div className="flex-1 bg-amber-50 p-4 rounded-xl text-center">
-                      <div className="text-2xl font-bold text-amber-600">{importResult.skipped}</div>
-                      <div className="text-sm text-amber-700">重复跳过</div>
-                    </div>
-                  )}
-                </div>
-                {(importResult.unmatched || []).length > 0 && (
-                  <div className="bg-amber-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 text-amber-700 font-medium mb-2">
-                      <AlertCircle className="w-4 h-4" />
-                      未匹配学生（{(importResult.unmatched || []).length}人）
-                    </div>
-                    <div className="text-sm text-amber-800">
-                      {(importResult.unmatched || []).join('、')}
-                    </div>
-                    <p className="text-xs text-amber-600 mt-2">请检查 Excel 中的学生姓名是否与班级名单一致。</p>
-                  </div>
-                )}
-                {(importResult.errors || []).length > 0 && (
-                  <div className="bg-black/[0.05] p-4 rounded-xl max-h-40 overflow-y-auto">
-                    <div className="text-sm font-medium mb-2">错误信息：</div>
-                    {importResult.errors.map((err, i) => (
-                      <div key={i} className="text-sm text-rose-600">{err}</div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* 视图切换 */}
       {examEntries.length > 0 && (
         <Tabs value={activeView} onValueChange={(v) => setActiveView(v as typeof activeView)} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="mode-seg-grid school-score-tabs w-full max-w-md" aria-label="校内成绩视图">
             <TabsTrigger value="list" className="gap-2">
               <ClipboardList className="w-4 h-4" />
               成绩列表
@@ -549,7 +529,7 @@ export function SchoolScorePanel({
           </TabsList>
 
           <TabsContent value="list" className="space-y-4">
-            {examEntries.map(({ examId, examName, date, subject, list, avgRate, top1 }) => (
+            {examEntries.map(({ examId, examName, date, subject, list, avgRate }) => (
               <Card key={examId} className="ios-glass-card border-0 overflow-hidden">
                 <div className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2"
                   style={{ background: 'linear-gradient(135deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb)/0.75))' }}>
@@ -567,14 +547,7 @@ export function SchoolScorePanel({
                   <div className="flex flex-wrap items-center gap-2 text-white/90 text-xs">
                     <span>{list.length} 名学生</span>
                     <span className="w-px h-3.5 bg-white/30" />
-                    <span>班均正确率 <span className="font-bold text-white">{avgRate}%</span></span>
-                    {top1 && (
-                      <>
-                        <span className="w-px h-3.5 bg-white/30" />
-                        <Medal className="w-3.5 h-3.5" />
-                        <span>第一名 {getNickname(top1.studentName)} · {top1.score}分</span>
-                      </>
-                    )}
+                    <span>班均得分率 <span className="font-bold text-white">{avgRate}%</span></span>
                   </div>
                 </div>
                 <CardContent className="pt-2">
@@ -584,9 +557,10 @@ export function SchoolScorePanel({
                         <TableHead>姓名</TableHead>
                         <TableHead>得分</TableHead>
                         <TableHead>总分</TableHead>
-                        <TableHead>正确率</TableHead>
+                        <TableHead>得分率</TableHead>
                         <TableHead>班排</TableHead>
-                        <TableHead>年排</TableHead>
+                        <TableHead>级排</TableHead>
+                        <TableHead>来源信息</TableHead>
                         <TableHead className="text-right">操作</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -597,6 +571,8 @@ export function SchoolScorePanel({
                           : 0;
                         const ct = rankTone(score.classRank);
                         const gt = rankTone(score.gradeRank);
+                        const classRanking = schoolRank(score, 'class');
+                        const gradeRanking = schoolRank(score, 'grade');
                         return (
                           <TableRow key={score.id} className="hover:bg-black/[0.03]">
                             <TableCell>
@@ -630,11 +606,14 @@ export function SchoolScorePanel({
                               </div>
                             </TableCell>
                             <TableCell>
-                              <span className={ct.className}>{ct.icon && <span className="mr-0.5">{ct.icon}</span>}{score.classRank ? `第${score.classRank}名` : '-'}</span>
+                              <span className={ct.className}>{ct.icon && <span className="mr-0.5">{ct.icon}</span>}{classRanking?.label || '—'}</span>
+                              {classRanking?.method && <small className="block text-[color:var(--ink-4)]">{classRanking.method}</small>}
                             </TableCell>
                             <TableCell>
-                              <span className={gt.className}>{gt.icon && <span className="mr-0.5">{gt.icon}</span>}{score.gradeRank ? `第${score.gradeRank}名` : '-'}</span>
+                              <span className={gt.className}>{gt.icon && <span className="mr-0.5">{gt.icon}</span>}{gradeRanking?.label || '—'}</span>
+                              {gradeRanking?.method && <small className="block text-[color:var(--ink-4)]">{gradeRanking.method}</small>}
                             </TableCell>
+                            <TableCell><ScoreSourceDetails score={score} /></TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="ghost"
@@ -747,6 +726,7 @@ export function SchoolScorePanel({
                   </div>
                 </div>
 
+                <p className="mb-3 text-xs text-[color:var(--ink-4)]">同科目跨期对比。满分不同时看得分率百分点，排名并列展示名次和人数。<span className="sm:hidden"> 横向滑动可查看排名。</span></p>
                 {compareData.length > 0 ? (
                   <Table>
                     <TableHeader>
@@ -755,18 +735,22 @@ export function SchoolScorePanel({
                         <TableHead>{firstExam?.label}</TableHead>
                         <TableHead>{lastExam?.label}</TableHead>
                         <TableHead>分数变化</TableHead>
-                        <TableHead>正确率变化</TableHead>
-                        <TableHead>排名变化</TableHead>
+                        <TableHead>得分率变化</TableHead>
+                        <TableHead>班排变化</TableHead>
+                        <TableHead>级排变化</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {compareData.map(item => (
                         <TableRow key={item.name} className="hover:bg-black/[0.03]">
-                          <TableCell className="font-medium text-[color:var(--ink)]">{item.nickname}</TableCell>
+                          <TableCell className="whitespace-nowrap font-medium text-[color:var(--ink)]">
+                            {item.nickname}
+                            {item.hasMultiple && <small className="block text-amber-700">有多条成绩待核对</small>}
+                          </TableCell>
                           <TableCell>
                             {item.a ? (
                               <div className="flex flex-col">
-                                <span className="font-semibold">{item.a.score}分</span>
+                                <span className="font-semibold">{item.a.score}/{item.a.totalScore} 分</span>
                                 <span className="text-xs text-[color:var(--ink-4)]">{item.aRate.toFixed(1)}%</span>
                               </div>
                             ) : (
@@ -776,7 +760,7 @@ export function SchoolScorePanel({
                           <TableCell>
                             {item.b ? (
                               <div className="flex flex-col">
-                                <span className="font-semibold">{item.b.score}分</span>
+                                <span className="font-semibold">{item.b.score}/{item.b.totalScore} 分</span>
                                 <span className="text-xs text-[color:var(--ink-4)]">{item.bRate.toFixed(1)}%</span>
                               </div>
                             ) : (
@@ -795,22 +779,14 @@ export function SchoolScorePanel({
                           <TableCell>
                             {item.rateDiff !== undefined ? (
                               <span className={`font-semibold ${item.rateDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {item.rateDiff >= 0 ? '+' : ''}{item.rateDiff.toFixed(1)}%
+                                {item.rateDiff >= 0 ? '+' : ''}{item.rateDiff.toFixed(1)} 个百分点
                               </span>
                             ) : (
                               <span className="text-[color:var(--ink-4)]">-</span>
                             )}
                           </TableCell>
-                          <TableCell>
-                            {item.rankDiff !== undefined ? (
-                              <span className={`font-semibold flex items-center gap-0.5 ${item.rankDiff > 0 ? 'text-emerald-600' : item.rankDiff < 0 ? 'text-rose-600' : 'text-[color:var(--ink-4)]'}`}>
-                                {item.rankDiff > 0 ? <ChevronUp className="w-4 h-4" /> : item.rankDiff < 0 ? <ChevronDown className="w-4 h-4" /> : null}
-                                {item.rankDiff !== 0 ? `${Math.abs(item.rankDiff)}名` : '持平'}
-                              </span>
-                            ) : (
-                              <span className="text-[color:var(--ink-4)]">-</span>
-                            )}
-                          </TableCell>
+                          <TableCell><ScoreRankChange a={item.a} b={item.b} scope="class" /></TableCell>
+                          <TableCell><ScoreRankChange a={item.a} b={item.b} scope="grade" /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -835,7 +811,7 @@ export function SchoolScorePanel({
               <span className="empty-ico"><FileSpreadsheet className="w-6 h-6" /></span>
               <div className="empty-t">暂无校内成绩记录</div>
               <div className="empty-d">
-                支持导入 Excel，格式参考：学员姓名、学号、校区、年级、学科、得分、试卷总分、班级排名、年级排名。
+                导入 Excel 或粘贴表格，确认考试名称、日期和本班成绩后写入。
                 也可点右上角「添加成绩」手工录入。
               </div>
             </div>
@@ -876,18 +852,19 @@ export function SchoolScorePanel({
         </DialogContent>
       </Dialog>
 
-      {/* 智能录入：文本/图片 → 草稿 → 人工校正 → 批量写入 */}
-      {onAddScores && (
+      {onAddScores && (['text', 'excel'] as const).map(mode => (
         <ScoreIntakeDialog
-          open={isIntakeOpen}
-          onOpenChange={setIsIntakeOpen}
+          key={mode}
+          mode={mode}
+          open={intakeMode === mode}
+          onOpenChange={open => setIntakeMode(open ? mode : null)}
           students={students}
           nicknames={nicknames}
           existingScores={scores}
           onSave={onAddScores}
           getNickname={getNickname}
         />
-      )}
+      ))}
     </div>
   );
 }
@@ -917,7 +894,8 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
         studentRate,
         classMax: Math.round(max * 10) / 10,
         classAvg: avg,
-        rank: s.classRank || 0
+        classRank: schoolRank(s, 'class'),
+        gradeRank: schoolRank(s, 'grade')
       };
     });
   }, [studentScores, scores]);
@@ -961,7 +939,7 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
       {/* KPI 瓷贴 */}
       <div className="grid grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-gradient-to-br from-[rgb(var(--brand-rgb)/0.10)] to-cyan-50 border border-[rgb(var(--brand-rgb)/0.22)]">
-          <p className="text-xs text-[color:var(--ink-4)] mb-1">最近正确率</p>
+          <p className="text-xs text-[color:var(--ink-4)] mb-1">最近得分率</p>
           <p className="text-2xl font-bold text-[color:var(--brand)]">{latestRate}%</p>
         </div>
         <div className={`p-4 rounded-xl border ${totalImprovement >= 0 ? 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100' : 'bg-gradient-to-br from-rose-50 to-orange-50 border-rose-100'}`}>
@@ -981,7 +959,7 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-[color:var(--ink)] flex items-center gap-2">
             <LineChartIcon className="w-4 h-4 text-[color:var(--brand)]" />
-            历次正确率趋势
+            历次得分率趋势
           </h3>
         </div>
         <div style={{ height: 240 }}>
@@ -999,7 +977,7 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
               <Legend wrapperStyle={LEGEND_STYLE} />
               <Line type="monotone" dataKey="classMax" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
               <Line type="monotone" dataKey="classAvg" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="studentRate" name="学员正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ r: 5, fill: CHART_SERIES[0] }} activeDot={{ r: 7 }} />
+              <Line type="monotone" dataKey="studentRate" name="学员得分率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ r: 5, fill: CHART_SERIES[0] }} activeDot={{ r: 7 }} />
               <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />
               <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopLeft' }} />
               {improvements.map(({ point }) => (
@@ -1075,21 +1053,27 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
                 ))}
               </tr>
               <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
-                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级最高正确率</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级最高得分率</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center text-purple-700 font-semibold">{d.classMax}%</td>
                 ))}
               </tr>
               <tr className="bg-white">
-                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级平均正确率</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级平均得分率</td>
                 {lineData.map((d, i) => (
                   <td key={i} className="px-3 py-2 text-center text-[color:var(--ink-2)] font-semibold">{d.classAvg}%</td>
                 ))}
               </tr>
               <tr className="bg-[rgb(var(--brand-rgb)/0.08)]">
-                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级排名【前】</td>
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">班级排名</td>
                 {lineData.map((d, i) => (
-                  <td key={i} className="px-3 py-2 text-center font-semibold">{d.rank > 0 ? Math.round(d.rank) : '-'}</td>
+                  <td key={i} className="px-3 py-2 text-center font-semibold">{d.classRank?.label || '—'}{d.classRank?.method && ` · ${d.classRank.method}`}</td>
+                ))}
+              </tr>
+              <tr className="bg-white">
+                <td className="px-3 py-2 font-medium text-[color:var(--ink-2)]">年级排名</td>
+                {lineData.map((d, i) => (
+                  <td key={i} className="px-3 py-2 text-center font-semibold">{d.gradeRank?.label || '—'}{d.gradeRank?.method && ` · ${d.gradeRank.method}`}</td>
                 ))}
               </tr>
             </tbody>

@@ -3543,6 +3543,13 @@ html[data-exporting] .poster-frame > * { transform: none !important; }
 .dark .mode-seg-grid { border-color: rgba(255, 255, 255, 0.12); }
 .dark .mode-seg-grid [role="tab"][data-state="active"] { background: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
 
+.mode-seg-grid.school-score-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.school-score-tabs [role="tab"] { min-height: 36px; padding-inline: 5px; }
+.dark .mode-seg-grid.school-score-tabs > [role="tab"][data-state="active"] {
+  background: rgb(var(--brand-rgb) / .19) !important;
+  color: #e5efff;
+}
+
 /* 工具栏内的分隔线（视图切换与模式切换之间） */
 .tb-divider { width: 1px; height: 18px; background: rgba(15, 23, 42, 0.10); flex: 0 0 auto; }
 .dark .tb-divider { background: rgba(255, 255, 255, 0.14); }

@@ -200,6 +200,18 @@ export interface AppConfig {
   qtCategoryOverrides?: Record<string, string>;
 }
 
+export interface SchoolScoreSurvey {
+  group?: string;
+  reportedRate?: string;
+  rankSource?: string;
+  classSelection?: string;
+  keyClass?: string;
+  progress?: string;
+  weakness?: string;
+  targetScore?: string;
+  targetRank?: string;
+}
+
 // 校内成绩
 export interface SchoolScore {
   id: string;
@@ -224,11 +236,13 @@ export interface SchoolScore {
   auditResult?: string;
   classRank?: number;
   gradeRank?: number;
+  gradeSize?: number;
   classSize?: number;
   gradeLevel?: string;
   enrollmentPercent?: number;
   school?: string;
   note?: string;
+  survey?: SchoolScoreSurvey;
 }
 
 // 班级统计数据

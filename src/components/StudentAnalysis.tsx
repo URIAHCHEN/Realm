@@ -1,3 +1,4 @@
+import { schoolRankLabel } from '@/lib/scoreIntake';
 // 学员学情分析弹窗 —— 现代化管理后台风格：KPI 总览 + 多维图表 + 课次时间线 + 校内成绩
 import { useState, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -372,9 +373,8 @@ export function StudentAnalysis({
         得分率: s.totalScore > 0 ? Math.round((s.score / s.totalScore) * 100 * 10) / 10 : 0,
         score: s.score,
         totalScore: s.totalScore,
-        classRank: s.classRank,
-        gradeRank: s.gradeRank,
-        classSize: s.classSize,
+        classRank: schoolRankLabel(s, 'class'),
+        gradeRank: schoolRankLabel(s, 'grade'),
       })),
     [schoolScores]
   );
@@ -772,8 +772,8 @@ export function StudentAnalysis({
                           <td className="px-4 py-2.5">
                             <Badge variant="outline" className={`text-xs ${s.得分率 >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : s.得分率 >= 60 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>{s.得分率}%</Badge>
                           </td>
-                          <td className="px-4 py-2.5">{s.classRank ? `${s.classRank}/${s.classSize || '-'}` : '-'}</td>
-                          <td className="px-4 py-2.5">{s.gradeRank || '-'}</td>
+                          <td className="px-4 py-2.5">{s.classRank}</td>
+                          <td className="px-4 py-2.5">{s.gradeRank}</td>
                         </tr>
                       ))}
                     </tbody>

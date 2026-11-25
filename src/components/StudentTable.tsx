@@ -697,7 +697,19 @@ export function StudentTable({
                     <Input type="number" min={0} placeholder="分数" value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} className="w-24 h-8 text-sm" />
                   </>
                 )}
-                <Button size="sm" className="h-8 gap-1.5 ios-button" disabled={!canApplyBulk} onClick={handleApplyBulk}>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 ios-button"
+                  disabled={!canApplyBulk}
+                  onClick={handleApplyBulk}
+                  title={canApplyBulk
+                    ? '把上方填写的值应用到勾选学员'
+                    : !someSelected
+                      ? '先勾选学员左侧的复选框'
+                      : bulkField === 'score' && !bulkQtId
+                        ? '再选择要填写的题型'
+                        : '先在上方输入要填写的值或状态'}
+                >
                   <Check className="w-4 h-4" />应用到选中
                 </Button>
                 {/* 离班处理：名单里有、本次课表里没有的学员，从这里移除（历史课次记录保留） */}

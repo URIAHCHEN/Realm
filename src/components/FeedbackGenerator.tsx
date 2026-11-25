@@ -568,7 +568,7 @@ export function FeedbackGenerator({
                     <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
                     <div className="fb-more-menu" role="menu">
                       <button role="menuitem" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里"><ClipboardList className="w-4 h-4" />复制纯文本</button>
-                      <button role="menuitem" onClick={handleResetStatus}><RotateCcw className="w-4 h-4" />重置状态</button>
+                      <button role="menuitem" onClick={handleResetStatus} title="把已复制/已生成的标记清空，重新来过"><RotateCcw className="w-4 h-4" />重置状态</button>
                     </div>
                   </details>
                 </div>

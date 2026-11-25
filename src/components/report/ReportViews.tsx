@@ -572,7 +572,7 @@ export function PersonalReportView({
             </SelectContent>
           </Select>
           <label className="report-toolbar-check">
-            <Checkbox checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} />显示课次总分
+            <Checkbox aria-label="显示课次总分" checked={showCorrectRate} onCheckedChange={(v) => setShowCorrectRate(!!v)} />显示课次总分
           </label>
         </div>
         <div className="report-detail-kpis">
@@ -799,7 +799,7 @@ export function PersonalReportView({
             出勤与作业频次
             <span className="text-xs font-normal text-[color:var(--ink-4)] ml-1">按登记次数统计 · 右侧为占比</span>
             <label className="report-toolbar-check ml-auto font-normal" data-html2canvas-ignore="true">
-              <Checkbox checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} />显示课后任务
+              <Checkbox aria-label="显示课后任务" checked={showListening} onCheckedChange={(v) => setShowListening(!!v)} />显示课后任务
             </label>
           </CardTitle>
         </CardHeader>

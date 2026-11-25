@@ -340,7 +340,7 @@ body {
   position: absolute;
   width: 10px;
   height: 10px;
-  animation: confetti-fall 4s linear infinite;
+  animation: confetti-fall 4s linear 1 forwards;  /* forwards：停在末帧（落出屏且透明），否则播完会跳回顶部重新出现 */
   border-radius: 2px;
 }
 
@@ -383,7 +383,7 @@ body {
 }
 
 .trophy-pulse {
-  animation: trophy-pulse 2s ease-in-out infinite;
+  animation: trophy-pulse 2s ease-in-out 1;
 }
 
 /* 剧场按钮 */
@@ -523,7 +523,7 @@ body {
 }
 
 .crown-shine {
-  animation: crown-shine 2s ease-in-out infinite;
+  animation: crown-shine 2s ease-in-out 1;
 }
 
 /* 领奖台容器 */
@@ -664,7 +664,7 @@ body {
 }
 
 .trophy-float {
-  animation: trophy-float 2s ease-in-out infinite;
+  animation: trophy-float 2s ease-in-out 1;
   margin-bottom: 8px;
 }
 
@@ -856,7 +856,7 @@ body {
   width: 24px;
   height: 24px;
   color: var(--brand);
-  animation: crown-shine 1.5s ease-in-out infinite;
+  animation: crown-shine 1.5s ease-in-out 1;
 }
 
 /* 荣誉墙 */
@@ -2204,15 +2204,20 @@ html[data-exporting] * { animation: none !important; }
 [data-slot="select-content"], [data-slot="dropdown-menu-content"] {
   transform-origin: top center;
 }
-[data-slot="select-content"][data-state="open"] { animation: popIn var(--dur-ui) var(--ease-out-expo); }
+[data-slot="select-content"][data-state="open"] { animation: ux-enter var(--motion-base) var(--ease-enter); }
 @keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(-2px); } to { opacity: 1; transform: none; } }
 /* 弹窗遮罩与内容同一节奏（paired elements rule） */
 [data-slot="dialog-overlay"] { animation: fadeIn var(--dur-ui) ease-out; }
-[data-slot="dialog-content"] { animation: dialogIn 240ms var(--ease-out-expo); }
+[data-slot="dialog-content"][data-state="open"] {
+  animation: ux-enter var(--motion-slow) var(--ease-enter) !important;
+}
+[data-slot="dialog-content"][data-state="closed"] {
+  animation: ux-exit var(--motion-fast) var(--ease-exit) !important;
+}
 @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 @keyframes dialogIn { from { opacity: 0; transform: scale(0.965) } to { opacity: 1; transform: none } }
-/* Tab 内容切换：轻微淡入，不做位移动画（高频操作） */
-[role="tabpanel"] { animation: fadeIn 180ms ease-out; }
+/* Tab 内容切换：动画统一由 .main-tab-panel 负责（此处若再叠一层 fadeIn，
+   同一个面板会同时跑两个动画，看起来发飘） */
 /* 行 hover：颜色过渡用 ease（非对称曲线更优雅） */
 .data-table tbody tr { transition: background-color var(--dur-micro) ease; }
 /* 表格行「+」与下拉箭头保持轻过渡 */
@@ -2853,7 +2858,7 @@ textarea:focus-visible,
 .reveal:nth-child(5) { transition-delay: 180ms; }
 
 /* ② 主 Tab 面板：淡入 + 6px 轻抬（220ms ease-out-quart）；内层小 tab 仍走纯淡入，避免"整页在动" */
-.main-tab-panel[data-state="active"] { animation: panelIn 220ms var(--ease-out-quart) both; }
+.main-tab-panel[data-state="active"] { animation: ux-tab-in var(--motion-fast) var(--ease-standard) both; }
 @keyframes panelIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -4740,4 +4745,72 @@ html[data-exporting] .class-report-shell { box-shadow: none; }
 @media (max-width: 640px) {
   .realm-sync-panel [data-slot="card-content"],
   .realm-sync-panel [data-slot="card-header"] { padding-inline: 14px; }
+}
+
+/* ============================================================
+   动效统一语言（2026-11-25）
+   原则：动效解释「发生了什么」，不是装饰。
+   · 同一类变化用同一组时长与曲线，不再各处自造数值
+   · 高频操作只淡入、不位移（避免晃眼与重排）
+   · 装饰性循环动画一律只播一次
+   · 尊重系统「减少动态效果」
+   ============================================================ */
+:root {
+  /* 时长：按「变化大小」分档，不按页面 */
+  --motion-instant: 80ms;   /* 按下、悬停、勾选 */
+  --motion-fast: 140ms;     /* 高频切换（tab、筛选、折叠） */
+  --motion-base: 200ms;     /* 一般出现/消失（弹层、提示） */
+  --motion-slow: 280ms;     /* 大容器出现（弹窗、抽屉） */
+
+  /* 曲线：进来减速、出去加速、状态变化用标准曲线 */
+  --ease-standard: cubic-bezier(.2, .6, .2, 1);
+  --ease-enter: cubic-bezier(.16, 1, .3, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+}
+
+/* 出现：从略低、略小的位置浮上来，交代「它从哪来」 */
+@keyframes ux-enter {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+/* 消失：只淡出，不再缩小（缩小会让用户以为"被删掉了"） */
+@keyframes ux-exit { from { opacity: 1; } to { opacity: 0; } }
+/* 高频切换：只淡入，零位移，避免列表跳动 */
+@keyframes ux-tab-in { from { opacity: 0; } to { opacity: 1; } }
+/* 完成：勾号描边，用来确认"已保存/已写入" */
+@keyframes ux-check {
+  from { stroke-dashoffset: 22; opacity: .4; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+/* 出错：轻微左右摆动一次，不用红色闪烁（不刺眼） */
+@keyframes ux-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+/* —— 收敛装饰性动画：无限循环 → 只播一次 —— */
+.confetti { animation-iteration-count: 1 !important; }
+.praise-tile .trophy-pulse,
+.trophy-pulse,
+.crown-shine,
+.trophy-float { animation-iteration-count: 1 !important; }
+
+/* —— 减少动态效果：全局兜底，覆盖所有动画与过渡 —— */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 数值更新：只淡入，不位移不缩放——避免 KPI 卡高度跳动 */
+@keyframes ux-number-in { from { opacity: 0; } to { opacity: 1; } }
+.ux-number {
+  display: inline-block;
+  animation: ux-number-in var(--motion-fast) var(--ease-standard);
 }

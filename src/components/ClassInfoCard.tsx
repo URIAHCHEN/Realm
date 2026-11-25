@@ -119,7 +119,10 @@ export function ClassInfoCard({ classData, onManageStudents, onTransferStudent, 
           {stats.map(s => (
             <div key={s.label} className="rounded-xl bg-slate-50/80 border border-black/[0.03] p-3">
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-1.5 ${s.tone}`}>{s.icon}</div>
-              <p className="text-lg font-bold text-slate-800 leading-none">{s.value}</p>
+              <p className="text-lg font-bold text-slate-800 leading-none">
+                {/* 数值变化时重挂载一次，播 140ms 淡入：让用户察觉"刚更新过"，但不跳动 */}
+                <span key={s.value} className="ux-number">{s.value}</span>
+              </p>
               <p className="text-[11px] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}

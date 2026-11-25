@@ -6,7 +6,7 @@ import { FileSpreadsheet, ImagePlus, Loader2, ScanText, Trash2, Upload, Wand2 } 
 import { toast } from 'sonner';
 import type { SchoolScore } from '@/types';
 import {
-  draftToSchoolScore, matchSchoolScoreRosters, parseIntake, parseSchoolScoreWorkbook, sameSchoolScoreEntry,
+  draftToSchoolScore, guessDateFromFileName, matchSchoolScoreRosters, parseIntake, parseSchoolScoreWorkbook, sameSchoolScoreEntry,
   schoolScoreDate, schoolScoreIssue, scoreDedupKey,
   type ScoreDraft, type SchoolScoreRoster, type SchoolScoreTarget,
 } from '@/lib/scoreIntake';
@@ -53,7 +53,7 @@ export function ScoreIntakeDialog({
 }: ScoreIntakeDialogProps) {
   const isExcel = mode === 'excel';
   const [examName, setExamName] = useState(isExcel ? '' : '校内考试');
-  const [date, setDate] = useState(() => isExcel ? '' : schoolScoreDate());
+  const [date, setDate] = useState(() => schoolScoreDate());
   const [subject, setSubject] = useState('英语');
   const [text, setText] = useState('');
   const [rows, setRows] = useState<IntakeRow[] | null>(null);
@@ -63,6 +63,8 @@ export function ScoreIntakeDialog({
   const [workbook, setWorkbook] = useState<{ name: string; sheet: string }>();
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  /** 用户手动改过日期后，不再用文件名推断值覆盖 */
+  const dateTouched = useRef(false);
 
   const desktop = (window as Window & {
     realmDesktop?: { ocr?: (path: string) => Promise<string>; pickImage?: () => Promise<string | null> };
@@ -97,6 +99,8 @@ export function ScoreIntakeDialog({
     resetPreview();
     try {
       // Excel 的归班以完整名册为准，解析阶段只需保留源姓名和字段。
+      const guessed = guessDateFromFileName(file.name);
+      if (guessed && !dateTouched.current) setDate(guessed);
       const { sheet, drafts } = await parseSchoolScoreWorkbook(file, { ...ctx, students: [] });
       const matches = matchSchoolScoreRosters(drafts, eligibleRosters);
       setWorkbook({ name: file.name, sheet });
@@ -149,6 +153,9 @@ export function ScoreIntakeDialog({
   const readyClasses = new Set(ready.map(row => row.classId)).size;
   const issueCount = reviewed.filter(item => item.issue).length;
   const existingCount = reviewed.filter(item => item.duplicate || item.conflict).length;
+  // 缺字段时按钮是灰的，光看界面不知道差什么——底部要直接说出来
+  const missingFields = [!examName.trim() && '考试名称', !date && '考试日期'].filter(Boolean) as string[];
+  const blockingHint = missingFields.length ? `还需填写：${missingFields.join('、')}` : '';
   const canSave = !!examName.trim() && !!date && !!ready.length && !busy && (isExcel || issueCount === 0);
   const groups = new Map<string, typeof reviewed>();
   for (const row of reviewed) {
@@ -164,7 +171,12 @@ export function ScoreIntakeDialog({
   const save = () => {
     if (!canSave) return;
     onSave(ready);
-    toast.success(isExcel ? `已写入 ${readyClasses} 个班级，共 ${ready.length} 条成绩` : `已写入 ${ready.length} 条成绩`);
+    // 被跳过的那几条要说清楚是谁，否则用户以为全写进去了
+    const skipped = reviewed.filter(item => item.issue).map(item => item.draft.sourceName || item.draft.studentName || '未命名');
+    const skippedNote = skipped.length
+      ? { description: `${skipped.slice(0, 3).join('、')}${skipped.length > 3 ? ` 等 ${skipped.length} 条` : ''} 未指定班级，未写入`, duration: 7000 }
+      : undefined;
+    toast.success(isExcel ? `已写入 ${readyClasses} 个班级，共 ${ready.length} 条成绩` : `已写入 ${ready.length} 条成绩`, skippedNote);
     resetPreview();
     setWorkbook(undefined);
     setText('');
@@ -186,7 +198,7 @@ export function ScoreIntakeDialog({
         <div className="score-intake-body">
           <div className="score-intake-exam">
             <label>考试名称<Input value={examName} onChange={e => setExamName(e.target.value)} placeholder="如 26 秋期中考试" required /></label>
-            <label>考试日期<Input type="date" value={date} onChange={e => setDate(e.target.value)} required /></label>
+            <label>考试日期<Input type="date" value={date} onChange={e => { dateTouched.current = true; setDate(e.target.value); }} required /></label>
             <label>科目<Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="英语" /></label>
           </div>
 
@@ -334,14 +346,19 @@ export function ScoreIntakeDialog({
         </div>
 
         <footer className="score-intake-footer">
-          <p>{rows
+          <p>{blockingHint || (rows
             ? isExcel
-              ? [`写入 ${readyClasses} 个班级`, issueCount ? `待核对 ${issueCount} 条将跳过` : '', existingCount ? `已有 ${existingCount} 条将跳过` : ''].filter(Boolean).join(' · ')
+              ? [`写入 ${readyClasses} 个班级`, issueCount ? `${issueCount} 条待指定班级（将跳过）` : '', existingCount ? `已有 ${existingCount} 条将跳过` : ''].filter(Boolean).join(' · ')
               : issueCount ? '请修正或移除待核对项' : '确认后写入本班'
-            : '请填写考试名称、日期并预览成绩'}</p>
+            : '请填写考试名称、日期并预览成绩')}</p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button size="sm" onClick={save} disabled={!canSave}>写入 {ready.length} 条</Button>
+            <Button
+              size="sm"
+              onClick={save}
+              disabled={!canSave}
+              title={canSave ? undefined : (blockingHint || (ready.length ? undefined : '没有可写入的成绩行'))}
+            >写入 {ready.length} 条</Button>
           </div>
         </footer>
       </DialogContent>

@@ -446,7 +446,7 @@ export function matchSchoolScoreRosters(drafts: ScoreDraft[], rosters: SchoolSco
     return {
       target: candidates.length === 1 ? candidates[0] : undefined,
       candidates: candidates.length ? candidates : matches,
-      reason: candidates.length > 1 ? '同名待确认' : matches.length && !candidates.length ? '班级信息待确认' : '未匹配学员',
+      reason: candidates.length > 1 ? '同名学员，请指定班级' : matches.length && !candidates.length ? '班级待确认' : '未匹配到学员',
     };
   });
 }
@@ -525,6 +525,19 @@ export function schoolScoreIssue({ score, totalScore, classRank, classSize, grad
   if (gradeRank !== undefined && (!Number.isInteger(gradeRank) || gradeRank < 1)) return '年级排名须为正整数';
   if (gradeSize !== undefined && (!Number.isInteger(gradeSize) || gradeSize < 1 ||
       (gradeRank !== undefined && gradeRank > gradeSize))) return '年级人数须为正整数且不小于级排';
+}
+
+/**
+ * 从文件名里猜考试日期：`期中英语成绩汇总-2026-11-22.xlsx` → `2026-11-22`。
+ * Excel 导入本身不带日期，让用户每次手填既麻烦又容易漏（漏了按钮是灰的，点了没反应）。
+ */
+export function guessDateFromFileName(name: string): string {
+  const match = /(20\d{2})\s*[-_.年/]?\s*(\d{1,2})\s*[-_.月/]?\s*(\d{1,2})/.exec(String(name || ''));
+  if (!match) return '';
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  return `${match[1]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 export function schoolScoreDate(date = new Date()): string {

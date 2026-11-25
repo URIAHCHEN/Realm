@@ -9,7 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from
 import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
-import { draftToSchoolScore, matchSchoolScoreRosters, matchStudentName, parseIntake, parseRank, parseScorePair, sameSchoolScoreEntry, schoolExamKey, schoolRankChange, schoolScoreInClass, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
+import { draftToSchoolScore, guessDateFromFileName, matchSchoolScoreRosters, matchStudentName, parseIntake, parseRank, parseScorePair, sameSchoolScoreEntry, schoolExamKey, schoolRankChange, schoolScoreInClass, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
 import { blankEssayReview, defaultEssayRubric, essayTotals, essayWordCount, parseEssayReview } from '@/lib/essayReview';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
 import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, resolveCategory } from '@/lib/weakPoints';
@@ -1179,6 +1179,12 @@ group('校内成绩智能录入 · 解析与学员匹配（2026-11-15）');
   const k2 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 126, totalScore: 150 });
   const k3 = scoreDedupKey({ studentName: '陈志佳', examName: '期中考试', date: '2026-11-15', score: 120, totalScore: 150 });
   check(k1 === k2 && k1 !== k3, '同学生同考试同分数判重，分数不同不判重');
+
+  // Excel 导入不带日期，从文件名推断，避免"日期空 → 按钮灰 → 点了没反应"
+  check(guessDateFromFileName('期中英语成绩汇总-2026-11-22.xlsx') === '2026-11-22', '从文件名推断考试日期');
+  check(guessDateFromFileName('成绩 2026年11月2日.xlsx') === '2026-11-02', '中文年月日写法也能补零');
+  check(guessDateFromFileName('成绩汇总.xlsx') === '', '没有日期时不瞎猜');
+  check(guessDateFromFileName('2026-13-40.xlsx') === '', '非法月份日期不采用');
 }
 
 group('作文批改 · 结果与给分口径');

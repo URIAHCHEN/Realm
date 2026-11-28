@@ -194,22 +194,22 @@ group('按学情生成 · 表情清洗 / 附加项 / 进步判断（2026-11-28�
 
   // —— 表情清洗 ——
   const skin = run(mk({ homeworkStatus: '很棒哦👏🏻', scores: { q1: 10, q2: 10 } }), cfg());
-  check(skin.includes('【课堂练习】课堂练习登记为「很棒哦」。'), '带肤色的表情（很棒哦👏🏻）整组清干净，只剩文字');
+  check(skin.includes('【课堂练习】课堂练习做得挺好'), '带肤色的表情（很棒哦👏🏻）整组清干净，只剩文字');
   check(!ORPHAN.test(skin), '输出里没有孤立的表情部件（家长反馈截图里的方块）');
-  check(run(mk({ homeworkStatus: '很棒哦👏🏻', listeningStatus: '很棒哦👏🏻' }), cfg()).includes('【课后任务】这次完成得很棒，值得表扬。'),
+  check(run(mk({ homeworkStatus: '很棒哦👏🏻', listeningStatus: '很棒哦👏🏻' }), cfg()).includes('【课后任务】这次做得挺好'),
     '带肤色的课后任务状态也能归到「完成得很棒」，不再落到「这次的登记是…」兜底句');
   const z = run(mk({ homeworkStatus: '调课👩‍', scores: { q1: 10, q2: 10 } }), cfg());
-  check(z.includes('【课堂练习】课堂练习登记为「调课」。') && !ORPHAN.test(z), '被截断的零宽连接符序列不会留下连接符');
+  check(z.includes('【课堂练习】「调课」。') && !ORPHAN.test(z), '被截断的零宽连接符序列不会留下连接符');
   check(run(mk({ homeworkStatus: '完成80%', scores: { q1: 10, q2: 10 } }), cfg()).includes('「完成80%」'), '清洗不会误删状态里的数字');
 
   // —— 附加项：口语得分不计入总分，但登记了就要说 ——
   const oralCfg = cfg({ questionTypes: [qt('q1', '词汇默写', 10), qt('q2', '单项选择', 10), qt('q3', '口语得分', 100, { excludeFromTotal: true })] });
   const withOral = run(mk({ scores: { q1: 9, q2: 9, q3: 93 } }), oralCfg);
-  check(withOral.includes('【口语得分】这次登记了93分，很棒哦'), '口语等附加项有分数时单独成段，并带上档位');
+  check(withOral.includes('【口语得分】这次93分，很棒哦'), '口语等附加项有分数时单独成段，并带上档位');
   check(withOral.includes('这次小测满分20分'), '附加项不计入小测满分');
   check(!run(mk({ scores: { q1: 9, q2: 9 } }), oralCfg).includes('【口语得分】'), '附加项这节课没登记就不出现');
   const sel = cfg({ customFields: [{ id: 'c1', name: '背诵', kind: 'select', options: ['已通过', '待重背'], order: 0 }] });
-  check(run(mk({ scores: { q1: 10, q2: 10 }, customValues: { c1: '已通过✅' } }), sel).includes('【背诵】这次是「已通过」。'), '选项型自定义列有值时带上');
+  check(run(mk({ scores: { q1: 10, q2: 10 }, customValues: { c1: '已通过✅' } }), sel).includes('【背诵】已通过。'), '选项型自定义列有值时带上');
 
   // —— 开头带上课日期 ——
   check(skin.startsWith('小甲家长好呀～跟您说说第3课（11月22日）的情况。'), '开头带上「几月几日」');
@@ -224,17 +224,23 @@ group('按学情生成 · 表情清洗 / 附加项 / 进步判断（2026-11-28�
   const cfgs = { 1: big, 2: big, 3: big };   // 历史课要用自己的配置才算得出得分率
   const quizLine = (text: string) => text.split('\n').find(l => l.startsWith('【小测】')) || '';
   const single = run(lesson(3, 100), big, { history: [lesson(2, 40)], classMedian: median, lessonConfigs: cfgs });
-  check(quizLine(single).includes('得分率100%') && !single.includes('最近三次小测'), '只比上一次高 60 个百分点也不下结论（一次波动说明不了趋势）');
+  check(quizLine(single).includes('得分率100%') && !/有起色|有些回落/.test(single), '只比上一次高 60 个百分点也不下结论（一次波动说明不了趋势）');
   const rising = quizLine(run(lesson(3, 100), big, { history: [lesson(1, 70), lesson(2, 80)], classMedian: median, lessonConfigs: cfgs }));
-  check(rising.includes('在班里的位置一次比一次靠前'), '连续两次在班里靠前才说进步');
+  check(rising.includes('各自的班级表现') && rising.includes('一次比一次有起色'), '连续两次在班里靠前才说进步');
   const fallingHigh = quizLine(run(lesson(3, 86), big, { history: [lesson(1, 100), lesson(2, 92)], classMedian: median, lessonConfigs: cfgs }));
-  check(!fallingHigh.includes('最近三次小测'), '已经考到 86 分的孩子，名次回落不提醒家长');
+  check(!/有些回落/.test(fallingHigh), '已经考到 86 分的孩子，名次回落不提醒家长');
   const fallingLow = quizLine(run(lesson(3, 60), big, { history: [lesson(1, 90), lesson(2, 80)], classMedian: median, lessonConfigs: cfgs }));
-  check(fallingLow.includes('一次比一次靠后，咱们一起找找卡在哪'), '分数不理想且连续靠后才提醒，并给出下一步');
+  check(fallingLow.includes('对照，孩子最近三次小测有些回落') && fallingLow.includes('从这次失分比较多的地方入手'), '分数不理想且连续靠后才提醒，并给出下一步');
+  const missedLesson = run(lesson(3, 100), big, {
+    history: [lesson(1, 70), { ...lesson(2, 80), attendance: '请假' }],
+    classMedian: median, lessonConfigs: cfgs,
+  });
+  check(!missedLesson.includes('有起色'), '历史请假即使有残留分数，也不参加进步判断');
+  check(!run(mk({ listeningStatus: '要检查' }), cfg()).includes('正确率还可以再提'), '只登记要检查时不推断正确率低');
   const noMedian = run(lesson(3, 100), big, { history: [lesson(1, 70), lesson(2, 80)], lessonConfigs: cfgs });
-  check(!noMedian.includes('最近三次小测'), '没有班级中位数时不判断进步（无法抵消卷子难度）');
+  check(!/有起色|有些回落/.test(noMedian), '没有班级中位数时不判断进步（无法抵消卷子难度）');
   const absoluteOnly = run(lesson(3, 90), big, { history: [lesson(1, 70), lesson(2, 80)], classMedian: { 1: 20, 2: 30, 3: 40 }, lessonConfigs: cfgs });
-  check(!absoluteOnly.includes('最近三次小测'), '绝对得分率连涨 20 个点、但在班里的位置没变，不算进步');
+  check(!/有起色|有些回落/.test(absoluteOnly), '绝对得分率连涨 20 个点、但在班里的位置没变，不算进步');
 
   // —— 班级中位数 ——
   const rosters = [
@@ -279,7 +285,7 @@ group('学情表与个性化私发反馈');
   check(first.scores['完成句子'] === 3 && questionTypes.find(q => q.id === '完成句子')?.fullScore === 5, '有显式满分时，沿用 5 分题而非通用 10 分档位');
   check(/21分.*70%.*第2名/.test(a) && a.includes('词汇默写10/15分') && a.includes('看中文自默'), '按分项匹配词汇默写建议，并保留总分和名次');
   check(/26.5分.*88%.*第1名/.test(b) && b.includes('单项选择3/5分') && b.includes('题干里的线索'), '另一名学员得到不同优势和单选订正建议');
-  check(a.includes('先自己订正') && b.includes('值得表扬') && c.includes('补做时间'), '课后任务状态分别匹配订正、表扬、补做');
+  check(a.includes('先自己订正') && b.includes('课后任务】这次做得挺好') && c.includes('补做时间'), '课后任务状态分别匹配订正、表扬、补做');
   check(c.includes('本班没有小测成绩') && !c.includes('得分率') && !c.includes('第0名'), '调课只有口语记录时不评价小测');
   check(!feedback({ ...first, attendance: '请假' }).includes('21分'), '请假记录不输出历史残留成绩');
   const incomplete = feedback({ ...first, scores: { '词汇默写': 0, '单项选择': 5 } });
@@ -810,24 +816,28 @@ group('详细版反馈生成器');
   }) as unknown as StudentRecord;
 
   const top = buildDetailedFeedback(mkD(), cfgD, statsD, '黎少彬', 0, 21);
-  check(top.text1.includes('这几项本次没有失分'), '详细版：多项满分只陈述事实，不使用套路化夸奖');
+  check(/拿了满分/.test(top.text1), '详细版：多项满分只陈述事实，不使用套路化夸奖');
   check(!/待提升|还有空间|要盯的是|最需要补/.test(top.text1), '详细版：无弱项时不出"要盯的一处"');
-  check(top.text1.startsWith('黎少彬这次 52/52（100%），班级第 1 名（全班第一）。'), '详细版：段①定位句与样例一致');
+  check(top.text1.startsWith('黎少彬这次小测拿到52/52分，得分率100%，班上21位有小测成绩的孩子里排第1名。'), '详细版：段①定位句与样例一致');
 
   const back = buildDetailedFeedback(mkD({ rank: 15, scores: { v1: 18, v2: 2, v3: 10, v4: 7 }, totalScore: 37 }), cfgD, statsD, '张三', 1, 21);
-  check(back.text1.includes('班级后段'), '详细版：第15/21名写"班级后段"（不写中上）');
-  check(back.text1.includes('比班均低'), '详细版：弱项写出与班均的差距');
+  check(back.text1.includes('班上21位有小测成绩的孩子里排第15名'), '详细版：第15/21名按实际人数和名次表达');
+  check(back.text1.includes('比班里平均低'), '详细版：弱项写出与班均的差距');
   check(!back.text1.includes('把题干的关键词没划出来就选了处理好'), '详细版：不出现"把…处理好"的病句拼接');
 
   const badHw = buildDetailedFeedback(mkD({ homeworkStatus: '未完成❌', classPerformance: '正确率低', scores: { v1: 12, v2: 2, v3: 6, v4: 3 }, totalScore: 23, rank: 18 }), cfgD, statsD, '李四', 0, 21);
   check(!badHw.text1.includes('课堂练习完成得很好'), '详细版：课堂练习未完成时不夸课堂练习');
 
   const blank = buildDetailedFeedback(mkD({ scores: { v1: 20, v2: 4, v3: 11, v4: 0 }, totalScore: 35, rank: 12 }), cfgD, statsD, '王五', 0, 21);
-  check(blank.text1.includes('已登记的得分很少'), '详细版：低得分项如实描述，不夸大为能力空白');
+  check(blank.text1.includes('阅读0/9分'), '详细版：低得分项如实描述，不夸大为能力空白');
   check(!/不是不会/.test(blank.text1), '详细版：空白项不写"不是不会"');
 
+  const incomplete = buildDetailedFeedback(mkD({ scores: { v1: 24 }, rank: 1 }), cfgD, statsD, '小甲', 0, 21);
+  check(incomplete.text1.includes('词汇24/24分') && !/得分率|排第/.test(incomplete.text1), '详细版缺测只写已录分项，不写全卷得分率或名次');
+  const missing = buildDetailedFeedback(mkD({ scores: {}, rank: 0, homeworkStatus: '', listeningStatus: '' }), cfgD, statsD, '小甲');
+  check(missing.text1.includes('暂时没有小测分数') && !/0\/0|做完了/.test(missing.text1), '详细版无小测、完成状态时不补造分数和课堂事实');
   const len = (top.text1 + '\n\n' + top.text2).replace(/\s/g, '').length;
-  check(len > 180 && len < 420, `详细版：单条字数在合理区间（实际 ${len}）`);
+  check(len > 90 && len < 300, `详细版：单条字数在合理区间（实际 ${len}）`);
 
   const e0 = buildDetailedFeedback(mkD({ rank: 8, scores: { v1: 20, v2: 4, v3: 11, v4: 6 }, totalScore: 41 }), cfgD, statsD, '甲', 0, 21).text2;
   const e1 = buildDetailedFeedback(mkD({ rank: 8, scores: { v1: 20, v2: 4, v3: 11, v4: 6 }, totalScore: 41 }), cfgD, statsD, '甲', 1, 21).text2;

@@ -1,8 +1,9 @@
 import type { StudentRecord, ClassStats, LessonConfig, OralRatingConfig } from '@/types';
-import { isAbsentRecord, isTransferIn, isTransferRecord, attendanceKind } from '@/lib/attendance';
+import { isAbsentRecord, isTransferIn, isTransferRecord, attendanceKind, isQuizAssessed } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
-import { buildAdaptiveFeedback, type AdaptiveContext } from '@/lib/adaptiveFeedback';
+import { buildAdaptiveFeedback, completeQuizRate, quizItemsOf, type AdaptiveContext } from '@/lib/adaptiveFeedback';
+import { cleanFeedbackStatus, practiceForQuestion } from '@/lib/feedbackPhrases';
 import { rateOralScore } from '@/lib/oralRating';
 import { optionToneLevel } from '@/lib/optionTone';
 import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
@@ -354,9 +355,9 @@ export const FOUR_IN_ONE_MATERIALS = [
 export const DEFAULT_FOUR_IN_ONE_TEMPLATE =
 `【第【课次】课 · 【昵称】】
 【开场】
-【场景引导】🌟 优秀表现：【优秀表现】
-🔍 待提升：【待提升】
-🛠 下一步：【下一步】【新学员补充】
+【优秀表现】
+【待提升】
+【下一步】【新学员补充】
 【参考教辅】
 【结尾】`;
 
@@ -380,79 +381,73 @@ type FourInOnePack = { openers: string[]; closings: string[]; intro: string };
 export const FOUR_IN_ONE_PACKS: Record<'daily' | 'afterclass' | 'comm', FourInOnePack> = {
   daily: {
     intro: '',
-    // 六版人格差异：①亲切日常 ②极简要点 ③专业详实 ④鼓励正向 ⑤复盘推进 ⑥行动约定
-    // 2026-10-23：开场统一以「学生短昵称 + 家长好」起句（【昵称】在生成时替换）；去掉机械的"记了两笔"式说法
     openers: [
-      '【昵称】家长好，今天的课有几点想跟您说，都写在下面：',
-      '【昵称】家长好，第【课次】课的情况如下：',
-      '【昵称】家长您好。本课的内容、表现与测评数据，整理在下面。',
-      '【昵称】家长好，今天有一处做得挺好，先说这个，再说要留心的：',
-      '【昵称】家长您好。这堂课我只看三件事：听进去没有、练对没有、回家能不能接上。',
-      '【昵称】家长您好。情况都写清楚了，末尾有一件事想请您帮个忙。',
+      '【昵称】家长好呀～跟您说说孩子第【课次】课的情况。',
+      '【昵称】家长好，第【课次】课有几处值得跟您说说。',
+      '【昵称】家长您好，跟您同步一下第【课次】课的学习情况。',
+      '【昵称】家长好呀，给您发一下第【课次】课的反馈。',
+      '【昵称】家长好，咱们一起看看孩子第【课次】课的情况。',
+      '【昵称】家长好呀～第【课次】课孩子学得怎么样，我跟您具体说说。',
     ],
     closings: [
-      '您在家若看到什么，随时告诉我。',
-      '就这些，想细聊随时找我。',
-      '需要的话，我可以再整理一份本讲的个性化练习建议。',
-      '这几处我下节课接着核对，有变化再跟您同步。',
-      '这两处我下节课重点看，有变化第一时间告诉您。',
-      '这一项先练一周，下次反馈我给您看同类题的变化。',
+      '有问题随时问我哦～',
+      '孩子练的时候碰到问题，发我看看就好。',
+      '有哪一处您想了解得更细，随时找我聊。',
+      '有什么拿不准的，您让孩子过来问我就好。',
+      '孩子在家练得怎么样，您方便时也可以跟我说说。',
+      '先从这一小步来，有疑问随时找我哦。',
     ],
   },
   afterclass: {
-    intro: '这一讲在行课中段，重点是前后知识的衔接与错题复盘。\n',
+    intro: '这节课可以先挑一处订正，再看同类题能不能自己做对。\n',
     openers: [
-      '【昵称】家长好，课到一半，孩子这段的情况我归拢了几点，说给您：',
-      '【昵称】家长好，行课中的进度同步，只说关键的：',
-      '【昵称】家长您好。本讲承接上一讲，结合近几次测评的走势，孩子的情况如下：',
-      '【昵称】家长好，这段能看出孩子渐渐找到了感觉——先报喜，再说要盯的地方：',
-      '【昵称】家长您好。今天我把前面的内容又串了一遍，孩子的衔接情况如下：',
-      '【昵称】家长您好。中段最容易松劲，今天跟您对一下节奏，末尾有件事想请您配合。',
+      '【昵称】家长好呀～课上到第【课次】节了，跟您说说这一节值得留意的地方。',
+      '【昵称】家长好，发您第【课次】课的情况，咱们看看接下来怎么练。',
+      '【昵称】家长您好，第【课次】课的情况想跟您对一下。',
+      '【昵称】家长好呀～跟您聊聊孩子这节课的表现和课后的安排。',
+      '【昵称】家长好，咱们用第【课次】课的表现看看下一步先抓哪里。',
+      '【昵称】家长好呀，跟您简单说说孩子第【课次】课的情况。',
     ],
     closings: [
-      '中段最怕"以为自己会了"。有疑问随时问我，课上我再带一遍。',
-      '关键两条：错题别压着，节奏别断。',
-      '这个阶段我更看重基础有没有闭合。进度慢一点没关系，别留窟窿。',
-      '这段的进步我看在眼里，保持住。',
-      '下次课前让孩子翻一遍本讲笔记，课上我带着回顾。',
-      '您在家盯一周，我课上接着带——比单纯加练有用。',
+      '练的时候可以让孩子讲讲怎么想的，讲到卡住的地方，随时发我看看。',
+      '先练这一处，有问题咱们再一起看。',
+      '您方便时也可以跟我说说，孩子在家做起来顺不顺。',
+      '订正时有哪一步想不明白，留着来问我就好。',
+      '家里先试这一个做法，有需要我再和您一起看。',
+      '这次先把这一小步弄明白，孩子有疑问随时来找我。',
     ],
   },
   comm: {
     intro: '',
     openers: [
-      '【昵称】家长好，占用您一分钟，说说孩子最近的状态：',
-      '【昵称】家长好，想跟您对一件事：',
-      '【昵称】家长您好。孩子近期的表现我整理了几点，也想听听您看到的情况。',
-      '【昵称】家长好，孩子最近有两件事我挺高兴，也有一处想提一下：',
-      '【昵称】家长您好。这条反馈只说观察到的事实与我的判断，不绕弯子：',
-      '【昵称】家长您好。有个情况想先跟您通个气，再一起商量怎么配合：',
+      '【昵称】家长好呀～想跟您聊聊孩子第【课次】课的情况，也听听您在家看到的。',
+      '【昵称】家长好，想跟您对一下第【课次】课的表现，看看家里怎么配合更顺手。',
+      '【昵称】家长您好，有几处课上的情况想跟您说说，咱们一起看看。',
+      '【昵称】家长好呀，想结合第【课次】课跟您聊聊孩子接下来怎么练。',
+      '【昵称】家长好，跟您说说我看到的第【课次】课的情况。',
+      '【昵称】家长好呀～想跟您商量一下，第【课次】课之后孩子在家可以怎么练。',
     ],
     closings: [
-      '您方便的时候，聊几句都行。',
-      '不急，先听听您的想法。',
-      '方便的话，我给您做一次完整的情况说明。',
-      '孩子整体在往上走，保持沟通就好。',
-      '我把看到的说清楚，怎么做我们商量着来。',
-      '这事您怎么看？我按您的想法调整。',
+      '您在家观察到什么，也可以直接跟我说。',
+      '这一步在家做起来如果有困难，您跟我说，咱们一起想办法。',
+      '您方便的时候回我就好，也想听听孩子自己的想法。',
+      '咱们可以先跟孩子约定一件能做到的小事，试了再一起看。',
+      '孩子愿意的话，也可以让他把最拿不准的一题发给我。',
+      '您觉得家里怎么安排比较合适，咱们可以一起对一下。',
     ],
   },
 };
 
-/**
- * 新学员专用开场/收尾（2026-10-23）：
- * 新学员没有历史数据，用"渐渐找到感觉""照现在的节奏"这类话会与前文冲突，单独给一组中性措辞。
- */
 export const FOUR_IN_ONE_NEW_STUDENT_PACK = {
   openers: [
-    '【昵称】家长好，孩子刚加入不久，这堂课的情况我记在下面：',
-    '【昵称】家长您好。先说说孩子这堂课的表现：',
-    '【昵称】家长好，这堂课我留意了几个地方，跟您说说：',
+    '【昵称】家长好呀～孩子刚加入，先跟您说说这一节课的情况。',
+    '【昵称】家长您好，先说说孩子这堂课做得怎么样。',
+    '【昵称】家长好呀，跟您说说孩子这节课我留意到的地方。',
   ],
   closings: [
-    '孩子还在适应期，有任何情况我们随时沟通。',
-    '先按这个节奏来，过几节课我们再一起看变化。',
-    '刚起步不用急，把习惯立起来最重要。',
+    '刚开始，咱们先从这一小步来。有什么情况随时沟通哦。',
+    '先让孩子把课后怎么练弄清楚，有问题随时来问我。',
+    '刚起步慢一点没关系，先把这次的练习做扎实。',
   ],
 };
 
@@ -483,83 +478,61 @@ export function generateFourInOne(
   /** 学员长期薄弱板块（用于定制教辅推荐；缺省时给通用建议） */
   longTermWeak: string[] = []
 ): string {
-  if (isAbsentRecord(record)) {
-    return `【第${record.lessonNumber}课 · ${nickname}】\n孩子这堂课${record.attendance}，没有参与本讲的测评。落下的内容和补课安排我会单独跟您同步，也欢迎您随时跟我说说孩子的情况～`;
+  const shortNickname = nickname === record.studentName ? generateShortNickname(nickname) : nickname;
+  if (!isQuizAssessed(record, lessonConfig)) {
+    return buildAdaptiveFeedback(record, lessonConfig, shortNickname, { oralRating: oralCfg });
   }
-  const shortNickname = generateShortNickname(nickname);
-  const pack = FOUR_IN_ONE_PACKS[scenarioKey] || FOUR_IN_ONE_PACKS.daily;
-  const n = FOUR_IN_ONE_VARIANT_COUNT;
-  const v = ((variant % n) + n) % n;
-  // 开场与结尾一一配套：第 N 版用第 N 条开场 + 第 N 条结尾，保证同一版的语气/详略一致
-  // 新学员单独一组（不含"渐渐找到感觉""照现在的节奏"这类需要历史数据才能说的话，避免与其他话术冲突）
-  const openerPool = isNewStudent ? FOUR_IN_ONE_NEW_STUDENT_PACK.openers : pack.openers;
-  const closingPool = isNewStudent ? FOUR_IN_ONE_NEW_STUDENT_PACK.closings : pack.closings;
-  const opener = openerPool[v % openerPool.length];
-  const closing = closingPool[v % closingPool.length];
+  const pack = FOUR_IN_ONE_PACKS[scenarioKey];
+  const v = ((variant % FOUR_IN_ONE_VARIANT_COUNT) + FOUR_IN_ONE_VARIANT_COUNT) % FOUR_IN_ONE_VARIANT_COUNT;
+  const phrasePack = isNewStudent ? FOUR_IN_ONE_NEW_STUDENT_PACK : pack;
+  const opener = phrasePack.openers[v % phrasePack.openers.length];
+  const closing = phrasePack.closings[v % phrasePack.closings.length];
 
   const strong = lessonConfig.questionTypes
-    // 未登记的题型不参与强项判定（不能把「没登记」当成 0 分去比班均）
-    .filter(qt => typeof record.scores[qt.id] === 'number' && Number.isFinite(record.scores[qt.id]))
-    .map(qt => ({ qt, name: qt.name, s: record.scores[qt.id], avg: stats.avgScores[qt.id] || 0, full: qt.fullScore }))
-    .filter(x => x.avg > 0 && isQtStrong(x.qt, x.s, x.avg))
-    .sort((a, b) => (b.s - b.avg) - (a.s - a.avg));
-  const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes, stats.avgScores, undefined, stats.registeredCounts);
-  // 作业好/坏按语义色调判定（修复 P0：原硬编码 '超赞完成'/'未完成'/'没带' 为 v1 旧值，
-  // 现行选项已迁移为 完成✅/未完成❌/按要求❗ → 恒 false，家长话术错档）
-  const hwTone = optionToneLevel(record.homeworkStatus);
-  const homeworkGood = hwTone === 'good';
-  const homeworkBad = hwTone === 'bad';
-  const attendKind = attendanceKind(record.attendance);
-  const attendBad = attendKind === 'absent' ? '缺勤' : attendKind === 'late' ? '迟到' : attendKind === 'leave' ? '请假' : '';
+    .filter(qt => Number.isFinite(record.scores?.[qt.id]))
+    .map(qt => ({ qt, score: record.scores[qt.id], avg: stats.avgScores[qt.id] || 0 }))
+    .filter(x => x.avg > 0 && x.score <= x.qt.fullScore && isQtStrong(x.qt, x.score, x.avg))
+    .sort((a, b) => (b.score - b.avg) - (a.score - a.avg))[0];
+  const weak = computeCategoryWeakPoints(record, lessonConfig.questionTypes.filter(qt => !qt.excludeFromTotal), stats.avgScores, undefined, stats.registeredCounts)[0];
+  const classroom = cleanFeedbackStatus(record.homeworkStatus);
+  const homeworkGood = optionToneLevel(classroom) === 'good';
+  const homeworkBad = optionToneLevel(classroom) === 'bad';
+  const dayRate = completeQuizRate(record, lessonConfig);
+  const misses = quizItemsOf(record, lessonConfig)
+    .flatMap(q => q.score !== undefined && q.score < q.max ? [{ name: q.name, lost: q.max - q.score }] : [])
+    .sort((a, b) => b.lost - a.lost);
 
-  // 亮点：同一档位备两种说法，随「换一版措辞」轮换，避免每位家长收到同一句
-  const pick = <T,>(pair: [T, T]): T => pair[v % 2];
-  let praise: string;
-  if (strong.length) {
-    const s0 = strong[0];
-    const gap = Math.max(0, Math.round(s0.s - s0.avg));
-    praise = pick([
-      `${s0.name}本次得分 ${s0.s}/${s0.full}，比班级平均高 ${gap} 分`,
-      `${s0.name}是相对突出的一项，${s0.s}/${s0.full}，高出班均 ${gap} 分`,
-    ]);
-  } else if (record.correctRate >= 90) {
-    praise = pick([
-      `入门测正确率 ${record.correctRate}%，本次各板块完成得比较稳`,
-      `这次正确率 ${record.correctRate}%，已登记板块没有明显短板`,
-    ]);
+  let praise = '';
+  if (strong) {
+    const { qt, score, avg } = strong;
+    const gap = Number((score - avg).toFixed(1));
+    praise = score === qt.fullScore
+      ? `${qt.name}这次拿了满分，这一项做得挺稳。`
+      : `${qt.name}这次是${score}/${qt.fullScore}分，比班里平均高${gap}分。`;
+  } else if (dayRate !== undefined && dayRate >= 90) {
+    praise = `这次小测得分率${dayRate}%，整体发挥挺稳。`;
   } else if (homeworkGood) {
-    praise = pick(['书面作业完成质量很高', '书面作业做得认真，完成质量很高']);
-  } else {
-    praise = pick(['本课学习记录完整，课堂练习照常完成', '这堂课的学习任务已按要求记录']);
+    praise = '这次的课堂练习做完了，课上这一环有跟上。';
   }
 
   const issueParts: string[] = [];
-  if (weak.length) {
-    const w0 = weak[0];
-    const rate = Math.round(w0.studentRate * 100);
-    const gap = Math.max(0, Math.round(Math.abs(w0.diffRate) * 100));
-    issueParts.push(pick([
-      `${w0.category}是最值得再补的一块：得分率 ${rate}%，比班级平均低 ${gap} 个百分点`,
-      `${w0.category}这块可以再抓一抓——得分率 ${rate}%，低于班均 ${gap} 个百分点`,
-    ]));
+  if (weak) {
+    const rate = Math.round(weak.studentRate * 100);
+    const gap = Math.round(Math.abs(weak.diffRate) * 100);
+    issueParts.push(`${weak.category}这块可以先回头看看，这次得分率是${rate}%，比班里平均低${gap}个百分点。`);
   }
-  if (homeworkBad) issueParts.push(`书面作业${record.homeworkStatus}`);
-  if (attendBad) issueParts.push(`本课${attendBad}`);
-  // 没有弱项、作业和考勤也都正常时，不写"没发现明显薄弱处"这类凑数句（用户反馈"很没必要"）
-  const issue = issueParts.join('；');
+  if (homeworkBad) issueParts.push(`课堂练习这次是「${classroom}」。`);
+  if (attendanceKind(record.attendance) === 'late') issueParts.push('这节课到得晚了一点，下次咱们尽量提早几分钟。');
+  const issue = issueParts.join('');
 
-  const nextAction = weak.length
-    ? `针对${weak[0].category}板块（${weak[0].questionTypeNames.join('、')}）先做几道同类题，错题标出出错步骤；隔天不看答案再做一次，确认是否真正改过来`
+  const question = misses.find(item => weak?.questionTypeNames.includes(item.name))?.name ?? misses[0]?.name;
+  const plan = question
+    ? practiceForQuestion(question)
     : homeworkBad
-      ? '今晚把这次的作业补齐并订正，下次课带来我看看'
-      : attendBad
-        ? '课后回看本讲的笔记和回放，落下的内容补上，不清楚的地方随时问我'
-        : isNewStudent
-          ? '先按这个节奏来：课后任务按计划完成，错题当场弄懂'
-          : '照现在的节奏走：课后任务按计划完成，错题及时过一遍';
-  // 2026-10-23：模板行已有「🛠 下一步：」标签，plan 不再另加一句式标签前缀（否则双重标签）
-  const planLead = scenarioKey === 'afterclass' ? '这阶段重点抓一下——' : scenarioKey === 'comm' ? '最想请您配合的是——' : '';
-  const plan = `${planLead}${nextAction}`;
+      ? '麻烦您和孩子约个时间，先把这次没做完的课堂练习补齐，卡住的题可以圈出来问我。'
+      : dayRate !== undefined
+        ? '有空可以挑一道这次做对的题，请孩子讲一下自己的思路。能说清楚，下次遇到类似题就有办法了。'
+        : '课后可以请孩子自己挑一道课上的例题，说说他记住了哪个做法。';
 
   const raw = (templateOverride != null ? templateOverride : lessonConfig.fourInOneTemplate);
   const base = (raw && raw.trim()) ? raw : DEFAULT_FOUR_IN_ONE_TEMPLATE;
@@ -602,6 +575,7 @@ export function generateFourInOne(
   }
 
   // 先替换"成员级"占位符（待提升/学习建议为空时整行删），再插入开场/结尾
+  fourTpl = dropLineIfLabelOnly(fourTpl, '【优秀表现】', praise, ['优秀表现', '做得好的地方']);
   fourTpl = dropLineIfLabelOnly(fourTpl, '【待提升】', issue, '待提升');
   fourTpl = dropLineIfLabelOnly(fourTpl, '【学习建议】', extraVars?.['【学习建议】'] ?? '', '学习建议');
 
@@ -628,7 +602,7 @@ export function generateFourInOne(
   if (!withMaterials) {
     out = out.split('\n').filter(l => !/参考教辅|^\s*(📚|🎧|💡)|^\s*·\s/.test(l.trim())).join('\n');
   }
-  out = out.replace(/\n{3,}/g, '\n\n').trimEnd();
+  out = out.replace(/\n{3,}/g, '\n\n').trim();
   return out;
 }
 

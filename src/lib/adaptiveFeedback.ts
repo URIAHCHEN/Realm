@@ -2,19 +2,7 @@ import { attendanceKind, isTransferIn } from '@/lib/attendance';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
 import { normalizeOralRating, type OralRatingConfig } from '@/lib/oralRating';
 import type { LessonConfig, StudentRecord } from '@/types';
-
-/**
- * 去掉状态文案里的表情符号，只留老师能读、家长能懂的文字。
- *
- * 必须整组清干净：一个表情往往由多个码点组成（基座 + 肤色修饰符 + 变体选择符 + 零宽连接符）。
- * 下面每一项都只匹配「一个」码点，而不是一整串组合：
- *   图形象字（基座）、肤色修饰符、国旗字母、变体选择符、默认可忽略的格式字符（含零宽连接符）、按键角标。
- * 只清「图形象形字」会漏掉肤色修饰符——`很棒哦👏🏻` 去掉 👏 后剩一个孤立的 🏻，
- * 没有基座可依附，渲染出来就是一个方块（2026-11-28 家长反馈截图里的乱码）。
- * 这里不使用 \p{Emoji}：它把数字 0-9、#、* 也算作表情，会误删分数里的字符。
- */
-const EMOJI_PARTS = /[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\p{Variation_Selector}\p{Default_Ignorable_Code_Point}\u20E3]/gu;
-const cleanStatus = (value?: string) => (value ?? '').replace(EMOJI_PARTS, '').trim().replace(/[。！!]+$/, '');
+import { cleanFeedbackStatus, practiceForQuestion } from '@/lib/feedbackPhrases';
 
 export interface AdaptiveContext {
   /** 该生在本班的所有记录（含本课）；用来和之前几次小测比，判断进步或退步 */
@@ -34,14 +22,14 @@ function scoreValue(raw: unknown): number | undefined {
 }
 
 /** 一行里的计分项：题型 + 计入总分的数值型自定义列，不含「口语得分」这类附加项 */
-function scoredItems(record: StudentRecord, config?: LessonConfig) {
+export function quizItemsOf(record: StudentRecord, config?: LessonConfig) {
   if (!config) return [];
   return [
     ...(config.questionTypes || []).filter(q => !q.excludeFromTotal).map(q => ({
-      name: q.name, max: q.fullScore, score: scoreValue(record.scores?.[q.id]),
+      questionTypeId: q.id, name: q.name, max: q.fullScore, score: scoreValue(record.scores?.[q.id]),
     })),
     ...(config.customFields || []).filter(f => f.kind === 'number' && f.includeInTotal).map(f => ({
-      name: f.name, max: f.fullScore ?? 0, score: scoreValue(record.customValues?.[f.id]),
+      questionTypeId: undefined, name: f.name, max: f.fullScore ?? 0, score: scoreValue(record.customValues?.[f.id]),
     })),
   ];
 }
@@ -50,8 +38,8 @@ function scoredItems(record: StudentRecord, config?: LessonConfig) {
  * 整卷得分率（0-100 的整数）。只有每一项都登记了、且没有超满分，才算「这一课可比」；
  * 缺项时算出来的百分比会和满勤那一次不公平地比较，宁可不说。
  */
-function completeRate(record: StudentRecord, config?: LessonConfig): number | undefined {
-  const items = scoredItems(record, config);
+export function completeQuizRate(record: StudentRecord, config?: LessonConfig): number | undefined {
+  const items = quizItemsOf(record, config);
   if (!items.length) return;
   let total = 0;
   let full = 0;
@@ -67,15 +55,6 @@ function completeRate(record: StudentRecord, config?: LessonConfig): number | un
 function bandLabel(score: number, config?: AdaptiveContext['oralRating']): string {
   const bands = normalizeOralRating(config).bands;
   return (bands.find(b => score >= b.min) ?? bands[bands.length - 1])?.label ?? '';
-}
-
-function practiceFor(name: string): string {
-  if (/默写|单词|词汇听写|听写/.test(name)) return '把这次写错的词圈出来，今天看中文自默一遍，隔一天再默一次。';
-  if (/连词成句|句子排序|词序|句子重组/.test(name)) return '挑一道错题，把词重新排一遍，读通后再检查词序、句首大写和标点。';
-  if (/完成句子|句子填空|翻译/.test(name)) return '挑一道错题，先圈出中文提示里的关键词，再把整句补写一遍，核对表达是否完整。';
-  if (/选择/.test(name)) return '请孩子挑一道选错的题，圈出题干里的线索，再说说为什么选正确选项。';
-  if (/阅读|完形/.test(name)) return '挑一道错题，回原文划出支持正确选项的一句话，再用自己的话讲一遍。';
-  return `把「${name}」的一道错题遮住答案重做，再对照答案说一说刚才哪里改了。`;
 }
 
 /** `2026-11-22` → `11月22日`；日期缺失或格式不对就不带 */
@@ -118,7 +97,7 @@ export function buildClassMedianRates(
   for (const record of records) {
     const kind = attendanceKind(record.attendance);
     if (kind === 'leave' || kind === 'absent') continue;
-    const rate = completeRate(record, lessonConfigs?.[record.lessonNumber]);
+    const rate = completeQuizRate(record, lessonConfigs?.[record.lessonNumber]);
     if (rate === undefined) continue;
     byLesson.set(record.lessonNumber, [...(byLesson.get(record.lessonNumber) || []), rate]);
   }
@@ -146,7 +125,8 @@ function trendLine(record: StudentRecord, current: number | undefined, context: 
   if (currentMedian === undefined) return '';
   const earlier = context.history
     .filter(r => r.studentName === record.studentName && r.lessonNumber < record.lessonNumber)
-    .map(r => ({ lesson: r.lessonNumber, rate: completeRate(r, context.lessonConfigs?.[r.lessonNumber]), median: medianOf(r.lessonNumber) }))
+    .filter(r => !['leave', 'absent'].includes(attendanceKind(r.attendance)))
+    .map(r => ({ lesson: r.lessonNumber, rate: completeQuizRate(r, context.lessonConfigs?.[r.lessonNumber]), median: medianOf(r.lessonNumber) }))
     .filter((x): x is { lesson: number; rate: number; median: number } => x.rate !== undefined && x.median !== undefined)
     .sort((a, b) => a.lesson - b.lesson)
     .slice(-2)
@@ -155,12 +135,12 @@ function trendLine(record: StudentRecord, current: number | undefined, context: 
   if (series.length < 3) return '';
   const first = series[1] - series[0];
   const second = series[2] - series[1];
-  if (first >= TREND_MIN && second >= TREND_MIN) return '最近三次小测，在班里的位置一次比一次靠前，这个势头很好。';
+  if (first >= TREND_MIN && second >= TREND_MIN) return '把孩子这三次小测放到各自的班级表现里看，一次比一次有起色，这点挺值得肯定的。';
   if (first <= -TREND_MIN && second <= -TREND_MIN) {
     // 只提醒真正需要留意的。已经考得不错的孩子，位置回落多半是别人追了上来，
     // 这时说「找找卡在哪」会让家长对着一张 98 分的卷子发愁。
     if (current >= SOLID_RATE) return '';
-    return '最近三次小测，在班里的位置一次比一次靠后，咱们一起找找卡在哪。';
+    return '和每次班级的整体表现对照，孩子最近三次小测有些回落。咱们先从这次失分比较多的地方入手。';
   }
   return '';
 }
@@ -171,27 +151,29 @@ export function buildAdaptiveFeedback(record: StudentRecord, config: LessonConfi
   const intro = `${shortName}家长好呀～跟您说说第${record.lessonNumber}课${day ? `（${day}）` : ''}的情况。`;
   if (attendance === 'leave' || attendance === 'absent') {
     const status = attendance === 'leave' ? '请假了' : '没有到课';
-    return `${intro}\n\n孩子这节课${status}，本课没有测评成绩。如需确认补课或练习安排，随时找我～`;
+    return `${intro}\n\n孩子这节课${status}，这次小测就先不算进来。要是想对一下补课或练习怎么安排，随时找我哦～`;
   }
 
   const sections: string[] = [];
   const transferIn = isTransferIn(record, config);
   const attendanceText = {
     onTime: '这节课准时到课。',
-    late: '这节课有迟到，下次咱们尽量提前一点到。',
-    transfer: transferIn ? '这节课调入，本班有小测记录。' : '这节课登记了调课，本班没有小测成绩。',
+    late: '这节课到得晚了一点，下次咱们尽量提早几分钟。',
+    transfer: transferIn ? '孩子这节课调到我们班，小测也一起做了。' : '孩子这节课调课，本班没有小测成绩。',
     unknown: '',
   }[attendance];
   if (attendanceText) sections.push(`【考勤】${attendanceText}`);
-  const classroom = cleanStatus(record.homeworkStatus);
+  const classroom = cleanFeedbackStatus(record.homeworkStatus);
   if (classroom) {
-    const text = /^(完成|圆满完成|超赞完成)$/.test(classroom) ? '课堂练习已完成。' : `课堂练习登记为「${classroom}」。`;
+    const text = /^(很棒哦?|优秀|超赞完成)$/.test(classroom)
+      ? '课堂练习做得挺好，这点继续保持哦。'
+      : /^(完成|圆满完成)$/.test(classroom) ? '这次的课堂练习做完了。' : `「${classroom}」。`;
     sections.push(`【课堂练习】${text}`);
   }
-  const performance = cleanStatus(record.classPerformance);
-  if (performance) sections.push(`【课堂表现】本课登记为「${performance}」。`);
+  const performance = cleanFeedbackStatus(record.classPerformance);
+  if (performance) sections.push(`【课堂表现】${performance}。`);
 
-  const items = scoredItems(record, config);
+  const items = quizItemsOf(record, config);
   const scored = items.flatMap(({ name, max, score }) =>
     Number.isFinite(max) && max > 0 && score !== undefined && score <= max
       ? [{ name, max, score, lost: Number((max - score).toFixed(8)), rate: score / max }] : [],
@@ -207,16 +189,18 @@ export function buildAdaptiveFeedback(record: StudentRecord, config: LessonConfi
     const rank = Number.isInteger(record.rank) && record.rank > 0 ? `，班级第${record.rank}名` : '';
     const summary = complete
       ? `这次小测满分${fullScore}分，${shortName}拿到${total}分，得分率${Math.round(total / fullScore * 100)}%${rank}。`
-      : `目前可核对的分项有${scored.map(format).join('、')}。`;
+      : `有分数的几项是${scored.map(format).join('、')}。`;
     const strength = complete && weakest.length === 0
-      ? '这次每一项都拿到了满分，继续保持～'
+      ? '这次各项都是满分，挺稳的👏'
       : complete && positives.length
-        ? `${positives.slice(0, 3).map(q => q.lost === 0 ? `${q.name}拿到满分` : format(q)).join('，')}，${positives.length === 1 ? '这项' : '这几项'}做得稳。`
+        ? `做得比较稳的是${positives.slice(0, 3).map(q => q.lost === 0 ? `${q.name}（满分）` : format(q)).join('、')}。`
         : '';
     const focus = weakest[0];
     const second = weakest[1];
     const priority = complete && focus
-      ? `可以先回看${format(focus)}，这项失了${focus.lost}分${second && (second.rate <= .6 || second.lost === focus.lost) ? `；${format(second)}也值得订正` : ''}。`
+      ? (weakest.length === 1 && focus.lost <= 1
+        ? `差的${focus.lost}分在${format(focus)}，把这一处订正清楚就行。`
+        : `先看${format(focus)}，这项丢了${focus.lost}分。${second && (second.rate <= .6 || second.lost === focus.lost) ? `${format(second)}也可以回头看看。` : ''}`)
       : '';
     const trend = complete && fullScore ? trendLine(record, Math.round(total / fullScore * 100), context) : '';
     sections.push(`【小测】${summary}${strength}${priority}${trend}`);
@@ -227,37 +211,45 @@ export function buildAdaptiveFeedback(record: StudentRecord, config: LessonConfi
   for (const q of (config.questionTypes || []).filter(q => q.excludeFromTotal)) {
     const score = scoreValue(record.scores?.[q.id]);
     if (score === undefined) continue;
-    const label = bandLabel(score, context.oralRating);
-    sections.push(`【${q.name}】这次登记了${score}分${label ? `，${label}` : ''}。`);
+    const oral = /口语|朗读|跟读|演讲/.test(q.name);
+    const label = oral ? cleanFeedbackStatus(bandLabel(score, context.oralRating)) : '';
+    const denom = !oral && q.fullScore > 0 ? `/${q.fullScore}` : '';
+    sections.push(`【${q.name}】这次${score}${denom}分${label ? `，${label}` : ''}。`);
   }
   // 选项型自定义列（老师自己加的列）：有值就带上，用老师填的原话
   for (const field of (config.customFields || []).filter(f => f.kind === 'select')) {
     const value = record.customValues?.[field.id];
-    const text = typeof value === 'string' ? cleanStatus(value) : '';
-    if (text) sections.push(`【${field.name}】这次是「${text}」。`);
+    const text = typeof value === 'string' ? cleanFeedbackStatus(value) : '';
+    if (text) sections.push(`【${field.name}】${text}。`);
   }
 
-  const task = cleanStatus(record.listeningStatus);
+  const task = cleanFeedbackStatus(record.listeningStatus);
   const unfinished = /未(完成|做完|提交|交|做)|漏交|没(完成|做完|交|做)|待补/.test(task);
   const needsCheck = /正确率.{0,2}(低|偏低)|要检查|需.{0,3}(订正|检查)|不过关/.test(task);
-  if (unfinished) sections.push('【课后任务】还有任务没完成，麻烦您和孩子确认一下补做时间。');
-  else if (needsCheck) sections.push('【课后任务】这次需要再检查一遍，可以让孩子先自己订正，再核对答案。');
+  if (unfinished) sections.push('【课后任务】这次还没做完，麻烦您和孩子约个补做时间，先把这次的任务补齐哦。');
+  else if (needsCheck) {
+    const concern = /正确率.{0,2}(低|偏低)/.test(task) ? '这次正确率还可以再提一提。' : '这次的任务还要回头检查一下。';
+    sections.push(`【课后任务】${concern}麻烦您提醒孩子先自己订正，再对答案看看漏了哪一步。`);
+  }
   else if (task === '具体分数') {
     const score = scoreValue(record.listeningScore);
-    if (score !== undefined) sections.push(`【课后任务】这次登记了${score}分。`);
+    if (score !== undefined) sections.push(`【课后任务】这次拿到${score}分。`);
   } else if (/^(很棒|很棒哦|优秀|完成|圆满完成|超赞完成)$/.test(task)) {
     sections.push(task.startsWith('很棒') || /优秀|超赞/.test(task)
-      ? '【课后任务】这次完成得很棒，值得表扬。'
-      : '【课后任务】这次已完成。');
+      ? '【课后任务】这次做得挺好，继续保持这个节奏哦。'
+      : '【课后任务】这次也做完啦。');
   } else if (task) {
-    sections.push(`【课后任务】这次的登记是「${task}」。`);
+    sections.push(`【课后任务】${task}。`);
   }
 
   if (weakest[0] && (!unfinished || weakest[0].lost >= 2)) {
-    sections.push(`【小建议】${practiceFor(weakest[0].name)}`);
+    sections.push(`【小建议】${practiceForQuestion(weakest[0].name)}`);
   } else if (!weakest.length && scored.length === items.length && scored.length > 0 && !unfinished && !needsCheck) {
-    sections.push('【小建议】下次课前可以选一道这次做对的题，请孩子讲讲自己的解题思路。');
+    sections.push('【小建议】有空可以挑一道做对的题，请孩子讲讲用了什么办法。能讲清楚，下次遇到相似题就有思路了。');
   }
-  if (!sections.length) return `${intro}\n\n这次的学情还在整理，有问题随时问我～`;
-  return [intro, sections.join('\n'), '有问题随时问我哦～'].join('\n\n');
+  if (!sections.length) return `${intro}\n\n这节课暂时没有可以反馈的记录。有问题随时问我哦～`;
+  const closing = weakest.length
+    ? '订正时哪一步没想通，随时发我看看哦～'
+    : '有问题随时问我哦～';
+  return [intro, sections.join('\n'), closing].join('\n\n');
 }

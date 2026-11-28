@@ -11,6 +11,7 @@ import {
   CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generatePrivateFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
+import { buildClassMedianRates } from '@/lib/adaptiveFeedback';
 import { isAbsentRecord, isQuizAssessed, isRecordedQuiz } from '@/lib/attendance';
 import { exportTeacherElfXlsx, planTeacherElfColumns, type TeacherElfTextSlot } from '@/lib/teacherElfExport';
 import { longTermWeakCategories } from '@/lib/longTermWeak';
@@ -262,6 +263,8 @@ export function FeedbackGenerator({
     return map;
   }, [students, recordsByName, lessonConfigs, lessonConfig, getNickname]);
 
+  // 各课次班级得分率中位数：判断「在班里是进步还是退步」要拿它扣掉卷子难度的起伏
+  const classMedian = useMemo(() => buildClassMedianRates(records, lessonConfigs), [records, lessonConfigs]);
   const detailedFourInOne = isFourInOne && detailLevel === 'detailed';
   const draftMode = isFourInOne ? detailLevel : usesTemplate ? 'template' : 'adaptive';
   const baseByName = useMemo(() => {
@@ -278,11 +281,16 @@ export function FeedbackGenerator({
       }
       const source = isFourInOne
         ? generateFourInOne(record, lessonConfig, stats, nickname, isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, advice, weakByStudent.get(name) ?? [])
-        : generatePrivateFeedback(record, lessonConfig, stats, nickname, draftFeedback, oralRating, advice);
+        : generatePrivateFeedback(record, lessonConfig, stats, nickname, draftFeedback, oralRating, advice, {
+          // 给上历史记录和各课配置，「按学情生成」才能说出「比第 N 课进步了」
+          history: recordsByName.get(record.studentName) ?? [],
+          lessonConfigs,
+          classMedian,
+        });
       map.set(name, { source });
     });
     return map;
-  }, [students, lessonRecordsByName, getNickname, adviceMap, detailedFourInOne, isFourInOne, lessonConfig, stats, variant, assessedCount, isNewStudent, libraryLinks, draftFourInOne, scenario, withMaterials, oralRating, weakByStudent, draftFeedback]);
+  }, [students, lessonRecordsByName, recordsByName, lessonConfigs, classMedian, getNickname, adviceMap, detailedFourInOne, isFourInOne, lessonConfig, stats, variant, assessedCount, isNewStudent, libraryLinks, draftFourInOne, scenario, withMaterials, oralRating, weakByStudent, draftFeedback]);
   const feedbackByName = new Map(Array.from(baseByName, ([name, base]) => {
     const edit = edits.get(`${draftMode}:${name}`);
     return [name, edit?.source === base.source
@@ -338,7 +346,11 @@ export function FeedbackGenerator({
     const adviceRef = { '【学习建议】': adviceMap[name] || '' };
     const source = kind === 'fourInOne'
       ? generateFourInOne(rec, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, adviceRef, weakOf(name))
-      : generatePrivateFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef);
+      : generatePrivateFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef, {
+        history: recordsByName.get(rec.studentName) ?? [],
+        lessonConfigs,
+        classMedian,
+      });
     const mode = kind === 'fourInOne' ? 'brief' : usesTemplate ? 'template' : 'adaptive';
     const edit = edits.get(`${mode}:${name}`);
     return edit?.source === source ? edit.text : source;

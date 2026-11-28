@@ -60,6 +60,7 @@ const ModuleLoading = ({ label }: { label: string }) => (
   </div>
 );
 import { exportToCSV, downloadCSV, generatePrivateFeedback, copyToClipboard } from '@/lib/feedbackTemplates';
+import { buildClassMedianRates } from '@/lib/adaptiveFeedback';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
@@ -912,7 +913,12 @@ function App() {
     if (!rec) { toast.error('该生本课暂无记录，无法生成反馈'); return; }
     const stats = calculateClassStats(cls.records.filter(r => r.lessonNumber === currentLessonNumber), currentLessonConfig.questionTypes, currentLessonConfig.customFields);
     const nick = getStudentNickname(studentName, currentClassId || undefined);
-    const text = generatePrivateFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {});
+    // 与「反馈生成」页同一套上下文：行内复制和页面里生成的文字必须一字不差
+    const text = generatePrivateFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {}, {
+      history: cls.records.filter(r => r.studentName === studentName),
+      lessonConfigs: cls.lessonConfigs,
+      classMedian: buildClassMedianRates(cls.records, cls.lessonConfigs),
+    });
     const ok = await copyToClipboard(text);
     if (ok) toast.success(`已复制 ${nick} 的私发反馈`);
     else toast.error('复制失败，请手动选择复制');

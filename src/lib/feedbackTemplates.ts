@@ -2,7 +2,7 @@ import type { StudentRecord, ClassStats, LessonConfig, OralRatingConfig } from '
 import { isAbsentRecord, isTransferIn, isTransferRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
-import { buildAdaptiveFeedback } from '@/lib/adaptiveFeedback';
+import { buildAdaptiveFeedback, type AdaptiveContext } from '@/lib/adaptiveFeedback';
 import { rateOralScore } from '@/lib/oralRating';
 import { optionToneLevel } from '@/lib/optionTone';
 import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
@@ -190,12 +190,14 @@ export function generatePrivateFeedback(
   templateOverride?: string,
   oralCfg?: OralRatingConfig,
   extraVars?: Record<string, string>,
+  adaptive?: Omit<AdaptiveContext, 'oralRating'>,
 ): string {
   if (lessonConfig.privateFeedbackMode === 'template') {
     return generatePersonalFeedback(record, lessonConfig, stats, nickname, templateOverride, oralCfg, extraVars);
   }
   const name = nickname === record.studentName ? generateShortNickname(nickname) : nickname;
-  return buildAdaptiveFeedback(record, lessonConfig, name);
+  // 口语档位沿用上面同一个 oralCfg；历史记录与各课配置由调用方给，给不到就只看本课
+  return buildAdaptiveFeedback(record, lessonConfig, name, { ...adaptive, oralRating: oralCfg });
 }
 
 export function generatePersonalFeedback(

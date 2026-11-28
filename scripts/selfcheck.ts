@@ -9,6 +9,7 @@ import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed, isTra
 import { buildDynamicVariables, generatePersonalFeedback, generatePrivateFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
+import { buildAdaptiveFeedback, buildClassMedianRates, type AdaptiveContext } from '@/lib/adaptiveFeedback';
 import { draftToSchoolScore, guessDateFromFileName, matchSchoolScoreRosters, matchStudentName, parseIntake, parseRank, parseScorePair, sameSchoolScoreEntry, schoolExamKey, schoolRankChange, schoolScoreInClass, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
 import { blankEssayReview, defaultEssayRubric, essayTotals, essayWordCount, parseEssayReview } from '@/lib/essayReview';
 import { DEFAULT_QUARTERLY_TEMPLATE, computeQuarterlyStats, humanizeEmptyOral, isOralQuestionTypeName, listQuarters, oralScoreOf, quarterlyVariables, renderQuarterlyTemplate } from '@/lib/quarterlyStats';
@@ -175,6 +176,77 @@ check(dense.rows.find(r => r.studentName === '丙')?.scoreValues?.['语法选择
 check(dense.errors.some(e => e.includes('丙')), '负分给出可读提示');
 check(dense.rows.find(r => r.studentName === '丁')?.scoreValues?.['语法选择'] === 14, '全角数字 １４ 被正确解析为 14');
 check(col('口语得分')?.excludeFromTotal === true, '口语列仍被标记为附加项');
+
+group('按学情生成 · 表情清洗 / 附加项 / 进步判断（2026-11-28）');
+{
+  const qt = (id: string, name: string, fullScore: number, extra: Partial<QuestionType> = {}): QuestionType => ({ id, name, fullScore, order: 0, ...extra });
+  const mk = (over: Partial<StudentRecord>): StudentRecord => ({
+    id: 'a1', studentName: '甲', lessonNumber: 3, seasons: ['秋'], attendance: '准时👍', homeworkStatus: '完成✅',
+    listeningStatus: '很棒哦👏', listeningScore: 0, scores: {}, customValues: {}, totalScore: 0, correctRate: 0, rank: 0, date: '2026-11-22',
+    ...over,
+  } as StudentRecord);
+  const cfg = (over: Partial<LessonConfig> = {}): LessonConfig => ({
+    lessonNumber: 3, questionTypes: [qt('q1', '词汇默写', 10), qt('q2', '单项选择', 10)], customFields: [], ...over,
+  } as unknown as LessonConfig);
+  const run = (r: StudentRecord, c: LessonConfig, ctx: AdaptiveContext = {}) => buildAdaptiveFeedback(r, c, '小甲', ctx);
+  // 孤立的表情部件：肤色修饰符 / 变体选择符 / 零宽连接符前面没有图形象字
+  const ORPHAN = /(?<!\p{Extended_Pictographic})[\u{1F3FB}-\u{1F3FF}\p{Variation_Selector}\p{Default_Ignorable_Code_Point}]/u;
+
+  // —— 表情清洗 ——
+  const skin = run(mk({ homeworkStatus: '很棒哦👏🏻', scores: { q1: 10, q2: 10 } }), cfg());
+  check(skin.includes('【课堂练习】课堂练习登记为「很棒哦」。'), '带肤色的表情（很棒哦👏🏻）整组清干净，只剩文字');
+  check(!ORPHAN.test(skin), '输出里没有孤立的表情部件（家长反馈截图里的方块）');
+  check(run(mk({ homeworkStatus: '很棒哦👏🏻', listeningStatus: '很棒哦👏🏻' }), cfg()).includes('【课后任务】这次完成得很棒，值得表扬。'),
+    '带肤色的课后任务状态也能归到「完成得很棒」，不再落到「这次的登记是…」兜底句');
+  const z = run(mk({ homeworkStatus: '调课👩‍', scores: { q1: 10, q2: 10 } }), cfg());
+  check(z.includes('【课堂练习】课堂练习登记为「调课」。') && !ORPHAN.test(z), '被截断的零宽连接符序列不会留下连接符');
+  check(run(mk({ homeworkStatus: '完成80%', scores: { q1: 10, q2: 10 } }), cfg()).includes('「完成80%」'), '清洗不会误删状态里的数字');
+
+  // —— 附加项：口语得分不计入总分，但登记了就要说 ——
+  const oralCfg = cfg({ questionTypes: [qt('q1', '词汇默写', 10), qt('q2', '单项选择', 10), qt('q3', '口语得分', 100, { excludeFromTotal: true })] });
+  const withOral = run(mk({ scores: { q1: 9, q2: 9, q3: 93 } }), oralCfg);
+  check(withOral.includes('【口语得分】这次登记了93分，很棒哦'), '口语等附加项有分数时单独成段，并带上档位');
+  check(withOral.includes('这次小测满分20分'), '附加项不计入小测满分');
+  check(!run(mk({ scores: { q1: 9, q2: 9 } }), oralCfg).includes('【口语得分】'), '附加项这节课没登记就不出现');
+  const sel = cfg({ customFields: [{ id: 'c1', name: '背诵', kind: 'select', options: ['已通过', '待重背'], order: 0 }] });
+  check(run(mk({ scores: { q1: 10, q2: 10 }, customValues: { c1: '已通过✅' } }), sel).includes('【背诵】这次是「已通过」。'), '选项型自定义列有值时带上');
+
+  // —— 开头带上课日期 ——
+  check(skin.startsWith('小甲家长好呀～跟您说说第3课（11月22日）的情况。'), '开头带上「几月几日」');
+  check(run(mk({ scores: { q1: 10, q2: 10 }, date: '' }), cfg()).startsWith('小甲家长好呀～跟您说说第3课的情况。'), '日期缺失时不带括号');
+  check(run(mk({ scores: { q1: 10, q2: 10 }, date: '2026-13-40' }), cfg()).includes('第3课的情况'), '日期不合法时当作没有');
+
+  // —— 进步 / 退步：只认「相对班级、连续两次同向」，且不为高分学生制造焦虑 ——
+  const big = cfg({ questionTypes: [qt('q1', '词汇默写', 25), qt('q2', '单项选择', 25)] });
+  // 两题各 25 分、合计 50：每题填 rate/4，整卷得分率正好是 rate%
+  const lesson = (n: number, rate: number): StudentRecord => mk({ id: `l${n}`, lessonNumber: n, scores: { q1: rate / 4, q2: rate / 4 } });
+  const median = { 1: 70, 2: 70, 3: 70 };
+  const cfgs = { 1: big, 2: big, 3: big };   // 历史课要用自己的配置才算得出得分率
+  const quizLine = (text: string) => text.split('\n').find(l => l.startsWith('【小测】')) || '';
+  const single = run(lesson(3, 100), big, { history: [lesson(2, 40)], classMedian: median, lessonConfigs: cfgs });
+  check(quizLine(single).includes('得分率100%') && !single.includes('最近三次小测'), '只比上一次高 60 个百分点也不下结论（一次波动说明不了趋势）');
+  const rising = quizLine(run(lesson(3, 100), big, { history: [lesson(1, 70), lesson(2, 80)], classMedian: median, lessonConfigs: cfgs }));
+  check(rising.includes('在班里的位置一次比一次靠前'), '连续两次在班里靠前才说进步');
+  const fallingHigh = quizLine(run(lesson(3, 86), big, { history: [lesson(1, 100), lesson(2, 92)], classMedian: median, lessonConfigs: cfgs }));
+  check(!fallingHigh.includes('最近三次小测'), '已经考到 86 分的孩子，名次回落不提醒家长');
+  const fallingLow = quizLine(run(lesson(3, 60), big, { history: [lesson(1, 90), lesson(2, 80)], classMedian: median, lessonConfigs: cfgs }));
+  check(fallingLow.includes('一次比一次靠后，咱们一起找找卡在哪'), '分数不理想且连续靠后才提醒，并给出下一步');
+  const noMedian = run(lesson(3, 100), big, { history: [lesson(1, 70), lesson(2, 80)], lessonConfigs: cfgs });
+  check(!noMedian.includes('最近三次小测'), '没有班级中位数时不判断进步（无法抵消卷子难度）');
+  const absoluteOnly = run(lesson(3, 90), big, { history: [lesson(1, 70), lesson(2, 80)], classMedian: { 1: 20, 2: 30, 3: 40 }, lessonConfigs: cfgs });
+  check(!absoluteOnly.includes('最近三次小测'), '绝对得分率连涨 20 个点、但在班里的位置没变，不算进步');
+
+  // —— 班级中位数 ——
+  const rosters = [
+    lesson(1, 80), lesson(1, 80), lesson(1, 80), lesson(1, 60), lesson(1, 60), lesson(1, 100),
+    mk({ lessonNumber: 1, attendance: '请假🏫', scores: { q1: 12.5, q2: 12.5 } }),
+    mk({ lessonNumber: 1, scores: { q1: 12.5 } }),
+    lesson(2, 80), lesson(2, 80),
+  ];
+  const rates = buildClassMedianRates(rosters, { 1: big, 2: big });
+  check(rates[1] === 80, '班中位数取在课且整卷完整的记录（请假、缺项都不算）');
+  check(rates[2] === undefined, '不到 5 人的课次不算中位数');
+}
 
 group('学情表与个性化私发反馈');
 {

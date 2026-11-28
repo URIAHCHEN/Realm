@@ -155,7 +155,6 @@ export function SchoolScorePanel({
     if (!trendChartRef.current || !trendStudent || isExportingTrend) return;
     setIsExportingTrend(true);
     try {
-      await new Promise(r => setTimeout(r, 200));
       const target = trendChartRef.current;
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(target, {
@@ -953,9 +952,9 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ''}
               />
               <Legend wrapperStyle={LEGEND_STYLE} />
-              <Line type="monotone" dataKey="classMax" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
-              <Line type="monotone" dataKey="classAvg" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="studentRate" name="学员得分率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ r: 5, fill: CHART_SERIES[0] }} activeDot={{ r: 7 }} />
+              <Line isAnimationActive={false} type="monotone" dataKey="classMax" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
+              <Line isAnimationActive={false} type="monotone" dataKey="classAvg" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+              <Line isAnimationActive={false} type="monotone" dataKey="studentRate" name="学员得分率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ r: 5, fill: CHART_SERIES[0] }} activeDot={{ r: 7 }} />
               <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={{ value: '达标线 80%', fontSize: 10.5, fill: CHART_WARN, position: 'insideTopRight' }} />
               <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" label={{ value: '优秀线 85%', fontSize: 10.5, fill: CHART_GOOD, position: 'insideTopLeft' }} />
               {improvements.map(({ point }) => (
@@ -977,7 +976,7 @@ function TrendChartExport({ student, subject, scores, getNickname }: { student: 
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={3}>
+                <Pie isAnimationActive={false} data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={3}>
                   {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip />

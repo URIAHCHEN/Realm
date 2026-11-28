@@ -4,9 +4,9 @@
 // 覆盖的都是"改错了很难发现、却直接影响老师看到的数字"的口径逻辑。
 import { classSnapshotOfLesson, studentLessonTrend, formatRank, studentLessonRow } from '@/lib/lessonStats';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
-import { parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
-import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed } from '@/lib/attendance';
-import { buildDynamicVariables, generatePersonalFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
+import { buildTSV, clipboardLessonNumbers, parseClipboardTable, isNonQuizColumn } from '@/lib/docSync';
+import { attendanceKind, isAbsentRecord, isTransferRecord, isQuizAssessed, isTransferIn, hasQuizScores } from '@/lib/attendance';
+import { buildDynamicVariables, generatePersonalFeedback, generatePrivateFeedback, generateFourInOne, generatePraise } from '@/lib/feedbackTemplates';
 import { computeStudentReportStats, computeClassReportStats, isReportAssessed } from '@/lib/reportStats';
 import { collectQuestionTypeStats, questionTypeKey } from '@/lib/questionTypeStats';
 import { draftToSchoolScore, guessDateFromFileName, matchSchoolScoreRosters, matchStudentName, parseIntake, parseRank, parseScorePair, sameSchoolScoreEntry, schoolExamKey, schoolRankChange, schoolScoreInClass, schoolScoreIssue, scoreDedupKey } from '@/lib/scoreIntake';
@@ -16,13 +16,9 @@ import { computeCategoryWeakPoints, inferCategoryByName, isCategoryResolved, res
 import { buildDetailedFeedback } from '@/lib/detailedFeedback';
 import { planTeacherElfColumns, buildTeacherElfTable } from '@/lib/teacherElfExport';
 import { buildCondensedAdvice } from '@/lib/studentAdvice';
-import { generatePersonalFeedback } from '@/lib/feedbackTemplates';
 import { buildTrendExportHTML } from '@/lib/trendExport';
 import { categoryOf, aggregateByCategory, unclassifiedNames } from '@/lib/qtCategories';
-import { isQuizAssessed, isTransferIn, hasQuizScores } from '@/lib/attendance';
 import { optionToneLevel } from '@/lib/optionTone';
-import type { StudentRecord } from '@/types';
-import { parseClipboardTable } from '@/lib/docSync';
 import { mergeTemplateStores, SLOT } from '@/lib/templateStore';
 import {
   rateOralScore, buildOralRatings, normalizeOralRating, oralRatingForEditing,
@@ -179,6 +175,52 @@ check(dense.rows.find(r => r.studentName === '丙')?.scoreValues?.['语法选择
 check(dense.errors.some(e => e.includes('丙')), '负分给出可读提示');
 check(dense.rows.find(r => r.studentName === '丁')?.scoreValues?.['语法选择'] === 14, '全角数字 １４ 被正确解析为 14');
 check(col('口语得分')?.excludeFromTotal === true, '口语列仍被标记为附加项');
+
+group('学情表与个性化私发反馈');
+{
+  const text = [
+    '姓名\t课次\t考勤\t课堂练习\t课后任务\t词汇默写（15）\t单项选择（5）\t完成句子（5）\t连词成句（5）\t口语得分\t总分（30）',
+    '测试甲\t11\t准时👍\t完成✅\t正确率低，要检查哦💪\t10\t5\t3\t3\t88\t21',
+    '测试乙\t11\t准时👍\t完成✅\t很棒哦👏\t14.5\t3\t5\t4\t91\t26.5',
+    '测试丙\t11\t调课\t完成✅\t未完成⭕\t\t\t\t\t90\t',
+  ].join('\n');
+  check(clipboardLessonNumbers(text).join() === '11', '含课次列的单课次表可自动定位');
+  check(clipboardLessonNumbers('姓名\t课次\n测试甲\t第１１课\n测试乙\t12\n测试丙\t1.2').join() === '11,12', '识别混合课次与全角数字，跳过不合法的小数课次');
+  const intake = parseClipboardTable(text, []);
+  const questionTypes = intake.scoreColumns.map((column, index) => ({
+    id: column.name, name: column.name, order: index,
+    fullScore: column.suggestedFullScore, excludeFromTotal: column.excludeFromTotal,
+  }));
+  const config = { ...cfg, questionTypes, feedbackTemplate: '老师自定义【学生短昵称】' };
+  const stats = { maxScore: 30, minScore: 0, avgScore: 23, avgScores: {} };
+  const [first, second, third] = intake.rows.map((row, i) => rec({
+    id: String(i), studentName: row.studentName, lessonNumber: 11, scores: row.scoreValues || {},
+    attendance: row.attendance, homeworkStatus: row.homeworkStatus, listeningStatus: row.listeningStatus,
+    rank: [2, 1, 0][i],
+  }));
+  const feedback = (record: StudentRecord, override = config) =>
+    generatePrivateFeedback(record, override, stats, record.studentName);
+  const a = feedback(first);
+  const b = feedback(second);
+  const c = feedback(third);
+  check(intake.errors.length === 0 && getLessonFullScore(config) === 30, '按列名满分得到 30 分试卷，口语单列不占卷面');
+  check(first.scores['完成句子'] === 3 && questionTypes.find(q => q.id === '完成句子')?.fullScore === 5, '有显式满分时，沿用 5 分题而非通用 10 分档位');
+  check(/21分.*70%.*第2名/.test(a) && a.includes('词汇默写10/15分') && a.includes('看中文自默'), '按分项匹配词汇默写建议，并保留总分和名次');
+  check(/26.5分.*88%.*第1名/.test(b) && b.includes('单项选择3/5分') && b.includes('题干里的线索'), '另一名学员得到不同优势和单选订正建议');
+  check(a.includes('先自己订正') && b.includes('值得表扬') && c.includes('补做时间'), '课后任务状态分别匹配订正、表扬、补做');
+  check(c.includes('本班没有小测成绩') && !c.includes('得分率') && !c.includes('第0名'), '调课只有口语记录时不评价小测');
+  check(!feedback({ ...first, attendance: '请假' }).includes('21分'), '请假记录不输出历史残留成绩');
+  const incomplete = feedback({ ...first, scores: { '词汇默写': 0, '单项选择': 5 } });
+  check(incomplete.includes('词汇默写0/15分') && !incomplete.includes('得分率') && !incomplete.includes('班级第'), '保留真实零分，缺少分项时省略总评与名次');
+  check(feedback({ ...first, rank: 0 }).includes('70%') && !feedback({ ...first, rank: 0 }).includes('第0名'), '未登记排名不生成第零名');
+  check(feedback(first, { ...config, privateFeedbackMode: 'template' }).startsWith('老师自定义'), '旧自定义模板可切换使用');
+  const back = parseClipboardTable(buildTSV([third, { ...third, scores: { '词汇默写': 0 } }], questionTypes, name => name), questionTypes);
+  check(back.rows[0].scoreValues?.['词汇默写'] === undefined && back.rows[1].scoreValues?.['词汇默写'] === 0, '表格回导保留缺测与零分的区别');
+  const unknown = parseClipboardTable('姓名\t新题型\n甲\t3\n乙\t12', []);
+  check(unknown.rows[1].scoreValues?.['新题型'] === 12, '未知题型以实得较高分为下限，保留有效数据');
+  check(dense.rows.find(row => row.studentName === '乙')?.scores.g1 === undefined && dense.errors.some(error => error.includes('超过该题型满分')), '异常超满分不落库并显示核对提示');
+}
+
 
 // ============ 5. 新课次继承：内容字段必须清空（历史漏了课堂表现） ============
 group('课次继承边界');

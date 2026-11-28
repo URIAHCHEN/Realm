@@ -596,18 +596,7 @@ export function useClassData() {
   // 获取当前课次配置
   const getLessonConfig = useCallback((classId: string, lessonNumber: number): LessonConfig => {
     const classData = classes[classId];
-    if (!classData) return getDefaultLessonConfig(appConfig);
-    
-    const config = classData.lessonConfigs[lessonNumber.toString()];
-    if (config) return withLessonDefaults(config, appConfig);
-    
-    // 如果没有课次配置，尝试使用上一节课的配置
-    const prevLesson = lessonNumber - 1;
-    if (prevLesson > 0 && classData.lessonConfigs[prevLesson.toString()]) {
-      return withLessonDefaults(classData.lessonConfigs[prevLesson.toString()], appConfig);
-    }
-    
-    return getDefaultLessonConfig(appConfig);
+    return classData ? resolveLessonConfigPure(classData, lessonNumber, appConfig) : getDefaultLessonConfig(appConfig);
   }, [classes, appConfig]);
 
   const currentLessonConfig = useMemo(() => {
@@ -676,8 +665,8 @@ export function useClassData() {
         // 口径：调课学生的口语照常统计（他们确实上了课，只是小测在原班级），只排除请假/缺勤
         const registered = records
           .filter(r => !isAbsentRecord(r))
-          .map(r => r.scores[qt.id])
-          .filter((v): v is number => typeof v === 'number');
+          .map(r => r.scores?.[qt.id])
+          .filter(Number.isFinite);
         avgScores[qt.id] = registered.length > 0
           ? Math.round(registered.reduce((a, b) => a + b, 0) / registered.length * 10) / 10
           : 0;
@@ -984,7 +973,7 @@ export function useClassData() {
     setClasses(prev => {
       const classData = prev[classId];
       if (!classData) return prev;
-      const existingConfig = classData.lessonConfigs[lessonNumber.toString()] || getDefaultLessonConfig(appConfig);
+      const existingConfig = resolveLessonConfigPure(classData, lessonNumber, appConfig);
       const updated: Class = {
         ...classData,
         lessonConfigs: {
@@ -1145,7 +1134,7 @@ export function useClassData() {
     const usedQtIds = new Set<string>();
     classData.records.forEach(r => {
       if (r.lessonNumber !== lessonNumber) return;
-      Object.entries(r.scores || {}).forEach(([qtId, v]) => { if ((v || 0) !== 0) usedQtIds.add(qtId); });
+      Object.entries(r.scores || {}).forEach(([qtId, v]) => { if (Number.isFinite(v)) usedQtIds.add(qtId); });
     });
 
     const byName = new Map(baseCfg.questionTypes.map(qt => [qt.name, qt]));

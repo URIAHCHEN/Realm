@@ -25,7 +25,7 @@ import {
   TOOLTIP_CONTENT, TOOLTIP_LABEL, AXIS_TICK, AXIS_TICK_SM, GRID, LEGEND_STYLE,
   CHART_GOOD, CHART_WARN, CHART_NEUTRAL, CHART_SERIES, CHART_FONT_FAMILY,
 } from '@/lib/chartTheme';
-import { CHART_ANIM } from '@/lib/chartMotion';
+import { useChartMotion } from '@/lib/chartMotion';
 import { aggregateByCategory, categoryColor } from '@/lib/qtCategories';
 import { Button } from '@/components/ui/button';
 import { 
@@ -325,6 +325,7 @@ export function PersonalReportView({
     [barData],
   );
   const [isExportingImage, setIsExportingImage] = useState(false);
+  const chartMotion = useChartMotion(isExportingImage);
   const innerRef = useRef<HTMLDivElement>(null);
   const targetRef = (personalReportRef as React.RefObject<HTMLDivElement | null>) || innerRef;
   // 出勤率（0-100）：迟到算到场，请假/调课与未知项不进分母 —— 与全站 attendanceRateOf 同口径
@@ -406,7 +407,7 @@ export function PersonalReportView({
     const prevWidth = target.style.width;
     try {
       // 导出前的关键处理（缺一不可，否则会导出大片空白 / 图表丢失）：
-      // ① data-exporting → 把滚动淡入的 opacity:0 全部展开
+      // ① data-exporting → 截图期间禁用 CSS 入场动画
       // ② 固定像素宽度 → 克隆文档里 ResponsiveContainer 需要真实宽度，否则图表宽为 0
       // ③ 清掉高度上限与裁剪 → 否则只截到首屏
       document.documentElement.setAttribute('data-exporting', '1');
@@ -543,12 +544,12 @@ export function PersonalReportView({
               {/* 目标线：达标基准，一眼看出哪些课次在线上/线下 */}
               <ReferenceLine y={80} stroke="#c07a72" strokeDasharray="4 4" label={isMobile ? undefined : { value: '达标 80%', position: 'insideTopRight', fontSize: 10.5, fill: CHART_WARN }} />
               {/* 主序列：本生正确率（柱/线/面积三种形态可切换） */}
-              {trendType === 'bar' && <Bar {...CHART_ANIM} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={34} />}
-              {trendType === 'line' && <Line {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
-              {trendType === 'area' && <Area {...CHART_ANIM} type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
+              {trendType === 'bar' && <Bar {...chartMotion} dataKey="学生正确率" name="本生正确率" fill="rgb(var(--brand-rgb) / 0.62)" radius={[4, 4, 0, 0]} barSize={34} />}
+              {trendType === 'line' && <Line {...chartMotion} type="monotone" dataKey="学生正确率" name="本生正确率" stroke={CHART_SERIES[0]} strokeWidth={3} dot={{ fill: CHART_SERIES[0], r: 4 }} />}
+              {trendType === 'area' && <Area {...chartMotion} type="monotone" dataKey="学生正确率" name="本生正确率" stroke="#3b82f6" strokeWidth={2} fill="rgb(10 132 255 / 0.13)" />}
               {/* 班级对比线：定位"自己在班里什么位置" */}
-              <Line {...CHART_ANIM} type="monotone" dataKey="班级平均" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
-              <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <Line {...chartMotion} type="monotone" dataKey="班级平均" name="班级平均" stroke={CHART_WARN} strokeWidth={2} dot={{ r: 3 }} />
+              <Line {...chartMotion} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -640,7 +641,7 @@ export function PersonalReportView({
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        {...CHART_ANIM}
+                        {...chartMotion}
                         data={lossData}
                         dataKey="value"
                         nameKey="name"
@@ -702,7 +703,7 @@ export function PersonalReportView({
               <ResponsiveContainer width="100%" height="100%">
                 {distType === 'pie' ? (
                   <PieChart>
-                    <Pie {...CHART_ANIM} data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
+                    <Pie {...chartMotion} data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
                       {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                     </Pie>
                     <Tooltip />
@@ -714,7 +715,7 @@ export function PersonalReportView({
                     <XAxis type="number" tickLine={false} axisLine={false} tick={AXIS_TICK_SM} />
                     <YAxis type="category" dataKey="name" width={76} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#475569' }} />
                     <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #eef1f5', borderRadius: '12px' }} />
-                    <Bar {...CHART_ANIM} dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
+                    <Bar {...chartMotion} dataKey="value" name="平均分" radius={[0, 8, 8, 0]} maxBarSize={20}>
                       {pieData.map((entry, index) => <Cell key={`bar-cell-${index}`} fill={entry.color} />)}
                       {/* 数值直标：分数 + 得分率，一屏看清高低与达成度 */}
                       <LabelList
@@ -742,9 +743,9 @@ export function PersonalReportView({
                     <PolarGrid />
                     <PolarAngleAxis dataKey="subject" />
                     <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar {...CHART_ANIM} name="个人得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
+                    <Radar {...chartMotion} name="个人得分率" dataKey="A" stroke="rgb(var(--brand-rgb))" strokeWidth={2}
                       fill="rgb(var(--brand-rgb))" fillOpacity={0.28} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} />
-                    <Radar {...CHART_ANIM} name="班级平均" dataKey="B" stroke="#9aa8b8" strokeWidth={1.6}
+                    <Radar {...chartMotion} name="班级平均" dataKey="B" stroke="#9aa8b8" strokeWidth={1.6}
                       strokeDasharray="5 4" fill="none" dot={false} />
                     <Legend />
                     <Tooltip />
@@ -770,7 +771,7 @@ export function PersonalReportView({
                       </span>
                     </div>
                     <div className="mt-2 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
-                      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, rate)}%`, background: tone }} />
+                      <div className="h-full rounded-full motion-progress-fill" style={{ transform: `scaleX(${Math.min(100, rate) / 100})`, background: tone }} />
                     </div>
                   </div>
                 );
@@ -979,6 +980,7 @@ export interface ClassReportProps {
 }
 
 export function ClassReportView({ currentClassName, selectedLesson, classStats, classComboTrend, optionalRows, classReportRecords, getNickname, customFields, lessonConfigs, qtCategoryOverrides }: ClassReportProps) {
+  const chartMotion = useChartMotion();
   // 窄屏下参考线标签与柱顶数值会互相压住：移动端去掉右侧外置标签、缩窄柱宽，保证 6 次课都读得清
   const isMobile = useIsMobile();
   // 低分学生（用于关注名单）；hook 需在早返回之前声明
@@ -1147,7 +1149,7 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  {...CHART_ANIM}
+                  {...chartMotion}
                   data={classStats.distribution.filter(item => item.count > 0)}
                   dataKey="count"
                   nameKey="label"
@@ -1245,12 +1247,12 @@ export function ClassReportView({ currentClassName, selectedLesson, classStats, 
                 {/* 两条参考线挨得近（80/85），只在一处写合并标签，避免右侧两个标签互相压住 */}
                 <ReferenceLine y={80} stroke={CHART_WARN} strokeDasharray="4 4" label={isMobile ? undefined : { value: '达标 80% / 优秀 85%', position: 'right', fontSize: 10.5, fill: CHART_WARN }} />
                 <ReferenceLine y={85} stroke={CHART_GOOD} strokeDasharray="4 4" />
-                <Bar {...CHART_ANIM} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={isMobile ? 18 : 46}>
+                <Bar {...chartMotion} dataKey="班级平均" name="班级平均正确率" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} barSize={isMobile ? 18 : 46}>
                   {/* 窄屏 6 根柱挤在一起，柱顶数值必然互相压住：移动端不画，数值交给纵轴与 tooltip */}
                   {!isMobile && <LabelList dataKey="班级平均" position="top" style={{ fontSize: 11, fill: '#334155', fontWeight: 600 }} formatter={(v: number) => `${v}%`} />}
                 </Bar>
-                <Line {...CHART_ANIM} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
-                <Line {...CHART_ANIM} type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                <Line {...chartMotion} type="monotone" dataKey="班级最高" name="班级最高" stroke={CHART_GOOD} strokeWidth={2} dot={{ r: 3 }} />
+                <Line {...chartMotion} type="monotone" dataKey="班级最低" name="班级最低" stroke={CHART_NEUTRAL} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

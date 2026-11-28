@@ -59,13 +59,13 @@ const ModuleLoading = ({ label }: { label: string }) => (
     <p className="sk-caption">正在加载{label}…</p>
   </div>
 );
-import { exportToCSV, downloadCSV, generatePersonalFeedback, copyToClipboard } from '@/lib/feedbackTemplates';
+import { exportToCSV, downloadCSV, generatePrivateFeedback, copyToClipboard } from '@/lib/feedbackTemplates';
 import { exportToExcel, downloadExcel, exportClassRosterToExcel } from '@/lib/excelExport';
 import { useCloudSync } from '@/hooks/useCloudSync';
 import { CloudSyncPanel } from '@/components/CloudSyncPanel';
 import { DocSyncPanel, DocSyncInfo } from '@/components/DocSyncPanel';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
-import type { ParsedRow } from '@/lib/docSync';
+import type { ParsedRow, ScoreColumn } from '@/lib/docSync';
 import type { SyncSnapshot } from '@/lib/cloudSync';
 import type { AppConfig, LessonConfig, StudentRecord } from '@/types';
 // 伴学萌宠：增量模块（不改动既有数据类型与逻辑）
@@ -141,6 +141,14 @@ function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [schoolImportResult, setSchoolImportResult] = useState<Record<string, number> | null>(null);
   const [activeTab, setActiveTab] = useState('records');
+  const focusDocPaste = useRef(false);
+  const setDocPasteRef = useCallback((field: HTMLTextAreaElement | null) => {
+    if (!field || !focusDocPaste.current) return;
+    focusDocPaste.current = false;
+    requestAnimationFrame(() => {
+      if (field.isConnected) field.focus();
+    });
+  }, []);
   const [essayClassIds, setEssayClassIds] = useState<(string | null)[]>([]);
   useEffect(() => {
     if (activeTab !== 'essay') return;
@@ -228,7 +236,7 @@ function App() {
   const handleImportDocRows = (
     rows: ParsedRow[],
     target: { classId: string; lessonNumber: number },
-    scoreColumns: { name: string; suggestedFullScore: number; matchedQtId?: string }[] = []
+    scoreColumns: ScoreColumn[] = []
   ) => {
     const { classId, lessonNumber } = target;
     const classData = classes[classId];
@@ -390,35 +398,6 @@ function App() {
     try { localStorage.setItem('uiDarkMode', darkMode ? '1' : '0'); } catch { /* ignore */ }
   }, [darkMode]);
 
-  // 滚动淡入：零依赖 IntersectionObserver（尊重 prefers-reduced-motion）
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
-    const attach = () => {
-      document.querySelectorAll('[data-slot="card"]:not(.reveal)').forEach(el => {
-        el.classList.add('reveal'); io.observe(el);
-      });
-    };
-    const t = window.setTimeout(attach, 120);
-    // 只处理新插入的节点：原实现每次 DOM 变化都全文档 querySelectorAll，
-    // 录入分数时每击键都会触发一轮扫描（2026-10-17 优化）
-    const REVEAL_SEL = '[data-slot="card"]:not(.reveal)';
-    const mo = new MutationObserver((muts) => {
-      for (const m of muts) {
-        m.addedNodes.forEach(node => {
-          if (!(node instanceof HTMLElement)) return;
-          if (node.matches(REVEAL_SEL)) {
-            node.classList.add('reveal'); io.observe(node);
-          }
-          node.querySelectorAll(REVEAL_SEL).forEach(el => { el.classList.add('reveal'); io.observe(el); });
-        });
-      }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
-    return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(t); };
-  }, [activeTab]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const actor = (getCachedSession()?.email || '本机').split('@')[0];
   /**
@@ -933,7 +912,7 @@ function App() {
     if (!rec) { toast.error('该生本课暂无记录，无法生成反馈'); return; }
     const stats = calculateClassStats(cls.records.filter(r => r.lessonNumber === currentLessonNumber), currentLessonConfig.questionTypes, currentLessonConfig.customFields);
     const nick = getStudentNickname(studentName, currentClassId || undefined);
-    const text = generatePersonalFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {});
+    const text = generatePrivateFeedback(rec, currentLessonConfig, stats, nick, undefined, appConfig.oralRating, {});
     const ok = await copyToClipboard(text);
     if (ok) toast.success(`已复制 ${nick} 的私发反馈`);
     else toast.error('复制失败，请手动选择复制');
@@ -1033,7 +1012,7 @@ function App() {
         </div>
       </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="!block space-y-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} activationMode="manual" className="!block space-y-0">
       <div className="realm-workspace-top max-w-[1600px] mx-auto px-4 sm:px-6">
         <TabsList className="ios-tabs-list realm-primary-nav" aria-label="工作台功能">
           <TabsTrigger value="records" className="ios-tab-trigger realm-primary-tab">
@@ -1091,6 +1070,7 @@ function App() {
                   就成了用户反复反馈的"上短下长"。加上后表格在自己容器内滚动，三块宽度对齐。 */}
               <div className="flex-1 min-w-0">
                 <StudentTable
+                  classId={currentClassId ?? undefined}
                   key={`${currentClassId ?? 'none'}:${currentLessonNumber}`}
                   students={rosterForLesson}
                   records={currentClass?.records || []}
@@ -1226,9 +1206,9 @@ function App() {
             <ErrorBoundary label="反馈生成">
             <div className="main-module-shell space-y-5">
             <FeedbackGenerator
-                key={currentClassId || 'none'}
+                key={`${currentClassId ?? 'none'}:${currentLessonNumber}`}
               className={currentClass?.name || ''}
-              students={currentClass?.students || []}
+              students={rosterForLesson}
               records={currentClass?.records || []}
               lessonConfig={currentLessonConfig}
               lessonNumber={currentLessonNumber}
@@ -1241,6 +1221,10 @@ function App() {
               libraryLinks={Array.from(new Set((appConfig.savedFeedbacks || []).filter(f => f.lessonNumber === currentLessonNumber).flatMap(f => f.links || [])))}
               onSaveLessonConfig={handleSaveLessonConfig}
               onViewStudent={handleViewStudentAnalysis}
+              onImportRecords={membership.admin && currentClassId ? () => {
+                focusDocPaste.current = true;
+                setActiveTab('cloud');
+              } : undefined}
               qtCategoryOverrides={effectiveQtCategories}
               viewSwitch={(
                 <div className="mode-seg mode-seg--sm" role="tablist" aria-label="反馈视图">
@@ -1397,6 +1381,7 @@ function App() {
                     currentClassId={currentClassId}
                     getQuestionTypes={(classId, lesson) => getLessonConfig(classId, lesson).questionTypes}
                     knownLessons={getAllLessons(currentClassId || undefined)}
+                    pasteFieldRef={setDocPasteRef}
                     onImportRows={handleImportDocRows}
                     onExportExcel={handleExportAllData}
                   />

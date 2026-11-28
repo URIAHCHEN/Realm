@@ -141,8 +141,8 @@ function ExpBar({ percent, isMax }: { percent: number; isMax: boolean }) {
   return (
     <div className="pet-exp-track" role="progressbar" aria-label="等级经验" aria-valuemin={0} aria-valuemax={100} aria-valuenow={isMax ? 100 : percent}>
       <div
-        className="h-full rounded-full transition-[width] duration-300"
-        style={{ width: `${isMax ? 100 : percent}%` }}
+        className="h-full rounded-full motion-progress-fill"
+        style={{ transform: `scaleX(${isMax ? 1 : percent / 100})` }}
       />
     </div>
   );
@@ -382,7 +382,7 @@ export function PetGarden({
               <div><strong>第 {build.stageIndex + 1} 站 · {build.stageName}</strong><span>{build.isFinal ? '已到终点站' : `距下一站还差 ${Math.max(0, build.stageNeed - build.stageScore)} 分`}</span></div>
               <div className="pet-exp-track" role="progressbar" aria-label="本站共建进度"
                 aria-valuemin={0} aria-valuemax={build.stageNeed} aria-valuenow={Math.min(build.stageNeed, build.stageScore)}>
-                <div style={{ width: `${Math.min(100, build.stageScore / build.stageNeed * 100)}%` }} />
+                <div className="motion-progress-fill" style={{ transform: `scaleX(${Math.min(1, build.stageScore / build.stageNeed)})` }} />
               </div>
             </div>
             <ol className="pet-stations" aria-label="班级共建路线">

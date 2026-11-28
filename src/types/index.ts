@@ -69,6 +69,7 @@ export interface LessonConfig {
   /** 选项颜色标记：groupKey(attendance|homework|listening|classPerformance|cf:<fieldId>) -> 选项 -> 颜色(#rrggbb) */
   optionColors?: { [groupKey: string]: { [option: string]: string } };
   feedbackTemplate: string;
+  privateFeedbackMode?: 'adaptive' | 'template';
   /** 「四个一」反馈模板；留空则使用内置默认结构（含【开场】【优秀表现】【待提升】【下一步】【素材】等占位符） */
   fourInOneTemplate?: string;
   praiseTemplate: string;

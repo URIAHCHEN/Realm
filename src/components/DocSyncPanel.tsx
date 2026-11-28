@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   FileSpreadsheet, FileText, ClipboardCopy, ClipboardPaste, Table2,
@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { buildMarkdown, buildTSV, parseClipboardTable, type ParsedRow } from '@/lib/docSync';
+import { buildMarkdown, buildTSV, clipboardLessonNumbers, parseClipboardTable, type ParsedRow, type ScoreColumn } from '@/lib/docSync';
 import { KNOWN_CATEGORIES, unclassifiedNames } from '@/lib/qtCategories';
 import type { LessonConfig, StudentRecord, QuestionType } from '@/types';
 import type { useDisplaySettings } from '@/hooks/useDisplaySettings';
@@ -36,8 +36,9 @@ interface DocSyncPanelProps {
   onImportRows: (
     rows: ParsedRow[],
     target: { classId: string; lessonNumber: number },
-    scoreColumns: { name: string; suggestedFullScore: number; matchedQtId?: string }[]
+    scoreColumns: ScoreColumn[]
   ) => void;
+  pasteFieldRef?: React.Ref<HTMLTextAreaElement>;
   onExportExcel: () => void;
 }
 
@@ -46,7 +47,7 @@ const BTN_PRIMARY = `${BTN} bg-[color:var(--brand)] text-white hover:bg-[color:v
 
 export function DocSyncPanel({
   records, lessonConfig, lessonNumber, className, getNickname, classes, currentClassId, getQuestionTypes, knownLessons, onImportRows, onExportExcel,
-  qtCategoryOverrides, onSaveQtCategory,
+  qtCategoryOverrides, onSaveQtCategory, pasteFieldRef,
 }: DocSyncPanelProps) {
   const [pasteText, setPasteText] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -56,7 +57,11 @@ export function DocSyncPanel({
   // 本次导入里「规则命不中」的新题型：提示登记人当场选择归属板块
   const [unclassifiedQts, setUnclassifiedQts] = useState<string[]>([]);
   const [targetClass, setTargetClass] = useState<string>(currentClassId || classes[0]?.id || '');
-  const [targetLesson, setTargetLesson] = useState<number>(lessonNumber);
+  const [chosenLesson, setChosenLesson] = useState<number>();
+  const sourceLessons = useMemo(() => clipboardLessonNumbers(pasteText), [pasteText]);
+  const inferredLesson = sourceLessons.length === 1 ? sourceLessons[0] : undefined;
+  const targetLesson = chosenLesson ?? inferredLesson ?? lessonNumber;
+  const mixedLessons = sourceLessons.length > 1;
 
   const handleCopyTSV = async () => {
     if (records.length === 0) { toast.error('当前课次还没有数据'); return; }
@@ -83,6 +88,7 @@ export function DocSyncPanel({
   const handleParse = () => {
     if (!targetClass) { toast.error('请选择导入的目标班级'); return; }
     if (!pasteText.trim()) { toast.error('请先粘贴从在线表格复制的内容（含表头）'); return; }
+    if (mixedLessons) return;
     setParsing(true);
     try {
       const qts = getQuestionTypes(targetClass, targetLesson);
@@ -103,6 +109,7 @@ export function DocSyncPanel({
         const errNote = result.errors.length > 0 ? `；${result.errors.length} 条数据提示见下方横幅（常驻，核对后手动关闭）` : '';
         toast.success(`已导入 ${result.rows.length} 行到「${clsName} · 第${targetLesson}课」（匹配列：${result.matchedColumns.join('、')}${errNote}）`);
         setPasteText('');
+        setChosenLesson(undefined);
         // 异常提示改为常驻横幅：导入后是要"照着核对"的，toast 一闪而过等于没有
         setParseNotices(result.errors);
         // 新题型未归类提示（2026-10-16）：导入的分数列里规则命不中的，请登记人当场选板块
@@ -124,7 +131,7 @@ export function DocSyncPanel({
     if (lastTargetRef.current !== key) {
       lastTargetRef.current = key;
       setTargetClass(currentClassId || classes[0]?.id || '');
-      setTargetLesson(lessonNumber);
+      setChosenLesson(undefined);
     }
   }, [currentClassId, lessonNumber, classes]);
 
@@ -171,9 +178,7 @@ export function DocSyncPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-[color:var(--ink-4)]">
-            在腾讯文档/金山文档中选中含表头的数据区复制，粘贴到下面，系统按列名自动匹配（姓名/成长轨迹/课次/考勤/作业/课后任务/{lessonConfig.questionTypes.map(qt => qt.name).join('/')}）；不在名单的学生会自动补录到目标班级。
-          </p>
+          <p className="text-sm text-[color:var(--ink-4)]">复制含表头的学情表后粘贴。题型满分可写在列名里，如「完成句子（5）」。新学员会加入目标班级。</p>
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <Label className="text-sm text-[color:var(--ink-2)]">目标班级</Label>
@@ -186,10 +191,10 @@ export function DocSyncPanel({
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-sm text-[color:var(--ink-2)]">目标课次</Label>
-              <Select value={String(targetLesson)} onValueChange={(v) => setTargetLesson(Number(v))}>
+              <Select value={String(targetLesson)} onValueChange={(v) => setChosenLesson(Number(v))}>
                 <SelectTrigger className="w-24 h-9 text-sm rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Array.from(new Set([...(knownLessons || []), targetLesson, 1].filter(Boolean))).sort((a, b) => a - b).map(n => (
+                  {Array.from(new Set([...(knownLessons || []), targetLesson, lessonNumber, inferredLesson ?? 0, 1].filter(Boolean))).sort((a, b) => a - b).map(n => (
                     <SelectItem key={n} value={String(n)}>第{n}课</SelectItem>
                   ))}
                 </SelectContent>
@@ -197,15 +202,22 @@ export function DocSyncPanel({
             </div>
           </div>
           <Textarea
+            ref={pasteFieldRef}
+            aria-label="粘贴带表头的学情表"
             placeholder={'姓名\t成长轨迹\t课次\t考勤\t语法\t完形填空\t…\n陈志佳\t暑,秋\t1\t准时👍\t15\t8\t…'}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             className="min-h-[140px] text-sm rounded-xl"
           />
-          <Button className="h-auto max-w-full whitespace-normal break-words py-2 text-left gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" disabled={parsing} onClick={handleParse}>
+          <Button className="h-auto max-w-full whitespace-normal break-words py-2 text-left gap-2 bg-[rgb(var(--brand-rgb))] hover:bg-[rgb(var(--brand-rgb)/0.85)] text-white" disabled={parsing || mixedLessons} aria-describedby={mixedLessons ? 'doc-import-lesson-notice' : undefined} onClick={handleParse}>
             {parsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
             解析并导入到「{classes.find(c => c.id === targetClass)?.name || '班级'} · 第{targetLesson}课」
           </Button>
+          {mixedLessons && (
+            <p id="doc-import-lesson-notice" role="status" className="text-sm text-amber-700">
+              表里有多个课次（{sourceLessons.join('、')}）。请一次粘贴一个课次的数据。
+            </p>
+          )}
           {unmatched.length > 0 && (
             <div className="rounded-[var(--r-md)] bg-[rgb(var(--brand-rgb)/0.06)] border border-[rgb(var(--brand-rgb)/0.2)] p-3">
               <p className="text-sm text-[color:var(--ink-2)]">

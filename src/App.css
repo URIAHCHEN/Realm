@@ -211,35 +211,8 @@ body {
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* 动画效果 - iOS 风格 */
-@keyframes ios-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes ios-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 .ios-animate-fade-in {
-  animation: ios-fade-in 0.35s var(--ease) forwards;
-}
-
-.ios-animate-scale-in {
-  animation: ios-scale-in 0.3s var(--ease) forwards;
+  animation: ux-enter var(--motion-slow) var(--ease-enter);
 }
 
 /* 季节标签 - iOS 风格 */
@@ -1274,13 +1247,6 @@ body {
 }
 
 
-/* 卡片入场动效（页面/标签切换时柔和浮现） */
-[data-slot="tabs-content"],
-[data-radix-tabs-content] {
-  animation: ios-fade-in 0.32s var(--ease);
-}
-
-
 /* Tabs 激活态渐变胶囊 */
 .ios-tab-trigger[data-state="active"] {
   background: linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%);
@@ -1320,7 +1286,9 @@ body {
   border-radius: 2px;
   background: rgb(var(--brand-rgb) / 0.5);
   pointer-events: none;
-  transition: width 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
+  right: 6px;
+  transform-origin: left center;
+  transition: transform var(--motion-fast) var(--ease-enter);
 }
 
 .score-cell .score-bar.weak {
@@ -1339,16 +1307,6 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.total-bar {
-  position: absolute;
-  bottom: 1px;
-  left: 4px;
-  height: 3px;
-  border-radius: 2px;
-  background: rgb(var(--brand-rgb) / 0.5);
-  transition: width 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 /* ==================== 排名色阶徽章 ==================== */
@@ -2149,25 +2107,12 @@ html, body { overflow-x: hidden; }
 .dark .report-container p, .dark .report-container span { color: #d1d5db; }
 .dark .opt-negative { background: rgba(244, 63, 94, 0.16) !important; border-color: rgba(244, 63, 94, 0.45) !important; color: #fda4af !important; }
 
-/* ==================== 滚动淡入（IntersectionObserver 驱动，零依赖） ==================== */
-.reveal { opacity: 0; transform: translateY(12px); transition: opacity .5s cubic-bezier(.22,.61,.36,1), transform .5s cubic-bezier(.22,.61,.36,1); }
-.reveal.is-visible { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) {
-  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-}
 /* 流体字号（clamp）：大屏不显小、小屏不溢出 */
 .ios-tab-trigger { font-size: clamp(14.5px, 1.1vw, 17px) !important; }
 .report-container .report-section-title { font-size: clamp(19px, 1.45vw, 22px) !important; }
 
 
-/* ============ 图片导出态（2026-10-08） ============
-   踩坑：滚动淡入给未进入视口的卡片加了 opacity:0，html2canvas 会把它们当成透明 →
-   导出的 PNG 大片空白。导出前给 <html> 打 data-exporting，统一把淡入展开、容器不裁剪。 */
-html[data-exporting] .reveal {
-  opacity: 1 !important;
-  transform: none !important;
-  transition: none !important;
-}
+/* 解除报告容器的裁剪，保留长图的全部内容。 */
 html[data-exporting] .report-container,
 html[data-exporting] .report-section,
 html[data-exporting] .report-chart-container,
@@ -2188,50 +2133,10 @@ html[data-exporting] * { animation: none !important; }
   --dur-micro: 130ms;
   --dur-ui: 200ms;
 }
-/* 卡片入场：从 scale(.985) 轻微上浮 —— 不要从 scale(0) 或大位移开始 */
-.reveal {
-  opacity: 0;
-  transform: translateY(8px) scale(0.992);
-  transition: opacity 240ms var(--ease-out-quart), transform 240ms var(--ease-out-quart);
-}
-.reveal.is-visible { opacity: 1; transform: none; }
-
-/* 按钮按下回弹（100–150ms 微交互） */
-@media (hover: hover) and (pointer: fine) {
-  [data-slot="button"]:active { transform: scale(0.975); transition-duration: var(--dur-micro); }
-}
-/* 下拉/弹窗：进入 scale(.96)→1（不要 0），并让 transform-origin 落在触发点附近 */
-[data-slot="select-content"], [data-slot="dropdown-menu-content"] {
-  transform-origin: top center;
-}
-[data-slot="select-content"][data-state="open"] { animation: ux-enter var(--motion-base) var(--ease-enter); }
-@keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(-2px); } to { opacity: 1; transform: none; } }
-/* 弹窗遮罩与内容同一节奏（paired elements rule） */
-[data-slot="dialog-overlay"] { animation: fadeIn var(--dur-ui) ease-out; }
-[data-slot="dialog-content"][data-state="open"] {
-  animation: ux-enter var(--motion-slow) var(--ease-enter) !important;
-}
-[data-slot="dialog-content"][data-state="closed"] {
-  animation: ux-exit var(--motion-fast) var(--ease-exit) !important;
-}
-@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-@keyframes dialogIn { from { opacity: 0; transform: scale(0.965) } to { opacity: 1; transform: none } }
-/* Tab 内容切换：动画统一由 .main-tab-panel 负责（此处若再叠一层 fadeIn，
-   同一个面板会同时跑两个动画，看起来发飘） */
 /* 行 hover：颜色过渡用 ease（非对称曲线更优雅） */
 .data-table tbody tr { transition: background-color var(--dur-micro) ease; }
 /* 表格行「+」与下拉箭头保持轻过渡 */
 .season-tag, [role="combobox"] svg { transition: opacity 150ms ease, background-color 150ms ease; }
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-  [data-slot="select-content"][data-state="open"],
-  [data-slot="dialog-content"],
-  [data-slot="dialog-overlay"],
-  [role="tabpanel"] { animation: none !important; }
-  [data-slot="button"]:active { transform: none !important; }
-}
-
 
 /* ============ 报告页剩余板块视觉统一（2026-10-08） ============
    考勤统计 / 出勤统计 / 缺勤名单等卡片此前是"裸 Card"，
@@ -2254,15 +2159,9 @@ html[data-exporting] * { animation: none !important; }
 .report-container .grid [data-slot="card-content"] { padding-top: 2px !important; }
 
 /* ============ 表扬榜视觉迭代（2026-10-08 · 肉眼可见、模块位置/优先级不变） ============
-   ① 统计瓷贴：错峰上浮入场 + hover 轻抬（只动 transform/opacity，尊重 reduced-motion）
+   ① 统计瓷贴：延续模块配色
    ② 表彰输出：暖纸质感（ivory 底 + 细格线），让"要发到班群的文稿"有纸张感
    ③ 卡片标题：品牌 accent 下划短线，强化区块起点 */
-@keyframes praiseTileIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
-.praise-stat-tile { animation: praiseTileIn 0.4s var(--ease-out-quart) both; }
-
 .praise-card-header { position: relative; }
 .praise-card-header::after {
   content: '';
@@ -2271,11 +2170,6 @@ html[data-exporting] * { animation: none !important; }
   width: 44px; height: 3px;
   border-radius: 2px;
   background: linear-gradient(90deg, rgb(var(--brand-rgb)), rgb(var(--brand-rgb) / 0.15));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .praise-stat-tile { animation: none; }
-  .praise-stat-tile:hover { transform: none; }
 }
 
 /* ============ 版式性格强化 v2（2026-10-09 · ink/candy/mono 更 distinct；默认玻璃与 editorial 不动） ============
@@ -2846,24 +2740,6 @@ textarea:focus-visible,
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); }
 
 
-/* ==================== 动效细化 v2（2026-10-18 · 页面衔接更顺） ====================
-   在 v1（卡片 reveal / 按钮按压 / 弹层 popIn / tab 淡入）基础上补齐三处衔接感，
-   仍遵守同一套原则：只动 transform/opacity、<300ms、尊重 prefers-reduced-motion、
-   hover 仅在精确指针设备启用、高频操作只给触感反馈不做花活。 */
-
-/* ① 错峰入场：同一容器内的卡片按 45ms 步进依次浮现（封顶 5 个 = 180ms，长页面不拖沓） */
-.reveal:nth-child(2) { transition-delay: 45ms; }
-.reveal:nth-child(3) { transition-delay: 90ms; }
-.reveal:nth-child(4) { transition-delay: 135ms; }
-.reveal:nth-child(5) { transition-delay: 180ms; }
-
-/* ② 主 Tab 面板：淡入 + 6px 轻抬（220ms ease-out-quart）；内层小 tab 仍走纯淡入，避免"整页在动" */
-.main-tab-panel[data-state="active"] { animation: ux-tab-in var(--motion-fast) var(--ease-standard) both; }
-@keyframes panelIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
-}
-
 /* ③ chip 触感：班级/课次 chip 悬停轻抬、按下回弹；tab 按下回弹（高频，不给位移动画） */
 .class-chip, .lesson-chip, .ios-tabs-list [role="tab"] {
   transition: transform var(--dur-micro) var(--ease-out-quart),
@@ -2877,8 +2753,6 @@ textarea:focus-visible,
 .class-chip:active, .lesson-chip:active, .ios-tabs-list [role="tab"]:active { transform: scale(0.965); }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal:nth-child(n) { transition-delay: 0ms !important; }
-  .main-tab-panel[data-state="active"] { animation: none !important; }
   .class-chip, .lesson-chip, .ios-tabs-list [role="tab"] { transition: none !important; }
   .class-chip:active, .lesson-chip:active, .ios-tabs-list [role="tab"]:active,
   .class-chip:hover, .lesson-chip:hover { transform: none !important; }
@@ -3245,23 +3119,12 @@ h1, h2, h3,
 .module-skeleton .sk-title,
 .module-skeleton .sk-line {
   border-radius: 8px;
-  background: linear-gradient(90deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.10), rgba(15, 23, 42, 0.05));
-  background-size: 200% 100%;
-  animation: skSweep 1.2s ease-in-out 3;
+  background: rgb(var(--brand-rgb) / .08);
 }
 .module-skeleton .sk-title { height: 18px; width: 42%; margin-bottom: 18px; }
 .module-skeleton .sk-line { height: 12px; margin-bottom: 12px; }
 .module-skeleton .sk-caption { margin-top: 14px; font-size: 12px; color: var(--ink-4); }
-@keyframes skSweep {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-}
 .dark .module-skeleton { background: rgba(255, 255, 255, 0.05); }
-@media (prefers-reduced-motion: reduce) {
-  .module-skeleton .sk-title, .module-skeleton .sk-line { animation: none; }
-}
-
-
 /* ==================== 视觉升级 v8 · 旗舰化第二轮（2026-10-24） ====================
    ① 负向胶囊去刺眼（淡底细边，不要红块+红边+粗体叠加）
    ② KPI 统一品牌风（sa-kpi）
@@ -4655,7 +4518,7 @@ html[data-exporting] .class-report-shell { box-shadow: none; }
   color: var(--ink-2) !important;
   background: transparent !important;
   box-shadow: none !important;
-  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  transition: color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .realm-primary-nav[role="tablist"] > .realm-primary-tab svg {
@@ -4770,42 +4633,89 @@ html[data-exporting] .class-report-shell { box-shadow: none; }
 
 /* 出现：从略低、略小的位置浮上来，交代「它从哪来」 */
 @keyframes ux-enter {
-  from { opacity: 0; transform: translateY(6px) scale(.985); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; translate: 0 6px; scale: .985; }
+  to { opacity: 1; translate: none; scale: none; }
 }
 /* 消失：只淡出，不再缩小（缩小会让用户以为"被删掉了"） */
 @keyframes ux-exit { from { opacity: 1; } to { opacity: 0; } }
-/* 高频切换：只淡入，零位移，避免列表跳动 */
-@keyframes ux-tab-in { from { opacity: 0; } to { opacity: 1; } }
-/* 完成：勾号描边，用来确认"已保存/已写入" */
-@keyframes ux-check {
-  from { stroke-dashoffset: 22; opacity: .4; }
-  to { stroke-dashoffset: 0; opacity: 1; }
-}
-/* 出错：轻微左右摆动一次，不用红色闪烁（不刺眼） */
-@keyframes ux-shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-3px); }
-  75% { transform: translateX(3px); }
+/* 切换时保留内容的空间位置，并缩短低对比度的时间。 */
+@keyframes ux-tab-in { from { opacity: .68; } to { opacity: 1; } }
+@keyframes ux-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ux-menu-in {
+  from { opacity: 0; scale: .98; }
+  to { opacity: 1; scale: none; }
 }
 
-/* —— 收敛装饰性动画：无限循环 → 只播一次 —— */
-.confetti { animation-iteration-count: 1 !important; }
-.praise-tile .trophy-pulse,
-.trophy-pulse,
-.crown-shine,
-.trophy-float { animation-iteration-count: 1 !important; }
+[data-slot="tabs-content"][data-state="active"] {
+  animation: ux-tab-in var(--motion-fast) var(--ease-enter);
+}
+
+[data-slot="dialog-overlay"][data-state="open"] {
+  animation: ux-overlay-in var(--motion-base) var(--ease-standard) both;
+}
+[data-slot="dialog-content"][data-state="open"] {
+  animation: ux-enter var(--motion-slow) var(--ease-enter) both;
+}
+[data-slot="dialog-overlay"][data-state="closed"],
+[data-slot="dialog-content"][data-state="closed"],
+[data-slot="select-content"][data-state="closed"],
+[data-slot="tooltip-content"][data-state="closed"] {
+  animation: ux-exit var(--motion-fast) var(--ease-exit) both;
+  pointer-events: none;
+}
+[data-slot="select-content"][data-state="open"] {
+  transform-origin: var(--radix-select-content-transform-origin, center);
+  animation: ux-menu-in var(--motion-fast) var(--ease-enter) both;
+}
+[data-slot="tooltip-content"]:not([data-state="closed"]) {
+  animation: ux-overlay-in var(--motion-fast) var(--ease-enter) both;
+}
+
+[data-slot="button"],
+[data-slot="select-trigger"],
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="checkbox"],
+[data-slot="switch"] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+[data-slot="switch-thumb"] {
+  transition-duration: var(--motion-base);
+  transition-timing-function: var(--ease-enter);
+}
+[data-slot="button"]:not(:disabled):active {
+  transform: scale(.98);
+  transition-duration: var(--motion-instant);
+}
+.realm-primary-nav[role="tablist"] > .realm-primary-tab:active {
+  transform: none;
+}
+
+.motion-progress-fill {
+  width: 100%;
+  transform-origin: left center;
+  transition: transform var(--motion-slow) var(--ease-enter);
+}
 
 /* —— 减少动态效果：全局兜底，覆盖所有动画与过渡 —— */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    animation-delay: 0s !important;
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
+    transition-delay: 0s !important;
     transition-duration: .001ms !important;
     scroll-behavior: auto !important;
   }
+  [data-slot="button"]:not(:disabled):active { transform: none; }
+  [data-slot="dialog-content"][data-state],
+  [data-slot="dialog-overlay"][data-state],
+  [data-slot="select-content"][data-state],
+  [data-slot="tooltip-content"][data-state],
+  [data-slot="tabs-content"][data-state] { animation: none; }
 }
 
 /* 数值更新：只淡入，不位移不缩放——避免 KPI 卡高度跳动 */

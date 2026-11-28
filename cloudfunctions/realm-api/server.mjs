@@ -556,16 +556,17 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/essay/review') return await handleEssayReview(req, res, method)
 
     if (pathname.startsWith('/api/auth/v1/')) {
-      return handleAuth(req, res, pathname, url.search)
+      return await handleAuth(req, res, pathname, url.search)
     }
 
     if (pathname.startsWith('/api/rest/v1/')) {
-      return handleRest(req, res, pathname.slice('/api/rest/v1'.length), url.search, method)
+      return await handleRest(req, res, pathname.slice('/api/rest/v1'.length), url.search, method)
     }
 
     return serveStatic(req, res, pathname)
   } catch (e) {
     console.error('[realm-api] unhandled', e)
+    if (res.destroyed) return
     if (!res.headersSent) sendJson(res, 500, { message: 'internal error' })
     else res.end()
   }

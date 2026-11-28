@@ -1,11 +1,20 @@
-/**
- * 图表入场动画统一参数（2026-10-18）
- * Recharts 默认 animationDuration=1500ms —— 在这类"随时切换课次/学生"的产品界面里显得拖沓，
- * 切 Tab 时图表还在慢慢长出来。统一收敛到 550ms + ease-out（先快后缓，落点稳），
- * 既保留"数据在长出来"的连续感，又不会挡住阅读。
- */
-export const CHART_ANIM = {
-  isAnimationActive: true,
-  animationDuration: 550,
-  animationEasing: 'ease-out' as const,
-};
+import { useSyncExternalStore } from 'react';
+
+const query = '(prefers-reduced-motion: reduce)';
+const reducedMotion = () => typeof window === 'undefined' || window.matchMedia(query).matches;
+
+function subscribe(onChange: () => void) {
+  const media = window.matchMedia(query);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+export function useChartMotion(disabled = false) {
+  const reduced = useSyncExternalStore(subscribe, reducedMotion, () => true);
+  return {
+    isAnimationActive: !reduced && !disabled,
+    animationDuration: 280,
+    animationBegin: 0,
+    animationEasing: 'ease-out' as const,
+  };
+}

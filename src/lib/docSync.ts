@@ -22,7 +22,7 @@ export function buildTSV(
       r.classPerformance || '',
       r.homeworkStatus,
       r.listeningStatus === '具体分数' ? String(r.listeningScore) : r.listeningStatus,
-      ...questionTypes.map(qt => String(r.scores[qt.id] || 0)),
+      ...questionTypes.map(qt => String(r.scores?.[qt.id] ?? '')),
       String(r.totalScore),
       `${r.correctRate}%`,
       '' // 薄弱项列留空，避免在线表格二次加工
@@ -42,7 +42,7 @@ export function buildMarkdown(
   const header = `| 排名 | 姓名 | 考勤 | 作业 | ${questionTypes.map(qt => qt.name).join(' | ')} | 总分 | 正确率 |`;
   const sep = `| --- | --- | --- | --- | ${questionTypes.map(() => '---').join(' | ')} | --- | --- |`;
   const rows = sorted.map(r =>
-    `| ${r.rank || '-'} | ${getNickname(r.studentName)} | ${r.attendance} | ${r.homeworkStatus} | ${questionTypes.map(qt => r.scores[qt.id] || 0).join(' | ')} | **${r.totalScore}** | ${r.correctRate}% |`
+    `| ${r.rank || '-'} | ${getNickname(r.studentName)} | ${r.attendance} | ${r.homeworkStatus} | ${questionTypes.map(qt => r.scores?.[qt.id] ?? '—').join(' | ')} | **${r.totalScore}** | ${r.correctRate}% |`
   );
   return [header, sep, ...rows].join('\n');
 }
@@ -104,6 +104,24 @@ function splitLine(line: string): string[] {
 
 const norm = (s: string) => s.replace(/\s+/g, '').replace(/[（）()]/g, '');
 
+function parseLessonCell(raw = ''): number | undefined {
+  const cell = raw.replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0));
+  const match = cell.trim().match(/^(?:第\s*)?(\d+)\s*(?:课次?|节)?$/);
+  const number = Number(match?.[1]);
+  return Number.isSafeInteger(number) && number > 0 ? number : undefined;
+}
+
+export function clipboardLessonNumbers(text: string): number[] {
+  const [header, ...rows] = text.trim().split(/\r?\n/);
+  const index = splitLine(header).findIndex(cell => norm(cell).includes('课次'));
+  if (index === -1) return [];
+  return Array.from(new Set(rows.flatMap(row => {
+    const lesson = parseLessonCell(splitLine(row)[index]);
+    return lesson === undefined ? [] : [lesson];
+  })));
+}
+
+
 // 常用题型满分档位（学校常用卷面）：名称命中时优先采用，
 // 因为"列内最大值"在没人拿满分时会低估（如语篇填词全班最高 2 分，实际满分 5 分）。
 /**
@@ -149,7 +167,7 @@ function robustMax(nums: number[]): number {
 
 const CANONICAL_FULL_SCORES: Record<string, number> = {
   '语法选择': 15, '完形填空': 10, '阅读理解': 10, '语篇填词': 5, '完成句子': 10,
-  '语法填空': 10, '单项选择': 5,
+  '语法填空': 10, '单项选择': 5, '词汇默写': 15, '连词成句': 5,
   // 口语为百分制；它是作业成绩的一部分，不计入小测总分（见 excludeFromTotal）
   '口语': 100, '口语得分': 100, '口语成绩': 100,
 };
@@ -171,13 +189,13 @@ export function isNonQuizColumn(name: string): boolean {
  * 返回与传入列一一对应的满分数组。
  */
 function inferFullScores(
-  cols: { name: string; colMax: number; configFullScore?: number }[],
+  cols: { name: string; colMax: number; configFullScore?: number; declaredFullScore?: number }[],
   declaredTotal?: number
 ): number[] {
   const canonOf = (name: string) => CANONICAL_FULL_SCORES[norm(name)] ?? 0;
   const base = cols.map(c => {
     const cfg = c.configFullScore && c.configFullScore > 0 ? c.configFullScore : 0;
-    return Math.max(cfg, canonOf(c.name), c.colMax > 0 ? c.colMax : 0) || 1;
+    return c.declaredFullScore ?? (Math.max(cfg, canonOf(c.name), c.colMax) || 1);
   });
   if (!declaredTotal || declaredTotal <= 0) return base;
 
@@ -188,7 +206,7 @@ function inferFullScores(
   if (sum > declaredTotal) {
     // 高估：把高于"数据最大值"的部分回收（优先回收增量最大的列，且不低于数据最大值）
     const cands = cols
-      .map((c, i) => ({ i, over: base[i] - (c.colMax > 0 ? c.colMax : base[i]) }))
+      .map((c, i) => ({ i, over: !c.declaredFullScore && c.colMax > 0 ? base[i] - c.colMax : 0 }))
       .filter(x => x.over > 0.001)
       .sort((a, b) => b.over - a.over);
     for (const x of cands) {
@@ -219,7 +237,14 @@ export function parseClipboardTable(
     return { rows: [], errors: ['内容太少：请连表头一起复制（至少表头 + 1 行数据）'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [], scoreColumns: [] };
   }
 
-  const headers = splitLine(lines[0]).map(norm);
+  const rawHeaders = splitLine(lines[0]);
+  const scoreHeader = (label: string) => {
+    const parts = label.match(/^(.*?)\s*[（(]\s*(\d+(?:\.\d+)?)\s*分?\s*[）)]\s*$/);
+    return parts && Number(parts[2]) > 0
+      ? { name: parts[1].trim(), fullScore: Number(parts[2]) }
+      : { name: label.trim(), fullScore: undefined };
+  };
+  const headers = rawHeaders.map(h => norm(scoreHeader(h).name));
   const nameIdx = headers.findIndex(h => h === '姓名' || h === '学生姓名' || h === '名字' || h === '学生');
   if (nameIdx < 0) {
     return { rows: [], errors: ['未找到"姓名"列，请确认复制内容包含表头'], matchedColumns: [], unmatchedColumns: [], fullScoreUpdates: [], scoreColumns: [] };
@@ -279,10 +304,7 @@ export function parseClipboardTable(
       const found = ([...s].filter(ch => '暑秋寒春'.includes(ch)) as SeasonType[]);
       row.seasons = Array.from(new Set(found));
     }
-    if (lessonIdx >= 0) {
-      const n = parseInt((cells[lessonIdx] || '').replace(/\D/g, ''), 10);
-      if (!isNaN(n)) row.lessonNumber = n;
-    }
+    if (lessonIdx >= 0) row.lessonNumber = parseLessonCell(cells[lessonIdx]);
     if (hwIdx >= 0) row.homeworkStatus = (cells[hwIdx] || '').trim() || undefined;
     if (listenIdx >= 0) {
       const v = (cells[listenIdx] || '').trim();
@@ -319,9 +341,9 @@ export function parseClipboardTable(
     // 修复（2026-10-16 用户反馈）：口语/朗读等「非小测科目」列（作业成绩，口径=课后任务）
     // 不计入合计 —— 原实现把口语分也算进 sum，导致"题型分合计与总分不一致"的误报（总分不对）
     if (totalIdx >= 0 && qtIdx.length > 0) {
-      const quizQtIdx = qtIdx.filter(({ qt }) => !isNonQuizColumn(qt.name));
-      const expectedQuizCols = questionTypes.filter(q => !isNonQuizColumn(q.name)).length;
-      const sum = quizQtIdx.reduce((acc, { idx }) => acc + (parseFloat(cells[idx]) || 0), 0);
+      const quizQtIdx = qtIdx.filter(({ qt }) => !qt.excludeFromTotal && !isNonQuizColumn(qt.name));
+      const expectedQuizCols = questionTypes.filter(q => !q.excludeFromTotal && !isNonQuizColumn(q.name)).length;
+      const sum = quizQtIdx.reduce((acc, { qt }) => acc + (row.scores[qt.id] ?? 0), 0);
       const total = parseFloat(cells[totalIdx]);
       if (!isNaN(total) && Math.abs(sum - total) > 1 && quizQtIdx.length === expectedQuizCols) {
         errors.push(`第 ${i + 2} 行（${name}）：题型分合计 ${sum} 与总分 ${total} 不一致，请核对`);
@@ -332,8 +354,6 @@ export function parseClipboardTable(
   });
 
   // 未匹配、但数据多为数值的列 → 候选新题型（usedIdx 已含姓名/固定列/已匹配题型）
-  const rawHeaders = splitLine(lines[0]);
-
   // 表头「总分（50）」→ 50：这是校准各列满分最可靠的依据
   const declaredTotalScore = (() => {
     const i = rawHeaders.findIndex(h => norm(h).includes('总分'));
@@ -348,17 +368,17 @@ export function parseClipboardTable(
   const unmatchedIdx: { name: string; idx: number; suggestedFullScore: number }[] = [];
   rawHeaders.forEach((h, idx) => {
     if (usedIdx.has(idx)) return;
-    const label = (h || '').trim();
+    const { name: label, fullScore: statedMax } = scoreHeader(h);
     if (!label || /总分|正确率|排名|薄弱项|备注/.test(label)) return;
     const nums = dataLines
       .map(l => parseScoreCell(splitLine(l)[idx]).value)
       .filter((n): n is number => n != null);
-    if (nums.length === 0) return;
+    if (nums.length === 0 && !statedMax) return;
     const numericRatio = nums.length / Math.max(1, dataLines.length);
     // 口语/朗读这类"并非每次课都登记"的可选列，登记率天然很低（1/4 也正常），
     // 若沿用 50% 的阈值会被整列丢弃 —— 用户就会发现"口语列没导进来"
     const optional = isNonQuizColumn(label);
-    if (numericRatio >= 0.5 || (optional && nums.length > 0)) {
+    if (statedMax || numericRatio >= 0.5 || (optional && nums.length > 0)) {
       const maxV = robustMax(nums);
       const suggested = Math.max(1, Math.ceil(maxV));
       const colMax = Math.ceil(maxV * 100) / 100;
@@ -405,23 +425,41 @@ export function parseClipboardTable(
     const nums = dataLines
       .map(l => parseScoreCell(splitLine(l)[col.idx]).value)
       .filter((n): n is number => n != null);
-    // 稳健上限：个别人误填 150 不会把 15 分题的满分抬成 150
-    const colMax = robustMax(nums);
     const cfgQt = col.matchedQtId ? questionTypes.find(q => q.id === col.matchedQtId) : undefined;
+    const declaredFullScore = scoreHeader(rawHeaders[col.idx]).fullScore;
+    const configuredMax = cfgQt?.fullScore || CANONICAL_FULL_SCORES[norm(col.name)] || 0;
+    // 已知参考满分时排除明显异常值；新题型没有参考时，以实际录分的最大值为下限。
+    const observedMax = nums.reduce((max, value) => Math.max(max, value), 0);
+    const colMax = configuredMax || declaredFullScore ? robustMax(nums) : observedMax;
     return {
       name: col.name,
       matchedQtId: col.matchedQtId,
-      colMax: colMax > 0 ? Math.ceil(colMax * 2) / 2 : 0,   // 向上取到 0.5 的整数倍
+      colMax: Math.ceil(colMax * 2) / 2,
       configFullScore: cfgQt?.fullScore || col.suggestedFullScore || 0,
+      declaredFullScore,
+      excludeFromTotal: cfgQt?.excludeFromTotal || isNonQuizColumn(col.name) || undefined,
     };
   });
-  const inferred = inferFullScores(colStats, declaredTotalScore);
-  const scoreColumns: ScoreColumn[] = colStats.map((c, i) => ({
+  const inferred = inferFullScores(colStats.filter(col => !col.excludeFromTotal), declaredTotalScore);
+  let examIndex = 0;
+  const scoreColumns: ScoreColumn[] = colStats.map(c => ({
     name: c.name,
     matchedQtId: c.matchedQtId,
-    suggestedFullScore: inferred[i],
-    excludeFromTotal: isNonQuizColumn(c.name) || undefined,
+    suggestedFullScore: c.excludeFromTotal ? inferFullScores([c])[0] : inferred[examIndex++],
+    excludeFromTotal: c.excludeFromTotal,
   }));
 
+  if (declaredTotalScore != null && Math.abs(inferred.reduce((sum, value) => sum + value, 0) - declaredTotalScore) > .01) {
+    errors.push(`各题型满分合计与表头的 ${declaredTotalScore} 分不同，请核对各题型满分（可在列名标注满分，如「完成句子（5）」）。`);
+  }
+  scoreColumns.forEach(column => {
+    rows.forEach(row => {
+      const value = row.scoreValues?.[column.name];
+      if (value === undefined || value <= column.suggestedFullScore) return;
+      errors.push(`${row.studentName} · ${column.name}：${value} 分超过该题型满分 ${column.suggestedFullScore} 分，已跳过`);
+      delete row.scoreValues?.[column.name];
+      if (column.matchedQtId) delete row.scores[column.matchedQtId];
+    });
+  });
   return { rows, errors, matchedColumns: matched, unmatchedColumns, fullScoreUpdates, scoreColumns, declaredTotalScore };
 }

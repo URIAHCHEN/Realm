@@ -10,7 +10,7 @@ import {
   BookOpen, FileText, Copy, Check, Wand2, Users, ClipboardList,
   CircleAlert, RotateCcw, Send, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generatePersonalFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
+import { generatePrivateFeedback, generateFourInOne, generateShortNickname, copyToClipboard, DEFAULT_FOUR_IN_ONE_TEMPLATE, FOUR_IN_ONE_VARIABLES, FOUR_IN_ONE_SCENARIOS, FOUR_IN_ONE_VARIANT_COUNT , buildDynamicVariables } from '@/lib/feedbackTemplates';
 import { isAbsentRecord, isQuizAssessed, isRecordedQuiz } from '@/lib/attendance';
 import { exportTeacherElfXlsx, planTeacherElfColumns, type TeacherElfTextSlot } from '@/lib/teacherElfExport';
 import { longTermWeakCategories } from '@/lib/longTermWeak';
@@ -26,7 +26,8 @@ import './FeedbackGenerator.css';
  * 这样粘贴后每份反馈完整落在一个单元格内，不会把版式撑散。
  */
 function toTsvCell(text: string): string {
-  const t = (text ?? '').replace(/\r\n/g, '\n');
+  const normalized = text.replace(/\r\n?/g, '\n');
+  const t = /^[\s\uFEFF]*[=+@-]/.test(normalized) ? "'" + normalized : normalized;
   if (/[\n\t"]/.test(t)) return '"' + t.replace(/"/g, '""') + '"';
   return t;
 }
@@ -56,6 +57,7 @@ interface FeedbackGeneratorProps {
   onSaveLessonConfig: (lessonNumber: number, config: Partial<LessonConfig>) => void;
   /** 点击群发列表中的姓名弹出该生学情报告 */
   onViewStudent?: (name: string) => void;
+  onImportRecords?: () => void;
   /** 视图切换（反馈生成 / 反馈素材），并入工具栏，避免单独一行灰 pill */
   viewSwitch?: React.ReactNode;
   /** 题型名 → 板块覆盖（appConfig.qtCategoryOverrides）：让反馈的薄弱项与报告同口径 */
@@ -65,6 +67,8 @@ interface FeedbackGeneratorProps {
 }
 
 type StatusTone = 'none' | 'generated' | 'copied';
+type FeedbackParts = { text1: string; text2: string };
+const joinFeedbackParts = ({ text1, text2 }: FeedbackParts) => [text1, text2].filter(Boolean).join('\n\n');
 
 export function FeedbackGenerator({
   students,
@@ -80,6 +84,7 @@ export function FeedbackGenerator({
   libraryLinks = [],
   onSaveLessonConfig,
   onViewStudent,
+  onImportRecords,
   viewSwitch,
   qtCategoryOverrides,
   className
@@ -95,14 +100,27 @@ export function FeedbackGenerator({
   }), [lessonConfigProp, qtCategoryOverrides]);
 
   const [selected, setSelected] = useState<string | null>(null);
-  const [generated, setGenerated] = useState<Record<string, string>>({});
-  const [copiedSet, setCopiedSet] = useState<Set<string>>(new Set());
-  const copySession = useRef(new AbortController());
+  const [generatedNames, setGeneratedNames] = useState(() => new Set<string>());
+  const [edits, setEdits] = useState(() => new Map<string, { source: string; text: string; detail?: FeedbackParts }>());
+  const [copied, setCopied] = useState(() => new Map<string, string>());
+  const copySession = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const session = new AbortController();
+    copySession.current = session;
+    return () => session.abort();
+  }, []);
 
   // 模板旁编辑 + 实时预览
   const [showTemplate, setShowTemplate] = useState(false);
-  const [draftFeedback, setDraftFeedback] = useState(lessonConfig.feedbackTemplate);
-  const [draftFourInOne, setDraftFourInOne] = useState(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE);
+  const [privateTemplateDraft, setPrivateTemplateDraft] = useState<{ source: string; text: string }>();
+  const [fourInOneTemplateDraft, setFourInOneTemplateDraft] = useState<{ source: string; text: string }>();
+  const savedPrivateTemplate = lessonConfig.feedbackTemplate;
+  const savedFourInOneTemplate = lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE;
+  const draftFeedback = privateTemplateDraft?.source === savedPrivateTemplate ? privateTemplateDraft.text : savedPrivateTemplate;
+  const draftFourInOne = fourInOneTemplateDraft?.source === savedFourInOneTemplate ? fourInOneTemplateDraft.text : savedFourInOneTemplate;
+  const setDraftFeedback = (text: string) => setPrivateTemplateDraft({ source: savedPrivateTemplate, text });
+  const setDraftFourInOne = (text: string) => setFourInOneTemplateDraft({ source: savedFourInOneTemplate, text });
   const templateRef = useRef<HTMLTextAreaElement>(null);
 
   // 反馈模式：常规模板 / 四个一
@@ -127,24 +145,15 @@ export function FeedbackGenerator({
     records.filter(r => r.lessonNumber === lessonNumber),
     [records, lessonNumber]
   );
+  const lessonRecordsByName = useMemo(() => new Map(lessonRecords.map(r => [r.studentName, r])), [lessonRecords]);
+  const recordOf = (name: string) => lessonRecordsByName.get(name);
 
   const stats = useMemo(() =>
     calculateClassStats(lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields),
     [lessonRecords, lessonConfig.questionTypes, lessonConfig.customFields, calculateClassStats]
   );
-
-  // 切换课次时重置批量状态
-  useEffect(() => {
-    setGenerated({});
-    setCopiedSet(new Set());
-    setSelected(null);
-    const session = new AbortController();
-    copySession.current = session;
-    return () => session.abort();
-  }, [lessonNumber]);
-
-  const recordOf = (name: string) =>
-    lessonRecords.find(r => r.studentName === name);
+  const assessedCount = lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig)).length;
+  const usesTemplate = lessonConfig.privateFeedbackMode === 'template';
 
   // 表格字段 → 可选参数（题型含口语得分等附加项、自定义列），与 lib 的替换逻辑同一份定义
   const dynamicVars = useMemo(
@@ -170,45 +179,9 @@ export function FeedbackGenerator({
   }, [recordsByName, lessonConfigs, qtCategoryOverrides]);
   const weakOf = (name: string): string[] => weakByStudent.get(name) || [];
 
-  const generateFor = (name: string): string | null => {
-    const record = recordOf(name);
-    if (!record) return null;
-    if (feedbackMode === 'fourInOne') {
-      if (detailLevel === 'detailed') {
-        const d = buildDetailedFeedback(record, lessonConfig, stats, getNickname(name), variant, lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig)).length);
-        return `${d.text1}\n\n${d.text2}`;
-      }
-      return generateFourInOne(record, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, { '【学习建议】': adviceMap[name] || '' }, weakOf(name));
-    }
-    return generatePersonalFeedback(record, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, { '【学习建议】': adviceMap[name] || '' });
-  };
-
-  // 模板 / 场景 / 变体 / 开关改动：已生成的内容**自动按新规则重算**
-  //（2026-10-23：原实现是"清空全部已生成"，切换开关后预览直接空白、还得重新点一键生成；
-  //  且只刷新当前选中 → 复制对照表/导出时其他学员仍是旧话术，用户反馈"改了模板没看到效果"）
-  useEffect(() => {
-    setGenerated(prev => {
-      const names = Object.keys(prev);
-      if (names.length === 0) return prev;
-      const next = { ...prev };
-      let changed = false;
-      names.forEach(n => {
-        const t = generateFor(n);
-        if (t != null && t !== next[n]) { next[n] = t; changed = true; }
-      });
-      return changed ? next : prev;
-    });
-    // 内容变了，"已发送"标记失效
-    setCopiedSet(new Set());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftFeedback, draftFourInOne, scenario, variant, isNewStudent, withMaterials, feedbackMode, detailLevel, records, lessonConfig, stats, oralRating, libraryLinks.join('\u0001')]);
-
-  // 外部模板变化（保存成功 / 切换课次或班级）时回填草稿
-  useEffect(() => { setDraftFeedback(lessonConfig.feedbackTemplate); }, [lessonNumber, lessonConfig.feedbackTemplate]);
-  useEffect(() => { setDraftFourInOne(lessonConfig.fourInOneTemplate || DEFAULT_FOUR_IN_ONE_TEMPLATE); }, [lessonNumber, lessonConfig.fourInOneTemplate]);
-
   const isFourInOne = feedbackMode === 'fourInOne';
   const activeTemplate = isFourInOne ? draftFourInOne : draftFeedback;
+  const templateVisible = showTemplate && (isFourInOne ? detailLevel === 'brief' : usesTemplate);
   const setActiveTemplate = (v: string) => isFourInOne ? setDraftFourInOne(v) : setDraftFeedback(v);
 
   // 在光标处插入变量到模板
@@ -222,39 +195,21 @@ export function FeedbackGenerator({
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + token.length, start + token.length); });
   };
 
-  // 保存当前模式模板到课次配置，并按新模板重算所有已生成反馈
   const handleSaveTemplate = () => {
-    if (isFourInOne) {
-      onSaveLessonConfig(lessonNumber, { fourInOneTemplate: draftFourInOne });
-    } else {
-      onSaveLessonConfig(lessonNumber, { feedbackTemplate: draftFeedback });
-    }
-    setGenerated(prev => {
-      const next: Record<string, string> = {};
-      Object.keys(prev).forEach(name => { const t = generateFor(name); if (t) next[name] = t; });
-      return next;
-    });
-    toast.success('模板已保存，已按新模板重新生成');
+    onSaveLessonConfig(lessonNumber, isFourInOne
+      ? { fourInOneTemplate: draftFourInOne }
+      : { feedbackTemplate: draftFeedback });
   };
 
   const resetTemplateToDefault = () => {
     if (isFourInOne) setDraftFourInOne(DEFAULT_FOUR_IN_ONE_TEMPLATE);
-    else setDraftFeedback(lessonConfig.feedbackTemplate);
+    else setPrivateTemplateDraft(undefined);
     toast.info('已恢复模板草稿');
-  };
-
-  const ensureGenerated = (name: string): string | null => {
-    if (generated[name]) return generated[name];
-    const text = generateFor(name);
-    if (text) {
-      setGenerated(prev => ({ ...prev, [name]: text }));
-    }
-    return text;
   };
 
   const handleSelect = (name: string) => {
     setSelected(name);
-    ensureGenerated(name);
+    if (recordOf(name)) setGeneratedNames(previous => new Set([...previous, name]));
   };
 
   const handleGenerateAll = () => {
@@ -263,52 +218,29 @@ export function FeedbackGenerator({
       toast.error(`第${lessonNumber}课还没有学情记录，请先到「学情记录」保存`);
       return;
     }
-    const next = { ...generated };
-    let fresh = 0;
-    withRecords.forEach(name => {
-      if (!next[name]) {
-        const text = generateFor(name);
-        if (text) {
-          next[name] = text;
-          fresh++;
-        }
-      }
-    });
-    setGenerated(next);
-    if (!selected) setSelected(withRecords[0]);
-    toast.success(fresh > 0
-      ? `已生成 ${fresh} 份新反馈，共 ${Object.keys(next).length} 份`
-      : '全部反馈已是最新，无需重新生成'
-    );
-    const absentCount = withRecords.filter(n => {
-      const r = recordOf(n);
-      return r && isAbsentRecord(r);
-    }).length;
-    if (absentCount > 0) toast.info(`其中 ${absentCount} 名本课请假/缺勤，已按请假处理（不计入平均分）`);
+    setGeneratedNames(new Set(withRecords));
+    if (!selected || !recordOf(selected)) setSelected(withRecords[0]);
+    toast.success(`已生成 ${withRecords.length} 份反馈`);
   };
 
-  const copyFeedback = async (text: string, names: string[]) => {
-    const { signal } = copySession.current;
+  const copyFeedback = async (text: string, rows: { name: string; text: string }[]) => {
+    const session = copySession.current;
     const ok = await copyToClipboard(text);
-    if (ok && !signal.aborted) {
-      setCopiedSet(previous => new Set([...previous, ...names]));
+    if (ok && !session?.signal.aborted) {
+      setCopied(previous => new Map([...previous, ...rows.map(row => [row.name, row.text] as const)]));
     }
     return ok;
   };
 
   const handleCopyOne = async (name: string) => {
-    const text = generated[name] ?? ensureGenerated(name);
-    if (!text) return;
-    const ok = await copyFeedback(text, [name]);
-    if (ok) {
-      toast.success(`已复制 ${getNickname(name)} 的私发反馈`);
-    } else {
-      toast.error('复制失败，请手动选择复制');
-    }
+    const row = feedbackByName.get(name);
+    if (!row?.text.trim()) return;
+    if (await copyFeedback(row.text, [row])) toast.success(`已复制 ${getNickname(name)} 的私发反馈`);
+    else toast.error('复制失败，请手动选择复制');
   };
 
   const handleResetStatus = () => {
-    setCopiedSet(new Set());
+    setCopied(new Map());
     toast.success('已重置复制状态');
   };
 
@@ -328,42 +260,47 @@ export function FeedbackGenerator({
       map[name] = buildCondensedAdvice(generateShortNickname(getNickname(name)), srs, st, lessonConfigs);
     });
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, recordsByName, records, lessonConfigs, lessonConfig]);
+  }, [students, recordsByName, lessonConfigs, lessonConfig, getNickname]);
 
-  // 一键复制某生的学习建议（精简版）
-  // 一键复制全班学习建议（学生 | 学习建议 两列表格）
-  // 群发预览：仅含有记录且非请假/缺勤的学员；内容按当前模板（课次配置/默认/界面修改后的草稿）实时生成
-  // 注意：withMaterials 必须进依赖 —— 否则取消勾选「附参考教辅」后群发预览仍带旧文本（历史缺陷）
-  const batchRows = useMemo(() => {
-    return students
-      .map(name => ({ name, record: recordOf(name) }))
-      // 2026-10-17：批量复制/群发只保留「在课」学员 —— 请假/缺勤排除；调课按调入/调出分流，调出（无小测数据）也排除
-      .filter(x => x.record && isQuizAssessed(x.record))
-      .map(x => ({ name: x.name, text: generateFor(x.name) ?? '' }));
-    // 依赖必须覆盖所有内容源（2026-10-17 补全）：else 改模板/资料库/昵称后
-    // 群发预览与教师精灵表导出的文本还是旧值。
-    // · adviceMap 随 lessonConfigs 变化（【学习建议】来源）
-    // · libraryLinks 由父级内联生成（每次新数组），用内容指纹比较避免每次都重算
-    // · getNickname 是父级内联箭头函数，直接放依赖会让 memo 永久失效，
-    //   但输入模板时本就每次重算，额外成本可忽略；不加则改名后导出仍是旧昵称
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- libraryLinks 用内容指纹比较，避免父级内联数组每次触发重算
-  }, [students, lessonRecords, stats, draftFeedback, draftFourInOne, feedbackMode, detailLevel, scenario, isNewStudent, variant, withMaterials, lessonConfig, adviceMap, oralRating, getNickname, libraryLinks.join('\u0001')]);
-
-  // 自动排除「不在课」学员并在复制后明确提示，避免漏发：
-  //   请假/缺勤 + 调课-调出（无小测数据，成绩以原班级为准）；调课-调入照常复制
-  const absentNames = useMemo(
-    () => lessonRecords.filter(r => isAbsentRecord(r)).map(r => getNickname(r.studentName)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lessonRecords]
-  );
-  const transferOutNames = useMemo(
-    () => lessonRecords.filter(r => !isQuizAssessed(r) && !isAbsentRecord(r)).map(r => getNickname(r.studentName)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lessonRecords]
-  );
-  const excludedNames = useMemo(() => [...absentNames, ...transferOutNames], [absentNames, transferOutNames]);
-  const excludedAbsentCount = absentNames.length;
+  const detailedFourInOne = isFourInOne && detailLevel === 'detailed';
+  const draftMode = isFourInOne ? detailLevel : usesTemplate ? 'template' : 'adaptive';
+  const baseByName = useMemo(() => {
+    const map = new Map<string, { source: string; detail?: FeedbackParts }>();
+    students.forEach(name => {
+      const record = lessonRecordsByName.get(name);
+      if (!record) return;
+      const nickname = getNickname(name);
+      const advice = { '【学习建议】': adviceMap[name] || '' };
+      if (detailedFourInOne) {
+        const detail = buildDetailedFeedback(record, lessonConfig, stats, nickname, variant, assessedCount);
+        map.set(name, { source: joinFeedbackParts(detail), detail });
+        return;
+      }
+      const source = isFourInOne
+        ? generateFourInOne(record, lessonConfig, stats, nickname, isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, advice, weakByStudent.get(name) ?? [])
+        : generatePrivateFeedback(record, lessonConfig, stats, nickname, draftFeedback, oralRating, advice);
+      map.set(name, { source });
+    });
+    return map;
+  }, [students, lessonRecordsByName, getNickname, adviceMap, detailedFourInOne, isFourInOne, lessonConfig, stats, variant, assessedCount, isNewStudent, libraryLinks, draftFourInOne, scenario, withMaterials, oralRating, weakByStudent, draftFeedback]);
+  const feedbackByName = new Map(Array.from(baseByName, ([name, base]) => {
+    const edit = edits.get(`${draftMode}:${name}`);
+    return [name, edit?.source === base.source
+      ? { name, ...edit }
+      : { name, ...base, text: base.source }] as const;
+  }));
+  const updateDraft = (name: string, text: string, detail?: FeedbackParts) => {
+    const base = feedbackByName.get(name);
+    if (base) setEdits(previous => new Map(previous).set(`${draftMode}:${name}`, { source: base.source, text, detail }));
+  };
+  const exportCandidates = Array.from(feedbackByName.values()).filter(row => {
+    const record = recordOf(row.name);
+    return record && isQuizAssessed(record, lessonConfig);
+  });
+  const batchRows = exportCandidates.filter(row => row.text.trim());
+  const excludedRecords = lessonRecords.filter(r => !isQuizAssessed(r, lessonConfig));
+  const excludedNames = excludedRecords.map(r => getNickname(r.studentName));
+  const excludedAbsentCount = excludedRecords.filter(isAbsentRecord).length;
 
   // 一键复制全班（表格）：一列学生 / 一列私发 / 一列四个一，直接粘进表格即可对照
   // 一键复制全班（单列）：按当前模式只导出私发或只导出四个一
@@ -375,7 +312,7 @@ export function FeedbackGenerator({
     const isFour = feedbackMode === 'fourInOne';
     const rows = batchRows.map(r => [getNickname(r.name), r.text]);
     const text = buildTsvTable(['学生姓名', isFour ? '四个一反馈' : '私发反馈'], rows);
-    const ok = await copyFeedback(text, batchRows.map(row => row.name));
+    const ok = await copyFeedback(text, batchRows);
     if (ok) {
       toast.success(`已复制 ${rows.length} 位学员的${isFour ? '四个一' : '私发'}反馈（单列表格）`, {
         description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
@@ -388,25 +325,26 @@ export function FeedbackGenerator({
   // 导出教师精灵（企鹅教师助手）个性化文本模板（2026-10-17）
   // 范围与「复制对照表」完全一致：只含在课学员（请假/缺勤/调课调出排除）。
   // 默认 B 列姓名 + C 列私发反馈两列；C/D 列内容可换，内容按当前模板草稿实时生成。
-  const detailedFourInOne = feedbackMode === 'fourInOne' && detailLevel === 'detailed';
   const ELF_SLOT_LABEL: Record<TeacherElfTextSlot, string> = {
     private: '私发反馈',
     fourInOne: detailedFourInOne ? '四个一·文本1' : '四个一反馈',
     fourInOnePart2: '四个一·文本2',
     advice: '学习建议',
   };
-  const assessedCount = lessonRecords.filter(r => isRecordedQuiz(r, lessonConfig)).length;
   const buildElfText = (name: string, kind: 'private' | 'fourInOne' | 'advice'): string => {
     if (kind === 'advice') return adviceMap[name] || '';
     const rec = recordOf(name);
     if (!rec) return '';
     const adviceRef = { '【学习建议】': adviceMap[name] || '' };
-    return kind === 'fourInOne'
+    const source = kind === 'fourInOne'
       ? generateFourInOne(rec, lessonConfig, stats, getNickname(name), isNewStudent, libraryLinks, variant, draftFourInOne, scenario, withMaterials, oralRating, adviceRef, weakOf(name))
-      : generatePersonalFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef);
+      : generatePrivateFeedback(rec, lessonConfig, stats, getNickname(name), draftFeedback, oralRating, adviceRef);
+    const mode = kind === 'fourInOne' ? 'brief' : usesTemplate ? 'template' : 'adaptive';
+    const edit = edits.get(`${mode}:${name}`);
+    return edit?.source === source ? edit.text : source;
   };
   const handleExportTeacherElf = async () => {
-    if (batchRows.length === 0) {
+    if (exportCandidates.length === 0) {
       toast.error('没有可导出的反馈（本课暂无在课学员记录）');
       return;
     }
@@ -420,27 +358,20 @@ export function FeedbackGenerator({
         [elfColC, ...(elfWithD ? [elfColD] : [])],
         detailedFourInOne,
       );
-      const rows = batchRows.map(r => {
-        const rec = recordOf(r.name);
-        let detail: { text1: string; text2: string } | null = null;
-        const detailOf = () => {
-          if (!detail && rec) {
-            detail = buildDetailedFeedback(rec, lessonConfig, stats, getNickname(r.name), variant, assessedCount);
-          }
-          return detail;
-        };
+      const rows = exportCandidates.map(r => {
         const texts = slots.map(slot => {
-          if (slot === 'fourInOnePart2') return detailOf()?.text2 || '';
-          if (slot === 'fourInOne' && detailedFourInOne) return detailOf()?.text1 || '';
+          if (slot === 'fourInOnePart2') return r.detail?.text2 ?? '';
+          if (slot === 'fourInOne' && detailedFourInOne) return r.detail?.text1 ?? '';
+          if ((slot === 'private' && !isFourInOne) || (slot === 'fourInOne' && isFourInOne)) return r.text;
           return buildElfText(r.name, slot);
         });
-        return {
-          name: getNickname(r.name),
-          text1: texts[0] || '',
-          text2: texts[1],
-          text3: texts[2],
-        };
-      }).filter(r => r.text1 || r.text2 || r.text3);
+        return { name: getNickname(r.name), text1: texts[0] || '', text2: texts[1], text3: texts[2] };
+      }).filter(r => r.text1.trim());
+      const skipped = exportCandidates.length - rows.length;
+      if (!rows.length) {
+        toast.error('所选 C 列没有可导出的正文，请检查后重试');
+        return;
+      }
       const { filename, truncated } = await exportTeacherElfXlsx({
         className,
         lessonNumber,
@@ -453,6 +384,7 @@ export function FeedbackGenerator({
       const notes = [
         `${colDesc}，共 ${rows.length} 人`,
         excludedNames.length ? `已排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）` : '',
+        skipped ? `已跳过 ${skipped} 条 C 列为空的记录` : '',
         truncated ? `${truncated} 条文本超过模板 1000 字上限，已截断` : '',
       ].filter(Boolean).join('；');
       toast.success(`已导出 ${filename}`, { description: notes, duration: 9000 });
@@ -468,7 +400,7 @@ export function FeedbackGenerator({
       return;
     }
     const text = batchRows.map(r => `【${getNickname(r.name)}】\n${r.text}`).join('\n\n──────────────\n\n');
-    const ok = await copyFeedback(text, batchRows.map(row => row.name));
+    const ok = await copyFeedback(text, batchRows);
     if (ok) {
       toast.success(`已复制 ${batchRows.length} 份反馈（纯文本，分隔线隔开）`, {
         description: excludedNames.length ? `已自动排除 ${excludedNames.length} 位不在课学员（请假/缺勤/调课调出）：${excludedNames.join('、')}` : undefined,
@@ -479,7 +411,7 @@ export function FeedbackGenerator({
   };
 
   const handleCopyBatchRow = async (name: string, text: string) => {
-    const ok = await copyFeedback(text, [name]);
+    const ok = await copyFeedback(text, [{ name, text }]);
     if (ok) {
       toast.success(`已复制 ${getNickname(name)} 的反馈`);
     } else {
@@ -488,19 +420,22 @@ export function FeedbackGenerator({
   };
 
   const statusTone = (name: string): StatusTone => {
-    if (copiedSet.has(name)) return 'copied';
-    if (generated[name]) return 'generated';
+    const current = feedbackByName.get(name);
+    if (!current) return 'none';
+    if (copied.get(name) === current.text) return 'copied';
+    if (generatedNames.has(name)) return 'generated';
     return 'none';
   };
 
   const withRecordsCount = students.filter(s => recordOf(s)).length;
-  const generatedCount = students.filter(s => generated[s]).length;
-  const copiedCount = copiedSet.size;
+  const generatedCount = students.filter(s => statusTone(s) !== 'none').length;
+  const copiedCount = students.filter(s => statusTone(s) === 'copied').length;
   const progressPct = withRecordsCount > 0
     ? Math.round((generatedCount / withRecordsCount) * 100)
     : 0;
 
   const selectedRecord = selected ? recordOf(selected) : undefined;
+  const selectedFeedback = selected ? feedbackByName.get(selected) : undefined;
 
   const selectableLessons = lessonNumbers
     ? [...new Set([...lessonNumbers, ...Object.keys(lessonConfigs).map(Number), lessonNumber])]
@@ -514,7 +449,7 @@ export function FeedbackGenerator({
     if (tone === 'copied') {
       return (
         <Badge className="bg-emerald-100 text-emerald-700 border-0 gap-1 rounded-full">
-          <Check className="w-3 h-3" />已发送
+          <Check className="w-3 h-3" />已复制
         </Badge>
       );
     }
@@ -540,7 +475,7 @@ export function FeedbackGenerator({
           <div className="feedback-workbench-header">
             <LearningWorkspaceHeading
               title={`私发反馈工作台 · 第${lessonNumber}课`}
-              description="一键生成全班话术；复制为「学生 / 私发 / 四个一」三列对照表，或直接导出教师精灵模板（请假 / 缺勤 / 调课调出自动排除）"
+              description="按本课学情生成逐生反馈，可编辑、批量复制或导出教师精灵表。"
               icon={FileText}
             />
             <div className="feedback-workbench-controls">
@@ -553,12 +488,18 @@ export function FeedbackGenerator({
                   <Button
                     variant="outline"
                     className={`h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2 border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.06)] ${elfOpen ? 'bg-[rgb(var(--brand-rgb)/0.08)]' : ''}`}
+                    aria-expanded={elfOpen}
                     onClick={() => setElfOpen(v => !v)}
                     title="按教师精灵（企鹅教师助手）模板导出：默认「学生姓名 + 私发反馈」两列，可选内容与是否再加一列"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
                     教师精灵表
                   </Button>
+                  {onImportRecords && (
+                    <Button variant="outline" size="sm" className="h-9 px-3.5 text-sm gap-2" onClick={onImportRecords}>
+                      <ClipboardList className="w-4 h-4" />粘贴学情表
+                    </Button>
+                  )}
                   <Button variant="outline" className="h-9 px-3.5 text-sm rounded-[var(--r-md)] gap-2" onClick={handleCopyBatchSingle}
                     title={feedbackMode === 'fourInOne' ? '只导出「学生 / 四个一」两列' : '只导出「学生 / 私发」两列'}>
                     <Copy className="w-4 h-4" />
@@ -568,7 +509,7 @@ export function FeedbackGenerator({
                     <summary title="更多批量操作" aria-label="更多批量操作">⋯</summary>
                     <div className="fb-more-menu" role="menu">
                       <button role="menuitem" onClick={handleCopyBatch} title="纯文本 + 分隔线，适合直接发群里"><ClipboardList className="w-4 h-4" />复制纯文本</button>
-                      <button role="menuitem" onClick={handleResetStatus} title="把已复制/已生成的标记清空，重新来过"><RotateCcw className="w-4 h-4" />重置状态</button>
+                      <button role="menuitem" onClick={handleResetStatus} title="清除已复制标记"><RotateCcw className="w-4 h-4" />重置状态</button>
                     </div>
                   </details>
                 </div>
@@ -578,7 +519,7 @@ export function FeedbackGenerator({
                       role="tab" aria-selected={feedbackMode === 'normal'}
                       onClick={() => setFeedbackMode('normal')}
                       className={`mode-seg-item ${feedbackMode === 'normal' ? 'is-active' : ''}`}
-                    >常规反馈</button>
+                    >私发反馈</button>
                     <button
                       role="tab" aria-selected={feedbackMode === 'fourInOne'}
                       onClick={() => setFeedbackMode('fourInOne')}
@@ -590,6 +531,18 @@ export function FeedbackGenerator({
                       <button role="tab" aria-selected={detailLevel === 'brief'} className={`mode-seg-item ${detailLevel === 'brief' ? 'is-active' : ''}`} onClick={() => setDetailLevel('brief')}>精简版</button>
                       <button role="tab" aria-selected={detailLevel === 'detailed'} className={`mode-seg-item ${detailLevel === 'detailed' ? 'is-active' : ''}`} onClick={() => setDetailLevel('detailed')}>详细版</button>
                     </div>
+                  )}
+                  {!isFourInOne && (
+                    <Select value={usesTemplate ? 'template' : 'adaptive'} onValueChange={(value: 'adaptive' | 'template') => {
+                      setShowTemplate(value === 'template');
+                      onSaveLessonConfig(lessonNumber, { privateFeedbackMode: value });
+                    }}>
+                      <SelectTrigger aria-label="私发反馈生成方式" size="sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="adaptive">按学情生成</SelectItem>
+                        <SelectItem value="template">使用自定义模板</SelectItem>
+                      </SelectContent>
+                    </Select>
                   )}
                   {viewSwitch && <span className="tb-divider" aria-hidden="true" />}
                   {viewSwitch}
@@ -656,7 +609,7 @@ export function FeedbackGenerator({
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 立即导出
               </Button>
-              <span className="text-[11px] text-[color:var(--ink-4)]">内容按当前模板草稿实时生成；请假 / 缺勤 / 调课调出自动排除</span>
+              <span className="text-[11px] text-[color:var(--ink-4)]">已编辑的正文随当前模式导出；请假 / 缺勤 / 调课调出自动排除</span>
             </div>
           )}
 
@@ -692,14 +645,14 @@ export function FeedbackGenerator({
               <span>
                 已生成 <span className="font-semibold" style={{ color: 'var(--brand)' }}>{generatedCount}</span>
                 <span className="mx-1.5">·</span>
-                已发送 <span className="font-semibold text-emerald-600">{copiedCount}</span>
+                已复制 <span className="font-semibold text-emerald-600">{copiedCount}</span>
               </span>
             </div>
-            <div className="h-2 rounded-full bg-black/[0.05] overflow-hidden">
+            <div className="h-2 rounded-full bg-black/[0.05] overflow-hidden" role="progressbar" aria-label="反馈生成进度" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
               <div
-                className="h-full rounded-full transition-all duration-500"
+                className="h-full rounded-full motion-progress-fill"
                 style={{
-                  width: `${progressPct}%`,
+                  transform: `scaleX(${progressPct / 100})`,
                   background: 'linear-gradient(90deg, rgb(var(--brand-rgb)/0.6), rgb(var(--brand-rgb)))'
                 }}
               />
@@ -726,17 +679,17 @@ export function FeedbackGenerator({
               <ScrollArea className="h-[420px] pr-2">
                 <div className="space-y-1">
                   {students.map(s => {
-                    const hasRecord = !!recordOf(s);
+                    const record = recordOf(s);
+                    const assessed = record && isRecordedQuiz(record, lessonConfig);
                     const tone = statusTone(s);
                     const isActive = selected === s;
                     return (
-                      <div
+                      <button
                         key={s}
-                        role="button"
-                        tabIndex={0}
+                        type="button"
+                        aria-pressed={isActive}
                         onClick={() => handleSelect(s)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(s); } }}
-                        className={`group w-full cursor-pointer flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
+                        className={`group w-full cursor-pointer flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
                           isActive
                             ? 'bg-[rgb(var(--brand-rgb)/0.1)] ring-1 ring-[rgb(var(--brand-rgb)/0.35)]'
                             : tone === 'copied'
@@ -757,7 +710,7 @@ export function FeedbackGenerator({
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm font-medium text-[color:var(--ink)] truncate">{getNickname(s)}</span>
                           <span className="block text-[11px] text-[color:var(--ink-4)] truncate">
-                            {hasRecord ? `${recordOf(s)!.totalScore}分 · 第${recordOf(s)!.rank}名` : '本课无记录'}
+                            {assessed ? `${record.totalScore}分${record.rank > 0 ? ` · 第${record.rank}名` : ''}` : record?.attendance || '本课无记录'}
                           </span>
                         </span>
                         {tone === 'copied' ? (
@@ -767,7 +720,7 @@ export function FeedbackGenerator({
                         ) : (
                           <span className="w-2 h-2 rounded-full bg-slate-200 flex-shrink-0" />
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -786,18 +739,20 @@ export function FeedbackGenerator({
               </span>
               <span className="flex items-center gap-2">
                 {selected && statusBadge(selected)}
-                <button
+                {(isFourInOne ? detailLevel === 'brief' : usesTemplate) && <button
+                  type="button"
+                  aria-expanded={templateVisible}
                   onClick={() => setShowTemplate(v => !v)}
-                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border transition-all ${showTemplate ? 'bg-[rgb(var(--brand-rgb)/0.12)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)]' : 'bg-black/[0.04] border-transparent text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border transition-colors ${showTemplate ? 'bg-[rgb(var(--brand-rgb)/0.12)] border-[rgb(var(--brand-rgb)/0.35)] text-[color:var(--brand)]' : 'bg-black/[0.04] border-transparent text-[color:var(--ink-3)] hover:text-[color:var(--ink)]'}`}
                   title="在右侧编辑并预览反馈模板"
                 >
                   <Wand2 className="w-3.5 h-3.5" />{isFourInOne ? '四个一模板' : '反馈模板'}
-                </button>
+                </button>}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-          <div className={showTemplate ? 'grid gap-5 lg:grid-cols-2 items-start' : ''}>
+          <div className={templateVisible ? 'grid gap-5 lg:grid-cols-2 items-start' : ''}>
           <div className="space-y-3">
             {!selected ? (
               <div className="py-16 text-center text-[color:var(--ink-4)]">
@@ -812,14 +767,35 @@ export function FeedbackGenerator({
               </div>
             ) : (
               <>
-                <Textarea
-                  value={generated[selected] ?? ''}
-                  data-preview-text
-                  onChange={(e) => setGenerated(prev => ({ ...prev, [selected]: e.target.value }))}
-                  className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
-                  placeholder="点击上方「一键生成全班」或直接输入反馈内容…"
-                />
-                {(lessonConfig.customFields || []).length > 0 && selectedRecord && (
+                {selectedFeedback?.detail ? (
+                  <div className="space-y-3">
+                    {(['text1', 'text2'] as const).map((key, index) => (
+                      <label key={key} className="block space-y-1.5">
+                        <span className="text-xs font-medium text-[color:var(--ink-3)]">文本 {index + 1}</span>
+                        <Textarea
+                          value={selectedFeedback.detail?.[key] ?? ''}
+                          data-preview-text
+                          onChange={event => {
+                            const detail = selectedFeedback.detail;
+                            if (!detail) return;
+                            const next = { ...detail, [key]: event.target.value };
+                            updateDraft(selected, joinFeedbackParts(next), next);
+                          }}
+                          className="min-h-[170px] text-sm leading-relaxed rounded-[var(--r-md)]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <Textarea
+                    aria-label="反馈正文"
+                    value={selectedFeedback?.text ?? ''}
+                    data-preview-text
+                    onChange={event => updateDraft(selected, event.target.value)}
+                    className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
+                  />
+                )}
+                {!selectedFeedback?.detail && (lessonConfig.customFields || []).length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-[color:var(--ink-4)]">可选参数（点击追加）：</span>
                     {(lessonConfig.customFields || []).map(cf => {
@@ -830,7 +806,7 @@ export function FeedbackGenerator({
                         <button
                           key={cf.id}
                           type="button"
-                          onClick={() => setGenerated(prev => ({ ...prev, [selected]: `${prev[selected] ?? ''}\n📋 ${cf.name}：${disp}` }))}
+                          onClick={() => updateDraft(selected, `${selectedFeedback?.text ?? ''}\n${cf.name}：${disp}`)}
                           className="px-2 py-0.5 rounded-lg text-xs bg-[rgb(var(--brand-rgb)/0.1)] text-[color:var(--brand)] hover:bg-[rgb(var(--brand-rgb)/0.18)] border border-[rgb(var(--brand-rgb)/0.2)] transition-colors"
                         >+ {cf.name}：{disp}</button>
                       );
@@ -839,17 +815,17 @@ export function FeedbackGenerator({
                 )}
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-[color:var(--ink-4)]">
-                    内容可自由编辑；薄弱项与成绩详情已按班均自动计算
+                    正文可编辑，修改会同步到本页的批量预览。
                   </p>
-                  <Button className="ios-button gap-2" onClick={() => handleCopyOne(selected)}>
+                  <Button className="ios-button gap-2" disabled={!selectedFeedback?.text.trim()} onClick={() => handleCopyOne(selected)}>
                     <Copy className="w-4 h-4" />
-                    复制并发送
+                    复制反馈
                   </Button>
                 </div>
               </>
             )}
           </div>
-          {showTemplate && (
+          {templateVisible && (
             <div className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[color:var(--ink)] flex items-center gap-1.5">
@@ -868,6 +844,7 @@ export function FeedbackGenerator({
               <Textarea
                 ref={templateRef}
                 data-preview-text
+                aria-label="反馈模板正文"
                 value={activeTemplate}
                 onChange={(e) => setActiveTemplate(e.target.value)}
                 className="min-h-[280px] text-sm leading-relaxed rounded-[var(--r-md)]"
@@ -933,13 +910,13 @@ export function FeedbackGenerator({
         <CardContent>
           {batchRows.length === 0 ? (
             <p className="text-sm text-[color:var(--ink-4)] text-center py-8">
-挺安静的——本课还没有到课学员的学情记录。去「学情记录」录入后，这里会自动生成每一份私发反馈
+本课暂无可用于群发的反馈。录入学情后，这里会自动更新。
             </p>
           ) : (
             <ScrollArea className="h-[380px] pr-2">
               <div className="grid grid-cols-[140px_1fr] gap-x-3 text-xs font-semibold text-[color:var(--ink-4)] pb-2 border-b border-black/10">
                 <span>同学</span>
-                <span>私发反馈内容</span>
+                <span>{isFourInOne ? '四个一反馈内容' : '私发反馈内容'}</span>
               </div>
               <div className="divide-y divide-black/5">
                 {batchRows.map(row => (

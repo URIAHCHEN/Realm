@@ -2,6 +2,7 @@ import type { StudentRecord, ClassStats, LessonConfig, OralRatingConfig } from '
 import { isAbsentRecord, isTransferIn, isTransferRecord, attendanceKind } from '@/lib/attendance';
 import { computeCategoryWeakPoints, formatCategoryWeakPoint, isQtStrong } from '@/lib/weakPoints';
 import { getLessonFullScore } from '@/lib/lessonFullScore';
+import { buildAdaptiveFeedback } from '@/lib/adaptiveFeedback';
 import { rateOralScore } from '@/lib/oralRating';
 import { optionToneLevel } from '@/lib/optionTone';
 import { createStudentActivityContext, isStudentActiveAtLesson, isStudentActiveForRange } from '@/lib/studentEligibility';
@@ -181,6 +182,22 @@ export function buildRatingByQtId(
   return out;
 }
 
+export function generatePrivateFeedback(
+  record: StudentRecord,
+  lessonConfig: LessonConfig,
+  stats: ClassStats,
+  nickname: string,
+  templateOverride?: string,
+  oralCfg?: OralRatingConfig,
+  extraVars?: Record<string, string>,
+): string {
+  if (lessonConfig.privateFeedbackMode === 'template') {
+    return generatePersonalFeedback(record, lessonConfig, stats, nickname, templateOverride, oralCfg, extraVars);
+  }
+  const name = nickname === record.studentName ? generateShortNickname(nickname) : nickname;
+  return buildAdaptiveFeedback(record, lessonConfig, name);
+}
+
 export function generatePersonalFeedback(
   record: StudentRecord,
   lessonConfig: LessonConfig,
@@ -198,7 +215,7 @@ export function generatePersonalFeedback(
   if (isAbsentRecord(record)) {
     return `${shortNickname}家长您好！\n\n第${record.lessonNumber}课孩子${spokenAttendance}，未参加本讲测评；落下的内容与补课安排，我会另行跟您同步。`;
   }
-  if (isTransferRecord(record) && !isTransferIn(record)) {
+  if (isTransferRecord(record) && !isTransferIn(record, lessonConfig)) {
     // 调出（无小测数据）：本次课的小测在原班级完成，本班只记录考勤/作业/口头表现
     const hw = record.homeworkStatus ? `本班这边记到的作业情况是「${record.homeworkStatus}」。` : '';
     return `${shortNickname}家长您好！\n\n第${record.lessonNumber}课孩子${spokenAttendance}，本讲测评在原班级完成，成绩以原班级为准。${hw}\n有需要协调的随时找我。`;

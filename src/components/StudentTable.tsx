@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {Trash2, UserPlus, UserMinus, Download, AlertTriangle, Check, Plus, Camera, Settings2, X, BarChart3, Eraser, Copy } from 'lucide-react';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import type { StudentRecord, LessonConfig, SeasonType, QuestionType, ClassStats, OralRatingConfig } from '@/types';
 
 interface StudentTableProps {
+  classId?: string;
   students: string[];
   records: StudentRecord[];
   lessonConfig: LessonConfig;
@@ -210,7 +211,7 @@ function NoteInput({ value, onCommit, placeholder, className }: {
 }
 
 export function StudentTable({
-  students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
+  classId, students, records, lessonConfig, lessonNumber, getNickname, calculateClassStats, oralRating,
   onUpdateRecord, onCreateRecord, onDeleteRecord, onDeleteStudentRecords, onAddStudent, onRemoveStudent,
   onExportData, onExportExcel, onDeleteLessonRecords, onClearRecord, getPublicityHTML, onViewStudentAnalysis, onCopyStudentFeedback, lessonBar, qtCategoryOverrides,
   onRemoveStudentsFromLesson,
@@ -242,7 +243,7 @@ export function StudentTable({
     // 只看「本课次」的记录：用全班所有课次会让任意一课有分数就永隐藏不了（切换课次后状态残留）
     const lessonRecs = records.filter(r => r.lessonNumber === lessonNumber);
     if (lessonRecs.length === 0) return all;
-    const nonEmpty = all.filter(qt => lessonRecs.some(r => (r.scores?.[qt.id] ?? 0) !== 0));
+    const nonEmpty = all.filter(qt => lessonRecs.some(r => Number.isFinite(r.scores?.[qt.id])));
     return nonEmpty.length > 0 ? nonEmpty : all;
     // 依赖必须含 lessonNumber：records 是全班所有课次的记录，切课次时其引用不变，
     // 少了它就会让「自动隐藏」停留在上一课次的结果（状态残留）。
@@ -562,19 +563,14 @@ export function StudentTable({
     const lessonNames = new Set(lessonRecords.map(r => r.studentName));
     return students.filter(n => !lessonNames.has(n));
   }, [students, lessonRecords]);
-  /** 进入课次时自动弹一次离班提醒（可标记本课次不再提示） */
-  const [leaveHintOpen, setLeaveHintOpen] = useState(false);
-  useEffect(() => {
-    // 数据异步补齐后名单可能从“有缺失”变为 0；必须同步关闭旧弹窗，
-    // 否则会停在“共有 0 位学员没有记录”的空提醒上。
-    if (missingNames.length === 0) {
-      setLeaveHintOpen(false);
-      return;
-    }
-    let dismissed = false;
-    try { dismissed = sessionStorage.getItem('leaveHintDismissed.' + lessonNumber) === '1'; } catch { /* ignore */ }
-    if (!dismissed) setLeaveHintOpen(true);
-  }, [lessonNumber, missingNames.length]);
+  const noticeKey = `missingRecordsNotice:${classId ?? 'none'}:${lessonNumber}`;
+  const [noticeDismissed, setNoticeDismissed] = useState(() => {
+    try { return sessionStorage.getItem(noticeKey) === '1'; } catch { return false; }
+  });
+  const dismissMissingNotice = () => {
+    setNoticeDismissed(true);
+    try { sessionStorage.setItem(noticeKey, '1'); } catch { /* ignore */ }
+  };
 
   /** 负面评价关键词（未完成/请假/迟到/缺勤/未交…）—— 表格里要高亮出来，避免被忽略 */
   const NEG_OPT_RE = /未完成|未交|未做|未带|没带|没做|请假|缺勤|缺席|迟到|补交|不合格|未参与/;
@@ -755,7 +751,7 @@ export function StudentTable({
             <div className="bg-white rounded-xl p-4">
               <div className="h-[600px] border rounded-lg overflow-auto">
       {/* 离班提醒：本课次没有记录的名单内学员（很可能是已离班） */}
-      {missingNames.length > 0 && (
+      {lessonRecords.length > 0 && !noticeDismissed && missingNames.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -771,7 +767,7 @@ export function StudentTable({
             选中这些学员
           </Button>
           <Button size="sm" variant="ghost" className="h-8 text-amber-700"
-            onClick={() => { try { sessionStorage.setItem('leaveHintDismissed.' + lessonNumber, '1'); } catch { /* ignore */ } setLeaveHintOpen(false); }}>
+            onClick={dismissMissingNotice}>
             本课次不再提示
           </Button>
         </div>
@@ -1011,7 +1007,7 @@ export function StudentTable({
                                         {settings.showDataBars && score > 0 && !notRegistered && (
                                           <span
                                             className={`score-bar ${isWeak ? 'weak' : isStrong ? 'strong' : ''}`}
-                                            style={{ width: `calc(${barPct}% - 6px)` }}
+                                            style={{ transform: `scaleX(${barPct / 100})` }}
                                           />
                                         )}
                                         <ScoreInput value={rawScore} max={qt.fullScore} label={`${studentName} ${qt.name}`} placeholder="—" onCommit={(n) => handleScoreChange(studentName, qt.id, n)} className={`${inputCls} w-16 h-9 text-center text-lg font-semibold rounded-lg`} />
@@ -1188,32 +1184,6 @@ export function StudentTable({
           <div className="space-y-4 mt-4">
             <Input placeholder="输入学生姓名" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddStudent()} className="liquid-glass-input" />
             <Button onClick={handleAddStudent} className="w-full liquid-glass-button">添加</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* 离班提醒：必须挂在「添加学员」Dialog 之外——否则它只在外层弹窗打开时才存在于 DOM，
-          进入课次的自动提醒永远不出现（2026-10-17 修正） */}
-      <Dialog open={leaveHintOpen && missingNames.length > 0} onOpenChange={setLeaveHintOpen}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />本课次有学员没有记录
-            </DialogTitle>
-            <DialogDescription>
-              共有 {missingNames.length} 位学员在名单里，但「第 {lessonNumber} 课」没有任何记录 —— 他们可能已经离班（例如只在早前课次出勤过）。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-52 overflow-auto rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-            <p className="text-sm text-amber-900 leading-relaxed">{missingNames.join('、')}</p>
-          </div>
-          <p className="text-xs text-[color:var(--ink-4)]">
-            已离班 → 点「选中这些学员」，再点表格上方的「从本课次起移除」（历史课次记录会保留）；只是还没录 → 直接补录即可。
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => { try { sessionStorage.setItem('leaveHintDismissed.' + lessonNumber, '1'); } catch { /* ignore */ } setLeaveHintOpen(false); }}>本课次不再提示</Button>
-            <Button size="sm" variant="outline" onClick={() => { setSelectedStudents(new Set(missingNames)); setLeaveHintOpen(false); }}>选中这些学员</Button>
-            <Button size="sm" onClick={() => setLeaveHintOpen(false)}>知道了</Button>
           </div>
         </DialogContent>
       </Dialog>
